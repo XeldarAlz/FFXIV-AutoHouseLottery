@@ -17,6 +17,10 @@
     <Compile Include="..\AutoHouseLottery\Core\Selection\Model\**\*.cs" Link="Selection\Model\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Persistence\**\*.cs" Link="Persistence\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Tasks\Model\**\*.cs" Link="Tasks\Model\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Providers\Model\**\*.cs" Link="Providers\Model\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Find\Model\**\*.cs" Link="Find\Model\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Maps\Model\**\*.cs" Link="Maps\Model\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Saved\Model\**\*.cs" Link="Saved\Model\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
