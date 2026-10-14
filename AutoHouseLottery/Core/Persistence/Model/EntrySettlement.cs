@@ -14,8 +14,8 @@ internal readonly record struct EntrySettlement(
     // The refund deadline the result dialog itself named, when it could be read.
     public DateTime? RefundDeadlineUtc { get; init; }
 
-    // Settled because the placard no longer offered a result, not because a result was read. Such a settlement can be
-    // reopened when the game later says a refund or a plot is still waiting (LogMessage 6100).
+    // Settled without a result being read: the placard no longer offered one, or the player said it was settled in game.
+    // Such a settlement can be reopened when the game later says a refund or a plot is still waiting (LogMessage 6100).
     public bool SettledByAbsence { get; init; }
 
     public bool IsSettled => SettlementTransitions.IsSettled(State);

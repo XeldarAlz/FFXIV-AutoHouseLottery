@@ -93,6 +93,17 @@ public sealed class NetReturnAndNoticeTests
     }
 
     [Fact]
+    public void AWinFoundAfterItsClaimDeadlineIsNotAnnounced()
+    {
+        var won = Receipt(Plot(12, 5), FirstCycle);
+        var journal = Journal([], (won, SettlementState.WonUnclaimed));
+        var results = ResultsPhase(FirstCycle);
+
+        Assert.Empty(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc, _ => false));
+        Assert.Empty(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc.AddDays(3), _ => false));
+    }
+
+    [Fact]
     public void AClaimDeadlineIsAnnouncedWithinItsLastDay()
     {
         var won = Receipt(Plot(12, 5), FirstCycle);
@@ -145,6 +156,19 @@ public sealed class NetReturnAndNoticeTests
 
         Assert.Empty(SettlementNotices.Due(journal, later, LotteryCalendar.Global, afterDeadline, _ => false));
         Assert.Single(journal.Receipts);
+    }
+
+    [Fact]
+    public void ADeadlineADialogShowedIsTrustedOnlyNearTheEstimate()
+    {
+        var estimate = CycleStart.AddDays(SettlementDeadlines.RefundWindowDays);
+
+        Assert.True(SettlementDeadlines.PlausibleShownDeadline(estimate, estimate));
+        Assert.True(SettlementDeadlines.PlausibleShownDeadline(estimate.AddDays(-SettlementDeadlines.ShownDeadlineToleranceDays), estimate));
+        Assert.True(SettlementDeadlines.PlausibleShownDeadline(estimate.AddDays(SettlementDeadlines.ShownDeadlineToleranceDays), estimate));
+        Assert.False(SettlementDeadlines.PlausibleShownDeadline(estimate.AddDays(SettlementDeadlines.ShownDeadlineToleranceDays).AddMinutes(1), estimate));
+        Assert.False(SettlementDeadlines.PlausibleShownDeadline(estimate.AddDays(-40), estimate));
+        Assert.False(SettlementDeadlines.PlausibleShownDeadline(estimate, null));
     }
 
     private static JournalSnapshot With(JournalSnapshot journal, Guid receiptId, Func<EntrySettlement, EntrySettlement> change)

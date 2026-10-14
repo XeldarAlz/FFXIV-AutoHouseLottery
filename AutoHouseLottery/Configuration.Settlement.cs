@@ -1,3 +1,5 @@
+using Newtonsoft.Json;
+
 namespace AutoHouseLottery;
 
 public sealed partial class Configuration
@@ -15,6 +17,10 @@ public sealed partial class Configuration
     // entry as still pending on My lottery.
     public Dictionary<Guid, AbsenceSighting> AbsenceSightings { get; set; } = [];
 
+    // Changes with every sighting recorded or forgotten, so a window can tell the sightings changed without comparing them.
+    [JsonIgnore]
+    public int AbsenceSightingsRevision { get; private set; }
+
     public bool AutomaticRefunds(ulong contentId) => !ManualRefundCharacters.Contains(contentId);
 
     public AbsenceSighting? AbsenceSighting(Guid id) => AbsenceSightings.TryGetValue(id, out var sighting) ? sighting : null;
@@ -28,6 +34,7 @@ public sealed partial class Configuration
         }
 
         AbsenceSightings[id] = new AbsenceSighting(session, nowUtc, strong);
+        AbsenceSightingsRevision++;
         var retention = TimeSpan.FromDays(NoticeRetentionDays);
         var expired = new List<Guid>();
         foreach (var (seen, sighting) in AbsenceSightings)
@@ -50,6 +57,7 @@ public sealed partial class Configuration
     {
         if (AbsenceSightings.Remove(id))
         {
+            AbsenceSightingsRevision++;
             SaveDebounced();
         }
     }

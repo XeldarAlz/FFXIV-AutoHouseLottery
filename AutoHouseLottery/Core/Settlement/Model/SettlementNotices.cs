@@ -22,10 +22,10 @@ internal static class SettlementNotices
     private static readonly TimeSpan refundLead = TimeSpan.FromDays(RefundLeadDays);
 
     // Results available: an entry whose results arrived and whose outcome nobody has read. Won: a win the plugin found,
-    // announced once whoever found it, since a win is never settled in the background. Claim deadline: that win still not
-    // claimed within a day of the end of its results period. Refund deadline: a refund owed within a week of its deadline,
-    // the dialog's own when it was read, otherwise the 90-day estimate. A deadline that has passed, or that nothing can
-    // place, is not announced.
+    // announced once whoever found it, since a win is never settled in the background, and not at all once its claim
+    // deadline has passed. Claim deadline: that win still not claimed within a day of the end of its results period.
+    // Refund deadline: a refund owed within a week of its deadline, the dialog's own when it was read, otherwise the
+    // 90-day estimate. A deadline that has passed, or that nothing can place, is not announced.
     public static ImmutableArray<SettlementNotice> Due(in JournalSnapshot snapshot, in CyclePosition current, LotterySchedule? schedule, DateTime nowUtc, Func<string, bool> delivered)
     {
         var due = ImmutableArray.CreateBuilder<SettlementNotice>();
@@ -45,14 +45,19 @@ internal static class SettlementNotices
             else if (settlement.State == SettlementState.WonUnclaimed)
             {
                 var claimBy = SettlementDeadlines.ResultsEnd(receipt.Cycle, current, schedule);
+                if (claimBy is { } end && end <= nowUtc)
+                {
+                    continue;
+                }
+
                 var won = Notice(SettlementNoticeKind.Won, receipt, claimBy);
                 if (!delivered(won.Key))
                 {
                     due.Add(won);
                 }
-                else if (Approaching(claimBy, claimLead, nowUtc) is { } end)
+                else if (Approaching(claimBy, claimLead, nowUtc) is { } claimEnd)
                 {
-                    Offer(due, Notice(SettlementNoticeKind.ClaimDeadline, receipt, end), delivered);
+                    Offer(due, Notice(SettlementNoticeKind.ClaimDeadline, receipt, claimEnd), delivered);
                 }
             }
             else if (SettlementStates.RefundOwed(settlement.State)

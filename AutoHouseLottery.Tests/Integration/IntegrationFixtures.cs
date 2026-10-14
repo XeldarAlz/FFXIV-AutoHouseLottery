@@ -94,6 +94,8 @@ internal static class IntegrationFixtures
         return new JournalSnapshot([.. attempts], [.. receipts], [.. settlements]);
     }
 
+    public static bool NothingLeftToTheGame(EntryReceipt receipt, EntrySettlement settlement) => false;
+
     public static CyclePosition ResultsPhase(CycleKey cycle) => new(
         cycle,
         Core.Housing.Model.LotteryPhase.Results,

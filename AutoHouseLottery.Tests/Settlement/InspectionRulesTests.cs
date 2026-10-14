@@ -168,6 +168,20 @@ public sealed class InspectionRulesTests
     }
 
     [Fact]
+    public void OnlyAStrongSightingFromAnotherSessionHoursEarlierCountsAsTheSecond()
+    {
+        var earlierSession = Guid.NewGuid();
+        var session = Guid.NewGuid();
+        var earlier = ObservedAt;
+        var later = earlier + AbsenceRules.MinimumSightingGap;
+
+        Assert.True(AbsenceRules.CountsAsSecondSighting(earlierStrong: true, earlierSession, earlier, session, later));
+        Assert.False(AbsenceRules.CountsAsSecondSighting(earlierStrong: true, earlierSession, earlier, session, later.AddMinutes(-1)));
+        Assert.False(AbsenceRules.CountsAsSecondSighting(earlierStrong: true, session, earlier, session, later.AddDays(1)));
+        Assert.False(AbsenceRules.CountsAsSecondSighting(earlierStrong: false, earlierSession, earlier, session, later.AddDays(1)));
+    }
+
+    [Fact]
     public void AClaimInQuestionOrAPressedButtonWithoutADialogDecidesNothing()
     {
         var strong = Absence() with { SeenInAnotherSession = true };

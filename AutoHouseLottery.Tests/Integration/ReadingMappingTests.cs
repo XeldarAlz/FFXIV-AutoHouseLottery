@@ -91,7 +91,7 @@ public sealed class ReadingMappingTests
             (Receipt(Plot(2, 2), FirstCycle), SettlementState.LostRefundDue),
             (Receipt(Plot(3, 3), FirstCycle), SettlementState.WonUnclaimed));
 
-        Assert.Equal(OutstandingKind.UnclaimedWin, OutstandingRules.Find(snapshot, ContentId, SecondCycle).Kind);
+        Assert.Equal(OutstandingKind.UnclaimedWin, OutstandingRules.Find(snapshot, ContentId, SecondCycle, NothingLeftToTheGame).Kind);
     }
 
     [Fact]
@@ -99,9 +99,9 @@ public sealed class ReadingMappingTests
     {
         var snapshot = Journal([], (Receipt(Plot(1, 1), FirstCycle), SettlementState.Entered));
 
-        Assert.Equal(OutstandingKind.ResultUnchecked, OutstandingRules.Find(snapshot, ContentId, SecondCycle).Kind);
-        Assert.Equal(OutstandingKind.None, OutstandingRules.Find(snapshot, ContentId, FirstCycle).Kind);
-        Assert.Equal(OutstandingKind.None, OutstandingRules.Find(Journal([], (Receipt(Plot(1, 1), FirstCycle), SettlementState.Refunded)), ContentId, SecondCycle).Kind);
+        Assert.Equal(OutstandingKind.ResultUnchecked, OutstandingRules.Find(snapshot, ContentId, SecondCycle, NothingLeftToTheGame).Kind);
+        Assert.Equal(OutstandingKind.None, OutstandingRules.Find(snapshot, ContentId, FirstCycle, NothingLeftToTheGame).Kind);
+        Assert.Equal(OutstandingKind.None, OutstandingRules.Find(Journal([], (Receipt(Plot(1, 1), FirstCycle), SettlementState.Refunded)), ContentId, SecondCycle, NothingLeftToTheGame).Kind);
     }
 
     [Fact]
