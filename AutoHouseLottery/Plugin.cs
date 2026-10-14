@@ -51,6 +51,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly PlacardSaleHook placardSales;
     private readonly HousingLogWatcher housingLog;
     private readonly AppWindow appWindow;
+    private readonly RunStatusWindow runStrip;
     private readonly CommandInfo primaryCommand;
     private readonly CommandInfo aliasCommand;
 
@@ -100,6 +101,8 @@ public sealed class Plugin : IDalamudPlugin
             completed.Push(appWindow.Dispose);
             WindowSystem.AddWindow(appWindow);
             completed.Push(WindowSystem.RemoveAllWindows);
+            runStrip = new RunStatusWindow(this);
+            WindowSystem.AddWindow(runStrip);
 
             primaryCommand = new CommandInfo(OnCommand) { HelpMessage = Loc.T(L.Plugin.CommandHelp) };
             aliasCommand = new CommandInfo(OnCommand) { HelpMessage = Loc.T(L.Plugin.CommandHelpAlias) };
@@ -173,6 +176,8 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     public void ToggleMainUi() => appWindow.Toggle();
+
+    public void ShowPage(AppWindow.Page page) => appWindow.Show(page);
 
     public void ToggleConfigUi() => appWindow.TogglePage(AppWindow.Page.Settings);
 
@@ -255,6 +260,8 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnDraw()
     {
+        var status = Controller.Status;
+        runStrip.IsOpen = !appWindow.IsOpen && (Controller.Busy || (status.RunId != Guid.Empty && status.Step == Core.Tasks.Model.EntryStep.NeedsReconciliation));
         WindowSystem.Draw();
         Configuration.FlushPendingSave();
     }

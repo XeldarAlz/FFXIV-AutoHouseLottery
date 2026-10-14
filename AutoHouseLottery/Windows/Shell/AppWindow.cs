@@ -1,4 +1,5 @@
 using AutoHouseLottery.Windows.Pages;
+using AutoHouseLottery.Windows.Sections;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -286,10 +287,15 @@ public sealed class AppWindow : Window, IDisposable
         }
 
         using var reveal = Motion.PushReveal(Motion.Reveal(pageShownTick, PageRevealMs), PageSlide);
+        if (page is Page.FindHome or Page.MyLottery && RunPanel.Visible(plugin.Controller))
+        {
+            RunPanel.Draw(plugin);
+        }
+
         switch (page)
         {
             case Page.FindHome: findHomePage.Draw(); break;
-            case Page.MyLottery: myLotteryPage.Draw(); break;
+            case Page.MyLottery: myLotteryPage.Draw(plugin); break;
             case Page.Saved: savedPage.Draw(); break;
             case Page.Settings: settingsPage.Draw(plugin); break;
             case Page.Plugins: pluginsPage.Draw(); break;

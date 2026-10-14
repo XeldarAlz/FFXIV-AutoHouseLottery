@@ -25,7 +25,10 @@ internal sealed record LotteryRow(
     LotteryRowState State,
     LotterySection Section,
     LotteryAction Action,
-    bool Imported);
+    ReceiptEvidence? Evidence)
+{
+    public bool Imported => Evidence == ReceiptEvidence.ImportedFromGame;
+}
 
 internal static class LotteryRows
 {
@@ -72,7 +75,7 @@ internal static class LotteryRows
             state,
             section,
             action,
-            receipt.Imported);
+            receipt.Evidence);
     }
 
     private static LotteryRow ForAttempt(ActionAttempt attempt)
@@ -91,7 +94,7 @@ internal static class LotteryRows
             rejected ? LotteryRowState.Rejected : LotteryRowState.Uncertain,
             rejected ? LotterySection.History : LotterySection.ActionNeeded,
             rejected ? LotteryAction.None : LotteryAction.VerifyOutcome,
-            false);
+            null);
     }
 
     private static (LotteryRowState State, LotterySection Section, LotteryAction Action) Classify(SettlementState state, CycleKey entered, in CyclePosition current)

@@ -33,9 +33,14 @@ internal static class ReadyState
     {
         if (controller.Running)
         {
-            return controller.Paused
+            return controller.Paused || controller.Status.AwaitsPlayer
                 ? new Info(Kind.Paused, Styling.AccentAmber, Styling.AccentAmberSoft)
                 : new Info(Kind.Running, Styling.AccentBlue, Styling.AccentBlueSoft);
+        }
+
+        if (controller.Reconciling)
+        {
+            return new Info(Kind.Running, Styling.AccentBlue, Styling.AccentBlueSoft);
         }
 
         if (!ExternalPlugins.AllRequiredInstalled())

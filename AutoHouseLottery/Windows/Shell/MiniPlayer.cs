@@ -1,5 +1,7 @@
+using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
+using AutoHouseLottery.Core.Tasks.Model;
 using AutoHouseLottery.Windows.Components;
 using AutoHouseLottery.Windows.Sections;
 using Dalamud.Bindings.ImGui;
@@ -17,6 +19,8 @@ internal static class MiniPlayer
     private const float ButtonGap = 8f;
     private const float BarWidth = 160f;
     private const float BarHeight = 8f;
+    private const float BadgeGap = 8f;
+    private const string Separator = " · ";
 
     public static float Height()
     {
@@ -64,14 +68,45 @@ internal static class MiniPlayer
         }
 
         var textX = origin.X + padX + 22f * scale;
-        var label = TextDraw.Truncate(ReadyState.ShortLabel(info.Kind), barX - 16f * scale - textX);
+        var status = controller.Status;
+        if (status.RunId != Guid.Empty)
+        {
+            var dryRun = status.EntryMode == EntryMode.DryRun;
+            textX += Badge.DrawLeft(drawList, Loc.T(dryRun ? L.Run.DryRunBadge : L.Run.RealEntryBadge), dryRun ? Styling.AccentBlue : Styling.AccentRose, textX, midY) + BadgeGap * scale;
+        }
+
+        var label = TextDraw.Truncate(Label(controller, status, info.Kind), barX - 16f * scale - textX);
         TextDraw.At(label, new Vector2(textX, midY - ImGui.GetTextLineHeight() * 0.5f), Styling.TextStrong);
 
-        DrawButtons(controller, end, midY);
+        if (controller.Running)
+        {
+            DrawButtons(controller, end, midY);
+        }
 
         ImGui.SetCursorScreenPos(origin);
         ImGui.Dummy(size);
         return hit.Clicked;
+    }
+
+    private static string Label(RunController controller, RunStatus status, ReadyState.Kind kind)
+    {
+        if (controller.Reconciling && !controller.Running)
+        {
+            return Loc.T(L.Run.Checking);
+        }
+
+        if (status.Step == EntryStep.NeedsReconciliation)
+        {
+            return Loc.T(L.Run.UncertainTitle);
+        }
+
+        if (!controller.Running)
+        {
+            return ReadyState.ShortLabel(kind);
+        }
+
+        var step = status.Step == EntryStep.NeedsPlayer ? Loc.T(L.Run.NeedsPlayerTitle) : RunPanel.StepLine(controller, status);
+        return status.Target is { } target ? string.Concat(step, Separator, PlotNames.Address(target)) : step;
     }
 
     private static void DrawButtons(RunController controller, Vector2 end, float midY)
@@ -79,12 +114,12 @@ internal static class MiniPlayer
         var scale = ImGuiHelpers.GlobalScale;
         var padX = PadX * scale;
         var buttonSize = ButtonSize * scale;
-        var resumeBlocked = controller.PauseReason == PauseReason.InContent;
+        var resumeBlocked = controller.PauseReason == PauseReason.InContent || controller.Status.FinishingVerification;
         var pausePosition = new Vector2(end.X - padX - buttonSize * 2f - ButtonGap * scale, midY - buttonSize * 0.5f);
         ImGui.SetCursorScreenPos(pausePosition);
         if (IconButton.Draw(controller.Paused ? FontAwesomeIcon.Play : FontAwesomeIcon.Pause, "##ahl_mini_pause", buttonSize,
                 controller.Paused ? Styling.AccentMintSoft : Styling.AccentAmberSoft,
-                resumeBlocked ? Loc.T(L.Shell.ResumeBlocked) : controller.Paused ? Loc.T(L.Common.Resume) : Loc.T(L.Common.Pause),
+                controller.Status.FinishingVerification ? Loc.T(L.Run.FinishingVerification) : resumeBlocked ? Loc.T(L.Shell.ResumeBlocked) : controller.Paused ? Loc.T(L.Common.Resume) : Loc.T(L.Common.Pause),
                 enabled: !resumeBlocked))
         {
             controller.TogglePause();
