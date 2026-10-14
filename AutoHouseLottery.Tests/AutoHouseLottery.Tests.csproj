@@ -13,6 +13,7 @@
     <Compile Include="..\AutoHouseLottery\Core\Changelog\**\*.cs" Link="Changelog\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Localization\L.cs;..\AutoHouseLottery\Core\Localization\L.*.cs;..\AutoHouseLottery\Core\Localization\LocString.cs" Link="Localization\%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Housing\Model\**\*.cs" Link="Housing\Model\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Eligibility\Model\**\*.cs" Link="Eligibility\Model\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
