@@ -15,7 +15,13 @@ Lifestream is a separate plugin you install yourself; none of its code ships wit
 ## Aetherphone
 
 - Source: FFXIV-Aetherphone by XeldarAlz, the same author as this project, https://github.com/XeldarAlz/FFXIV-Aetherphone.
-- Used: the housing discovery code (the housing service client and its normalization, the cache, the district maps and marker projection, saved plots and reminders, and the Lifestream travel bridge) will be ported from it. Its notices are kept, and the Aetherphone commit each part came from is recorded under [Copied code](#copied-code) when it lands.
+- Used: the Lifestream travel bridge's housing address is ported already (see [Ported from Aetherphone](#ported-from-aetherphone)). The housing discovery code (the housing service client and its normalization, the cache, the district maps and marker projection, saved plots and reminders) will be ported from it. Its notices are kept, and the Aetherphone commit each part came from is recorded under [Copied code](#copied-code) when it lands.
+- License: GNU Affero General Public License v3.0, the license of this project.
+
+## Auto GC Supply
+
+- Source: FFXIV-AutoGCSupply by XeldarAlz, the same author as this project, https://github.com/XeldarAlz/FFXIV-AutoGCSupply. The plugin's scaffold comes from it.
+- Used: the task, walking and navmesh helpers and the Timers window pass are adapted from it; each file is listed under [Ported from Auto GC Supply](#ported-from-auto-gc-supply).
 - License: GNU Affero General Public License v3.0, the license of this project.
 
 ## Game interaction references
@@ -29,7 +35,8 @@ What this project knows about the game's housing windows (the plot placard, the 
 - [AltMate](https://github.com/naco-ff14/AltMate), AGPL-3.0: the placard text nodes, the entry confirmation and the result dialogs.
 - [HousingHerald](https://github.com/mashirochan/FFXIV-HousingHerald), AGPL-3.0: the placard text nodes and the entry confirmation.
 - [Lifestream](https://github.com/NightmareXIV/Lifestream): the names and signatures of the IPC gates the travel adapter calls, read from its public `IPC/IPCProvider.cs`.
-- [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining), no license: only the row IDs of the game's Addon, LogMessage and EObjName sheets are used, and their text is read from your own client.
+- HouseHunter, closed source, read as a recovered build: the mechanics the code comments cite, namely the personal lottery record behind `HousingManager + 0xB0` and its layout, the Timers window's values and lottery tab, and the ward selector's values and ward callback. Facts only; none of its code is copied.
+- [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining), no license: the plugin uses only the row IDs of the game's Addon, LogMessage and EObjName sheets and reads their text from your own client. The unit tests hold the text of Addon rows 7122, 7123, 7124 and 7128 in English, German, French and Japanese, so the dialog matcher is tested against the real row structure.
 
 ## Copied code
 
@@ -46,6 +53,16 @@ The MIT license of both projects reads:
 > The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 >
 > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### Ported from Auto GC Supply
+
+From FFXIV-AutoGCSupply at commit `9ddf709a2299a61a562c9129920cd991308aabcc`, AGPL-3.0:
+
+- `AutoHouseLottery/Core/Tasks/AutoCommon.cs` and `AutoCommon.Cancellable.cs`, `MoveOp.cs`, `StuckDetector.cs`, `MoveStallTracker.cs` and `TaskStarter.cs`: from the files of the same names under `AutoGcSupply/Core/Tasks/`, trimmed to what the plugin uses.
+- `AutoHouseLottery/Core/Ipc/NavmeshIpc.cs`: from `AutoGcSupply/Core/Ipc/NavmeshIPC.cs`, trimmed.
+- `AutoHouseLottery/Core/Game/Model/DisplayText.cs`: from `AutoGcSupply/Core/HandIn/Model/PromptText.cs`.
+- `AutoHouseLottery/Core/Game/AddonReads.cs`: the AtkValue reads from `AutoGcSupply/Core/HandIn/AtkValueReads.cs`.
+- `AutoHouseLottery/Core/Game/Lottery/LotteryTimersPass.cs`: the shape of `AutoGcSupply/Core/Requests/TimersLoader.cs`.
 
 ### Ported from Aetherphone
 
