@@ -15,7 +15,7 @@ Lifestream is a separate plugin you install yourself; none of its code ships wit
 ## Aetherphone
 
 - Source: FFXIV-Aetherphone by XeldarAlz, the same author as this project, https://github.com/XeldarAlz/FFXIV-Aetherphone.
-- Used: the Lifestream travel bridge's housing address is ported already (see [Ported from Aetherphone](#ported-from-aetherphone)). The housing discovery code (the housing service client and its normalization, the cache, the district maps and marker projection, saved plots and reminders) will be ported from it. Its notices are kept, and the Aetherphone commit each part came from is recorded under [Copied code](#copied-code) when it lands.
+- Used: the Lifestream travel bridge's housing address and the housing discovery code (the housing service client and its normalization, the cache and refresh service, the district maps and marker projection, saved plots and reminders). Each file is listed under [Ported from Aetherphone](#ported-from-aetherphone) with the commit it came from.
 - License: GNU Affero General Public License v3.0, the license of this project.
 
 ## Auto GC Supply
@@ -67,3 +67,15 @@ From FFXIV-AutoGCSupply at commit `9ddf709a2299a61a562c9129920cd991308aabcc`, AG
 ### Ported from Aetherphone
 
 - `AutoHouseLottery/Core/Ipc/LifestreamIpc.cs`: the Lifestream housing address and the `GoToHousingAddress` call, from `src/Aetherphone/Core/Venues/LifestreamBridge.cs` at Aetherphone commit `255d4dd538d016036c8432a284948be4e0e74512`. AGPL-3.0.
+
+The housing discovery files below come from `src/Aetherphone/Core/Housing/` and `src/Aetherphone/Core/Net/` at the same Aetherphone commit `255d4dd538d016036c8432a284948be4e0e74512`, AGPL-3.0, with the phone interface left out and the data normalized into this plugin's plot store:
+
+- `AutoHouseLottery/Core/Providers/Model/HousingEndpoints.cs` and the `Feed*` response types: from `HousingEndpoints.cs` and `PaissaModels.cs`, global service only.
+- `AutoHouseLottery/Core/Providers/Model/FeedNormalizer.cs`: the field mapping of `HousingRestProvider.cs` (zero-based wards and plots, size, purchase flags and lottery phase), with stricter address, timestamp, count and completeness checks.
+- `AutoHouseLottery/Core/Providers/HousingFeedClient.cs` and `Model/BoundedBody.cs`: the request, timeout, Retry-After and response size handling of `Core/Net/HttpService.cs` and the two-request limit of `Core/Net/RequestThrottle.cs`.
+- `AutoHouseLottery/Core/Providers/HousingFeedService.cs` and `Model/RefreshCadence.cs`: the refresh, backoff and caching flow and the cadence constants of `HousingService.cs` and `HousingRecords.cs`.
+- `AutoHouseLottery/Core/Providers/HousingFeedCache.cs`: from `HousingCache.cs`, keeping each response with its receipt instead of the converted plots.
+- `AutoHouseLottery/Core/Maps/HousingGameMaps.cs`, `MapTextures.cs` and `Model/MapProjection.cs`: from `HousingGameMaps.cs` and `Core/Maps/MapTextures.cs`.
+- `AutoHouseLottery/Core/Find/Model/PlotFilter.cs`: the filter model of `HousingFilterState.cs`, extended to areas, buyer type, price and the lottery statuses.
+- `AutoHouseLottery/Core/Saved/SavedService.cs`, `NoticeAnnouncer.cs` and `Model/NoticeRules.cs`, `NoticePlanner.cs`, `NoticeLedger.cs`: the watch list reconciliation and the deduplicated reminders of `HousingWatchStore.cs` and `HousingReminderService.cs`.
+- `AutoHouseLottery/Windows/Find/FindText.cs`: the labels and countdown of `HousingFormat.cs`.

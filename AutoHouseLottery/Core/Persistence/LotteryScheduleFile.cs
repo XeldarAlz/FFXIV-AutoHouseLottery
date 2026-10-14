@@ -46,13 +46,7 @@ internal static class LotteryScheduleFile
 
     public static bool TrySave(string path, ReadOnlySpan<LotterySchedule> schedules)
     {
-        var stored = new ScheduleJson[schedules.Length];
-        for (var index = 0; index < schedules.Length; index++)
-        {
-            stored[index] = ScheduleJson.From(schedules[index]);
-        }
-
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new ScheduleFileJson { Schema = Schema, Schedules = stored }, ScheduleJsonContext.Default.ScheduleFileJson);
+        var bytes = Serialize(schedules);
         try
         {
             JournalFile.RewriteAtomically(path, bytes);
@@ -62,5 +56,16 @@ internal static class LotteryScheduleFile
         {
             return false;
         }
+    }
+
+    public static byte[] Serialize(ReadOnlySpan<LotterySchedule> schedules)
+    {
+        var stored = new ScheduleJson[schedules.Length];
+        for (var index = 0; index < schedules.Length; index++)
+        {
+            stored[index] = ScheduleJson.From(schedules[index]);
+        }
+
+        return JsonSerializer.SerializeToUtf8Bytes(new ScheduleFileJson { Schema = Schema, Schedules = stored }, ScheduleJsonContext.Default.ScheduleFileJson);
     }
 }

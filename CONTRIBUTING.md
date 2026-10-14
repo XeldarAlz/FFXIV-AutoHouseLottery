@@ -22,7 +22,11 @@ Load the built plugin via `/xlsettings` -> **Experimental** -> **Dev Plugin Loca
 Folders marked *planned* arrive with later phases of the plugin.
 
 - `AutoHouseLottery/Core/Housing/Model/`: plot and lottery period identity (`PlotKey`, `CycleKey`, the lottery calendar estimate), plot observations with their own source times, their merge rules, and the coverage of what was actually read.
-- `AutoHouseLottery/Core/Providers/` (*planned*): the Aetherphone housing service client and its disk cache, keeping fetch age apart from observation age.
+- `AutoHouseLottery/Core/Providers/`: the Aetherphone housing service client, its disk cache and the refresh service, keeping fetch age apart from observation age. The response normalizer, the single intake into the plot store and the refresh cadence live under `Core/Providers/Model/`.
+- `AutoHouseLottery/Core/Find/`: the Find a home state, the shared shortlist and its file, and the view rebuilt on a task; the area scope, filters, plot statuses, results and run preview rules live under `Core/Find/Model/`.
+- `AutoHouseLottery/Core/Maps/`: the district maps and the world and district names read from the game's sheets; the marker projection lives under `Core/Maps/Model/`.
+- `AutoHouseLottery/Core/Saved/`: saved searches, fixed plot lists and their notices; the library, the notice rules and ledger and the file format live under `Core/Saved/Model/`.
+- `AutoHouseLottery/Core/Storage/`: small JSON files written off the framework thread.
 - `AutoHouseLottery/Core/Selection/Model/`: the shortlist, the best match ranking, Same plot and Spread placement, and the assignment planner.
 - `AutoHouseLottery/Core/Eligibility/Model/`: eligibility, ownership group and budget rules, where Unknown never counts as eligible.
 - `AutoHouseLottery/Core/Game/`: the duty and GM watchers and text input focus, the ward, placard, lottery and character readers, the sheet-row dialog matching and the gated dialog buttons; their raw readings and pure rules live under `Core/Game/Model/`.
@@ -39,7 +43,7 @@ Folders marked *planned* arrive with later phases of the plugin.
 - `AutoHouseLottery/Windows/`: the ImGui window with its shell, pages (Find a home, My lottery, Saved, and the Settings, Plugins, Console, Changelog and About pages), sections, settings and components.
 - `AutoHouseLottery/`: plugin entry points, config, command wiring.
 - `AutoHouseLottery.Tests/`: unit tests for everything above that runs without the game.
-- `fixtures/` (*planned*): sanitized, versioned observations of the game's housing windows and the housing service, recorded per game build and used by the tests.
+- `fixtures/`: sanitized, versioned observations of the game's housing windows and the housing service, used by the tests. `fixtures/housing-service/` holds real world responses of the housing service.
 - `ECommons/`: submodule, shared Dalamud helpers. Don't patch this directly; upstream it.
 
 Keep logic small and direct. This plugin has one job.
