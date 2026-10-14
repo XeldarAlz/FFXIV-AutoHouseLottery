@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "每个角色都是试运行：每个角色进行到抽签确认窗口后将其关闭。在游戏中验证批量参与之前，真实的批量参与保持关闭。",
   "dev.refundSwitchingWarning": "退款队列的角色切换已允许两小时：开启“切换角色以领取退款”时，队列可以通过 Lifestream 登出并登录角色列表中已勾选的角色以确认其结果。/ahl dev revoke-switching 可撤回。",
   "findHome.reason.groupPlot": "其所有权组前往另一个地块",
-  "runFailure.groupEnteredElsewhere": "同一所有权组的另一个角色参与了不同的地块，而该组只能购买一个，因此这个角色不参与。",
+  "runFailure.groupEnteredElsewhere": "同一所有权组的另一个角色参与了这个角色无法跟随的地块（不同的地块，或无法读取的地块），而该组只能购买一个，因此这个角色不参与。",
   "runStart.batchWaiting": "还有一个批量参与在等待。请先继续或放弃它。",
   "diagnostics.name.batchEntry": "为多个角色参与",
   "diagnostics.name.characterSwitch": "切换角色",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "验证前关闭，但本次会话给出的许可允许退款队列在两小时内切换角色。/ahl dev revoke-switching 可撤回。",
   "diagnostics.reason.switchPermittedBoth": "验证前关闭，但本次会话给出的许可允许下一次批量参与和退款队列切换角色，最长两小时。/ahl dev revoke-switching 可撤回。",
   "diagnostics.reason.switchLifestreamMissing": "Lifestream 没有向其他插件提供角色切换，因此不会切换角色。请更新 Lifestream。",
-  "findHome.reason.region": "不支持其原始服务器上的房屋"
+  "findHome.reason.region": "不支持其原始服务器上的房屋",
+  "batch.member.held": "{0}：同一所有权组的一次参与正在核实，等待中"
 }

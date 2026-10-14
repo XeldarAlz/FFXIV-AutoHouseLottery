@@ -83,7 +83,7 @@ internal static partial class L
         public static readonly LocString JournalUnavailable = new("runFailure.journalUnavailable", "Entries cannot be recorded right now, so none is made.");
         public static readonly LocString CharacterChanged = new("runFailure.characterChanged", "A different character is logged in.");
         public static readonly LocString InspectionsExhausted = new("runFailure.inspectionsExhausted", "No plot on the shortlist passed its live checks.");
-        public static readonly LocString GroupEnteredElsewhere = new("runFailure.groupEnteredElsewhere", "Another character of its ownership group entered a different plot, and the group could claim only one, so this one stays out.");
+        public static readonly LocString GroupEnteredElsewhere = new("runFailure.groupEnteredElsewhere", "Another character of its ownership group entered a plot this one cannot follow (another plot, or one that could not be read), and the group could claim only one, so this one stays out.");
         public static readonly LocString SubmissionUncertain = new("runFailure.submissionUncertain", "The entry's outcome is not known yet.");
         public static readonly LocString RejectedOneEntry = new("runFailure.rejected.oneEntry", "The game says this character already has an entry this lottery period.");
         public static readonly LocString RejectedOutstanding = new("runFailure.rejected.outstanding", "The game says an earlier refund or plot must be collected first.");

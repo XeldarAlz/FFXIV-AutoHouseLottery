@@ -171,9 +171,9 @@ internal static class AssignmentPlanner
             if (characterResult.Blockers != EligibilityReason.None)
             {
                 exclusions.Add(new CharacterExclusion(settings.ContentId, characterResult.Blockers));
-                if (profile.Participation.StateIn(policy.Cycle.Cycle) == EntrySlotState.Entered && profile.Participation.EnteredPlot is { } plot)
+                if (profile.Participation.StateIn(policy.Cycle.Cycle) is EntrySlotState.Entered or EntrySlotState.Unresolved)
                 {
-                    entered.Add(new GroupEntry(group, plot));
+                    entered.Add(new GroupEntry(group, profile.Participation.EnteredPlot));
                 }
 
                 continue;
@@ -211,10 +211,10 @@ internal static class AssignmentPlanner
     }
 
     // Exact targets are applied first, each as its own pinned unit. Outside Spread an ownership group goes on one plot:
-    // the plot one of its characters already entered this cycle, else the first exact target among its members, else the
-    // plot its shared order ranks first. A group anchored on an entered or exact plot goes there with no fallback for any
-    // member; a member that cannot enter that plot, or whose own exact target is another plot, is left out with the
-    // reason, so the group never holds a second plot.
+    // the plot one of its characters already entered this cycle or has an entry in question on, else the first exact
+    // target among its members, else the plot its shared order ranks first. A group anchored on an entered or exact plot
+    // goes there with no fallback for any member; a member that cannot enter that plot, or whose own exact target is
+    // another plot, is left out with the reason, so the group never holds a second plot.
     private static List<PlacementUnit> BuildUnits(
         RunPolicy policy,
         List<PlannedCharacter> planned,
@@ -230,7 +230,7 @@ internal static class AssignmentPlanner
         {
             for (var index = 0; index < entered.Count; index++)
             {
-                anchors.TryAdd(entered[index].Group, IndexOf(ranking, entered[index].Plot));
+                anchors.TryAdd(entered[index].Group, entered[index].Plot is { } plot ? IndexOf(ranking, plot) : -1);
             }
         }
 
@@ -299,7 +299,8 @@ internal static class AssignmentPlanner
         return units;
     }
 
-    // Anchor is the group's plot in the ranking, or -1 when a member entered a plot that is not on the shortlist.
+    // Anchor is the group's plot in the ranking, or -1 when a member entered a plot that is not on the shortlist or that
+    // could not be read.
     private static void Anchor(
         RunPolicy policy,
         List<PlacementUnit> units,
@@ -701,7 +702,7 @@ internal static class AssignmentPlanner
 
     private readonly record struct SelectedCharacter(CharacterRunSettings Settings, CharacterProfile Profile, OwnershipGroup Group);
 
-    private readonly record struct GroupEntry(OwnershipGroup Group, PlotKey Plot);
+    private readonly record struct GroupEntry(OwnershipGroup Group, PlotKey? Plot);
 
     private readonly ref struct OddsContext(
         ReadOnlySpan<CharacterProfile> roster,

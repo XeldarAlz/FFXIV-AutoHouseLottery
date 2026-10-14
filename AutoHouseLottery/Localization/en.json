@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "Dry run for every character: each goes as far as its lottery confirmation and closes it. Real batch entries stay off until batches are validated in game.",
   "dev.refundSwitchingWarning": "REFUND QUEUE SWITCHING ALLOWED for two hours: with Switch characters to collect refunds on, the refund queue may log out and log in the characters ticked on the Characters list through Lifestream to check their results. /ahl dev revoke-switching withdraws it.",
   "findHome.reason.groupPlot": "its ownership group goes on another plot",
-  "runFailure.groupEnteredElsewhere": "Another character of its ownership group entered a different plot, and the group could claim only one, so this one stays out.",
+  "runFailure.groupEnteredElsewhere": "Another character of its ownership group entered a plot this one cannot follow (another plot, or one that could not be read), and the group could claim only one, so this one stays out.",
   "runStart.batchWaiting": "A batch is still waiting. Continue it or discard it first.",
   "diagnostics.name.batchEntry": "Entering for several characters",
   "diagnostics.name.characterSwitch": "Switching characters",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "Off until validated, but a permission given this session lets the refund queue switch characters for two hours. /ahl dev revoke-switching withdraws it.",
   "diagnostics.reason.switchPermittedBoth": "Off until validated, but permissions given this session let the next batch and the refund queue switch characters, for two hours at most. /ahl dev revoke-switching withdraws them.",
   "diagnostics.reason.switchLifestreamMissing": "Lifestream does not offer its character change to other plugins, so characters are never switched. Update Lifestream.",
-  "findHome.reason.region": "housing on its home world is not supported"
+  "findHome.reason.region": "housing on its home world is not supported",
+  "batch.member.held": "{0}: waiting while an entry in its ownership group is being checked"
 }

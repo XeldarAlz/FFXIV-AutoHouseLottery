@@ -153,14 +153,15 @@ internal sealed class BatchPanelText
                 lines.Append('\n');
             }
 
-            lines.Append(Line(batch.Members[order[index]]));
+            lines.Append(Line(batch, order[index]));
         }
 
         return lines.ToString();
     }
 
-    private static string Line(BatchMember member)
+    private static string Line(BatchCheckpoint batch, int memberIndex)
     {
+        var member = batch.Members[memberIndex];
         var name = member.Name.Length > 0 ? member.Name : Loc.T(L.Lottery.UnknownCharacter);
         var address = member.Plot is { } plot ? PlotNames.Address(plot) : Loc.T(L.Lottery.PlotNotNamed);
         var deposit = member.Deposit is { } amount ? Loc.Gil(amount) : Loc.T(L.Find.Unknown);
@@ -172,6 +173,7 @@ internal sealed class BatchPanelText
             BatchMemberState.Uncertain => Loc.T(L.Batch.MemberUncertain, name),
             BatchMemberState.NotEntered when member.Failure != EntryFailure.None => Loc.T(L.Batch.MemberNotEntered, name, RunText.Failure(member.Failure, null)),
             BatchMemberState.NotEntered or BatchMemberState.Excluded => Loc.T(L.Batch.MemberExcluded, name, FindText.Reasons(member.Reasons)),
+            _ when BatchRules.Held(batch, memberIndex) => Loc.T(L.Batch.MemberHeld, name),
             _ => Loc.T(L.Batch.MemberQueued, name),
         };
     }

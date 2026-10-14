@@ -120,6 +120,36 @@ public sealed class BatchPlanningTests
     }
 
     [Fact]
+    public void AMemberWithAnEntryInQuestionAnchorsItsGroupOnThatPlot()
+    {
+        var keys = Ward(5);
+        var inQuestion = Character(3) with
+        {
+            Participation = new CycleParticipation(FirstCycle, EntrySlotState.Unresolved) { EnteredPlot = keys[2], ObservedUtc = ObservedAt },
+        };
+
+        var plan = Plan(Policy(keys, Settings(1), Settings(2), Settings(3)), [Character(1), Character(2), inQuestion], Listed(keys));
+
+        Assert.Equal(2, plan.Assignments.Length);
+        for (var index = 0; index < plan.Assignments.Length; index++)
+        {
+            Assert.Equal<PlotKey>([keys[2]], plan.Assignments[index].TargetOrder);
+        }
+    }
+
+    [Fact]
+    public void AnEntryOnAPlotThatCouldNotBeReadLeavesItsGroupOut()
+    {
+        var keys = Ward(5);
+        var unread = Character(3) with { Participation = new CycleParticipation(FirstCycle, EntrySlotState.Entered) { EnteredUtc = ObservedAt } };
+
+        var plan = Plan(Policy(keys, Settings(1), Settings(2), Settings(3)), [Character(1), Character(2), unread], Listed(keys));
+
+        Assert.Empty(plan.Assignments);
+        Assert.Equal(2, CountReason(plan, EligibilityReason.GroupOnAnotherPlot));
+    }
+
+    [Fact]
     public void EachCharactersOwnRefundSettingDecidesWhetherAnEarlierRefundRulesItOut()
     {
         var keys = Ward(2);

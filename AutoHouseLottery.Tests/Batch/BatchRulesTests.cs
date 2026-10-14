@@ -13,6 +13,7 @@ namespace AutoHouseLottery.Tests.Batch;
 public sealed class BatchRulesTests
 {
     private static readonly DateTime now = CycleStart.AddHours(12);
+    private static readonly JournalSnapshot emptyJournal = new([], [], []);
 
     [Fact]
     public void TheLoggedInCharacterGoesFirstWithoutASwitch()
@@ -208,7 +209,7 @@ public sealed class BatchRulesTests
         var policy = Policy(keys, Settings(1), Settings(2), Settings(3), Settings(4));
         var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, false, now);
         batch = BatchRules.Record(batch, batch.IndexOf(1), BatchMemberState.Entered, EntryFailure.None, keys[0], Deposit, now);
-        batch = BatchRules.Skip(batch, batch.IndexOf(2), EligibilityReason.InsufficientGil, EntryFailure.OverBudget, now);
+        batch = BatchRules.Skip(batch, batch.IndexOf(2), EligibilityReason.InsufficientGil, EntryFailure.OverBudget, null, now);
 
         var report = BatchRules.Report(batch);
 
@@ -356,6 +357,136 @@ public sealed class BatchRulesTests
         Assert.Equal(BatchMemberState.Uncertain, reevaluated.Members[2].State);
     }
 
+    [Fact]
+    public void AMemberFreedOnContinueFollowsThePlotItsGroupEnteredWhileItWasInQuestion()
+    {
+        var batch = Batch(out _);
+        var entered = batch.Members[0].Assignment!.Value.TargetOrder[1];
+        batch = BatchRules.Record(batch, 0, BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
+        batch = BatchRules.Record(batch, 1, BatchMemberState.Entered, EntryFailure.None, entered, Deposit, now);
+
+        var reevaluated = BatchRules.Reevaluate(batch, emptyJournal, now);
+
+        Assert.Equal(BatchMemberState.Queued, reevaluated.Members[0].State);
+        Assert.Equal<PlotKey>([entered], reevaluated.Members[0].Assignment!.Value.TargetOrder);
+        Assert.Equal<PlotKey>([entered], reevaluated.Members[2].Assignment!.Value.TargetOrder);
+    }
+
+    [Fact]
+    public void AMemberFreedOnContinueWhosePlanLacksItsGroupsPlotIsLeftOut()
+    {
+        var batch = Batch(out _);
+        var targets = batch.Members[0].Assignment!.Value.TargetOrder;
+        batch = batch with { Members = batch.Members.SetItem(0, batch.Members[0] with { Assignment = batch.Members[0].Assignment!.Value with { TargetOrder = [targets[0]] } }) };
+        batch = BatchRules.Record(batch, 0, BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
+        batch = BatchRules.Record(batch, 1, BatchMemberState.DryRun, EntryFailure.None, targets[1], Deposit, now);
+
+        var reevaluated = BatchRules.Reevaluate(batch, emptyJournal, now);
+
+        Assert.Equal(BatchMemberState.NotEntered, reevaluated.Members[0].State);
+        Assert.Equal(EntryFailure.GroupEnteredElsewhere, reevaluated.Members[0].Failure);
+    }
+
+    [Fact]
+    public void GroupMatesOfAMemberInQuestionWaitWhileOtherGroupsGoOn()
+    {
+        var batch = TwoGroups();
+        batch = BatchRules.Record(batch, batch.IndexOf(1), BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
+
+        var mateLoggedIn = BatchRules.Next(batch, loggedIn: 2, switchingAllowed: true);
+        var mateWaitsForLogin = BatchRules.Next(batch, loggedIn: 2, switchingAllowed: false);
+
+        Assert.True(BatchRules.Held(batch, batch.IndexOf(2)));
+        Assert.False(BatchRules.Held(batch, batch.IndexOf(3)));
+        Assert.Equal(BatchStepKind.Switch, mateLoggedIn.Kind);
+        Assert.Equal(3UL, batch.Members[mateLoggedIn.MemberIndex].ContentId);
+        Assert.Equal(BatchStepKind.WaitForLogin, mateWaitsForLogin.Kind);
+        Assert.Equal(3UL, batch.Members[mateWaitsForLogin.MemberIndex].ContentId);
+
+        batch = Done(batch, 3, BatchMemberState.DryRun);
+        var onlyHeld = BatchRules.Next(batch, loggedIn: 2, switchingAllowed: true);
+
+        Assert.Equal(BatchStepKind.Held, onlyHeld.Kind);
+        Assert.Equal(2UL, batch.Members[onlyHeld.MemberIndex].ContentId);
+        Assert.Equal(StartRefusal.ReconciliationPending, BatchRules.ContinueRefusal(onlyHeld.Kind));
+        Assert.Equal(StartRefusal.None, BatchRules.ContinueRefusal(BatchStepKind.Process));
+        Assert.Equal(StartRefusal.None, BatchRules.ContinueRefusal(BatchStepKind.Switch));
+        Assert.Equal(StartRefusal.CharacterNotInPolicy, BatchRules.ContinueRefusal(BatchStepKind.WaitForLogin));
+    }
+
+    [Fact]
+    public void ACheckThatFindsTheEntryMadeReleasesItsGroupOntoThatPlot()
+    {
+        var batch = TwoGroups();
+        var first = batch.IndexOf(1);
+        var plot = batch.Members[first].Assignment!.Value.TargetOrder[0];
+        batch = BatchRules.Record(batch, first, BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
+        var receipt = Receipt(1, batch.Policy.Cycle.Cycle, plot);
+
+        var reevaluated = BatchRules.Reevaluate(batch, new JournalSnapshot([], [receipt], [EntrySettlement.Entered(receipt.ReceiptId, ObservedAt)]), now);
+
+        Assert.Equal(BatchMemberState.Entered, reevaluated.Members[first].State);
+        Assert.False(BatchRules.Held(reevaluated, reevaluated.IndexOf(2)));
+        Assert.Equal<PlotKey>([plot], reevaluated.Members[reevaluated.IndexOf(2)].Assignment!.Value.TargetOrder);
+        Assert.Equal(BatchStepKind.Process, BatchRules.Next(reevaluated, loggedIn: 2, switchingAllowed: false).Kind);
+    }
+
+    [Fact]
+    public void AMemberAFreshCheckFindsAlreadyEnteredHoldsItsGroupOnThatPlot()
+    {
+        var batch = Batch(out _);
+        var plot = batch.Members[0].Assignment!.Value.TargetOrder[2];
+
+        var skipped = BatchRules.Skip(batch, 0, EligibilityReason.AlreadyEnteredThisCycle, EntryFailure.AlreadyEntered, plot, now);
+
+        Assert.Equal(BatchMemberState.NotEntered, skipped.Members[0].State);
+        Assert.Equal(plot, skipped.Members[0].Plot);
+        Assert.Equal<PlotKey>([plot], skipped.Members[1].Assignment!.Value.TargetOrder);
+        Assert.Equal<PlotKey>([plot], skipped.Members[2].Assignment!.Value.TargetOrder);
+    }
+
+    [Fact]
+    public void AMemberItsOwnRunFindsAlreadyEnteredHoldsItsGroupOnThatPlot()
+    {
+        var batch = Batch(out _);
+        var plot = batch.Members[0].Assignment!.Value.TargetOrder[1];
+
+        var recorded = BatchRules.Record(batch, 0, BatchMemberState.NotEntered, EntryFailure.AlreadyEntered, plot, null, now);
+
+        Assert.Equal<PlotKey>([plot], recorded.Members[1].Assignment!.Value.TargetOrder);
+        Assert.Equal<PlotKey>([plot], recorded.Members[2].Assignment!.Value.TargetOrder);
+    }
+
+    [Fact]
+    public void AnEntryOnAPlotThatCouldNotBeReadLeavesTheWaitingGroupOut()
+    {
+        var batch = Batch(out _);
+
+        var skipped = BatchRules.Skip(batch, 0, EligibilityReason.AlreadyEnteredThisCycle, EntryFailure.AlreadyEntered, null, now);
+        var found = BatchRules.Record(batch, 0, BatchMemberState.NotEntered, EntryFailure.AlreadyEntered, null, null, now);
+
+        for (var index = 1; index < batch.Members.Length; index++)
+        {
+            Assert.Equal(BatchMemberState.NotEntered, skipped.Members[index].State);
+            Assert.Equal(EntryFailure.GroupEnteredElsewhere, skipped.Members[index].Failure);
+            Assert.Equal(BatchMemberState.NotEntered, found.Members[index].State);
+            Assert.Equal(EntryFailure.GroupEnteredElsewhere, found.Members[index].Failure);
+        }
+    }
+
+    [Fact]
+    public void AnotherReasonToSkipNeverMovesTheGroup()
+    {
+        var batch = Batch(out _);
+        var before = batch.Members[1].Assignment;
+
+        var skipped = BatchRules.Skip(batch, 0, EligibilityReason.InsufficientGil, EntryFailure.OverBudget, batch.Members[0].Assignment!.Value.TargetOrder[1], now);
+
+        Assert.Null(skipped.Members[0].Plot);
+        Assert.Equal(before, skipped.Members[1].Assignment);
+        Assert.Equal(BatchMemberState.Queued, skipped.Members[1].State);
+    }
+
     // Three ungrouped private characters on one world: one ownership group, Same plot, in policy order.
     internal static BatchCheckpoint Batch(out RunPolicy policy)
     {
@@ -365,6 +496,33 @@ public sealed class BatchRulesTests
         return BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, dryRunRequested: true, now);
     }
 
+    // Characters 1 and 2 share an ownership group; character 3 is alone in another.
+    private static BatchCheckpoint TwoGroups()
+    {
+        var keys = Ward(5);
+        var roster = new[] { Character(1, accountGroup: 1), Character(2, accountGroup: 1), Character(3, accountGroup: 2) };
+        var policy = Policy(keys, Settings(1), Settings(2), Settings(3));
+        return BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, dryRunRequested: true, now);
+    }
+
+    private static EntryReceipt Receipt(ulong contentId, CycleKey cycle, PlotKey plot) => new()
+    {
+        ReceiptId = Guid.NewGuid(),
+        CharacterContentId = contentId,
+        HomeWorldId = HomeWorld,
+        Cycle = cycle,
+        Plot = plot,
+        Buyer = BuyerType.Private,
+        Evidence = ReceiptEvidence.Reconciled,
+        Deposit = Deposit,
+        EnteredUtc = ObservedAt,
+    };
+
+    // An entry or a dry run always knows its plot: the member's first target here.
     private static BatchCheckpoint Done(BatchCheckpoint batch, ulong contentId, BatchMemberState state)
-        => BatchRules.Record(batch, batch.IndexOf(contentId), state, state == BatchMemberState.NotEntered ? EntryFailure.Sold : EntryFailure.None, null, null, now);
+    {
+        var index = batch.IndexOf(contentId);
+        var plot = state is BatchMemberState.Entered or BatchMemberState.DryRun ? batch.Members[index].Assignment!.Value.TargetOrder[0] : (PlotKey?)null;
+        return BatchRules.Record(batch, index, state, state == BatchMemberState.NotEntered ? EntryFailure.Sold : EntryFailure.None, plot, null, now);
+    }
 }

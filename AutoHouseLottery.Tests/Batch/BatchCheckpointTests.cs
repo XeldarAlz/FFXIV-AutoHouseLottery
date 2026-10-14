@@ -33,7 +33,7 @@ public sealed class BatchCheckpointTests : IDisposable
     {
         var batch = BatchRulesTests.Batch(out _);
         batch = BatchRules.Record(batch, 0, BatchMemberState.Entered, EntryFailure.None, batch.Members[0].Assignment!.Value.TargetOrder[1], Deposit, now);
-        batch = BatchRules.Skip(batch, 1, EligibilityReason.InsufficientGil | EligibilityReason.AlreadyEnteredThisCycle, EntryFailure.OverBudget, now);
+        batch = BatchRules.Skip(batch, 1, EligibilityReason.InsufficientGil | EligibilityReason.AlreadyEnteredThisCycle, EntryFailure.OverBudget, null, now);
         batch = BatchRules.BeginSwitch(batch, batch.Members[2].ContentId, now);
 
         Assert.True(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch), out var read));

@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "全キャラクターで試し実行：各キャラクターは抽選の確認画面まで進み、画面を閉じます。一括申し込みがゲーム内で検証されるまで、本番の一括申し込みはオフのままです。",
   "dev.refundSwitchingWarning": "返金キューのキャラクター切り替えを2時間許可：「キャラクターを切り替えて返金を受け取る」がオンのとき、キャラクター一覧でチェックしたキャラクターをLifestreamでログアウト・ログインして結果を確認できます。/ahl dev revoke-switching で取り消せます。",
   "findHome.reason.groupPlot": "所有グループは別の区画に申し込みます",
-  "runFailure.groupEnteredElsewhere": "同じ所有グループの別のキャラクターが別の区画に申し込み、グループで購入できるのは1つだけのため、このキャラクターは申し込みません。",
+  "runFailure.groupEnteredElsewhere": "同じ所有グループの別のキャラクターが、このキャラクターが合わせられない区画（別の区画、または読み取れなかった区画）に申し込み、グループで購入できるのは1つだけのため、このキャラクターは申し込みません。",
   "runStart.batchWaiting": "待機中の一括申し込みがあります。先に続行するか破棄してください。",
   "diagnostics.name.batchEntry": "複数キャラクターでの申し込み",
   "diagnostics.name.characterSwitch": "キャラクター切り替え",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "検証までオフですが、このセッションで出された許可により、返金キューは2時間キャラクターを切り替えられます。/ahl dev revoke-switching で取り消せます。",
   "diagnostics.reason.switchPermittedBoth": "検証までオフですが、このセッションで出された許可により、次の一括申し込みと返金キューはキャラクターを切り替えられます（最大2時間）。/ahl dev revoke-switching で取り消せます。",
   "diagnostics.reason.switchLifestreamMissing": "Lifestreamがキャラクター切り替えをほかのプラグインに提供していないため、切り替えは行いません。Lifestreamを更新してください。",
-  "findHome.reason.region": "ホームワールドのハウジングに対応していません"
+  "findHome.reason.region": "ホームワールドのハウジングに対応していません",
+  "batch.member.held": "{0}：同じ所有グループの申し込みを確認中のため待機"
 }

@@ -127,9 +127,7 @@ internal sealed partial class RunController
         }
 
         var reevaluated = BatchRules.Reevaluate(waiting, housing.JournalSnapshot, DateTime.UtcNow);
-        return BatchRules.Next(reevaluated, Svc.PlayerState.ContentId, BatchSwitchingAllowed).Kind is BatchStepKind.Process or BatchStepKind.Switch
-            ? StartRefusal.None
-            : StartRefusal.CharacterNotInPolicy;
+        return BatchRules.ContinueRefusal(BatchRules.Next(reevaluated, Svc.PlayerState.ContentId, BatchSwitchingAllowed).Kind);
     }
 
     // The player's Continue for a batch that waits for a login or was halted. Nothing restarts on its own after a halt or a
@@ -313,6 +311,9 @@ internal sealed partial class RunController
                           + $"{DescribeReport(BatchRules.Report(batch))}.");
                 SaveBatch();
                 return;
+            case BatchStepKind.Held:
+                HaltBatch(BatchHalt.NeedsReconciliation, $"{running.Members[step.MemberIndex].Name} and the others still queued wait until their ownership group's entry in question is checked");
+                return;
             default:
                 batch = BatchRules.Finish(running, BatchHalt.None, now);
                 ReleaseBatchLease();
@@ -351,7 +352,7 @@ internal sealed partial class RunController
         var (reasons, failure) = BatchRules.Recheck(characterCheck.Blockers, funds);
         if (reasons != EligibilityReason.None)
         {
-            batch = BatchRules.Skip(running, index, reasons, failure, now);
+            batch = BatchRules.Skip(running, index, reasons, failure, profile.Participation.EnteredPlot, now);
             RunLog.Info($"Batch {running.BatchId}: {member.Name} is not entered after a fresh check ({reasons}, funds {funds}; gil {context.Gil?.ToString() ?? "unknown"}).");
             SaveBatch();
             batchStepDue = true;
@@ -392,6 +393,10 @@ internal sealed partial class RunController
         {
             plot = ended.Target;
             deposit = ended.Ledger.GrossSubmitted;
+        }
+        else if (state == BatchMemberState.NotEntered && ended.Failure == EntryFailure.AlreadyEntered)
+        {
+            plot = EnteredPlotOf(running.Members[index], running.Policy.Cycle);
         }
 
         var deferred = deferredHalt;
@@ -608,6 +613,14 @@ internal sealed partial class RunController
 
         var index = current.IndexOf(ended.Settings.ContentId);
         return index >= 0 && current.Members[index].State == BatchMemberState.Running ? index : -1;
+    }
+
+    // The plot a member's own run found it already entered on, from the journal and the run's lottery reading; null when
+    // neither can tell, which leaves the member's group out of the batch rather than guessing.
+    private PlotKey? EnteredPlotOf(BatchMember member, in CyclePosition cycle)
+    {
+        var slot = housing.Participation(member.ContentId, member.HomeWorldId, housing.LastReading(member.ContentId), cycle);
+        return slot.StateIn(cycle.Cycle) is EntrySlotState.Entered or EntrySlotState.Unresolved ? slot.EnteredPlot : null;
     }
 
     private static (int Number, int Count) Position(BatchCheckpoint running)

@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "Simulation pour chaque personnage : chacun va jusqu'à sa confirmation de loterie et la ferme. Les participations réelles en lot restent désactivées tant que les lots ne sont pas validés en jeu.",
   "dev.refundSwitchingWarning": "CHANGEMENT POUR LA FILE DES REMBOURSEMENTS AUTORISÉ pendant deux heures : avec Changer de personnage pour récupérer les remboursements activé, la file peut déconnecter et connecter les personnages cochés dans la liste Personnages via Lifestream pour vérifier leurs résultats. /ahl dev revoke-switching la retire.",
   "findHome.reason.groupPlot": "son groupe de propriété va sur une autre parcelle",
-  "runFailure.groupEnteredElsewhere": "Un autre personnage de son groupe de propriété a participé pour une autre parcelle, et le groupe ne pourrait en acheter qu'une, celui-ci reste donc à l'écart.",
+  "runFailure.groupEnteredElsewhere": "Un autre personnage de son groupe de propriété a participé pour une parcelle que celui-ci ne peut pas suivre (une autre parcelle, ou une qui n'a pas pu être lue), et le groupe ne pourrait en acheter qu'une, celui-ci reste donc à l'écart.",
   "runStart.batchWaiting": "Un lot est encore en attente. Continuez-le ou abandonnez-le d'abord.",
   "diagnostics.name.batchEntry": "Participer pour plusieurs personnages",
   "diagnostics.name.characterSwitch": "Changement de personnage",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "Désactivé jusqu'à validation, mais une autorisation donnée dans cette session permet à la file des remboursements de changer de personnage pendant deux heures. /ahl dev revoke-switching la retire.",
   "diagnostics.reason.switchPermittedBoth": "Désactivé jusqu'à validation, mais des autorisations données dans cette session permettent au prochain lot et à la file des remboursements de changer de personnage, deux heures au plus. /ahl dev revoke-switching les retire.",
   "diagnostics.reason.switchLifestreamMissing": "Lifestream ne propose pas son changement de personnage aux autres plugins, donc aucun changement n'a lieu. Mettez Lifestream à jour.",
-  "findHome.reason.region": "le logement sur son monde d'origine n'est pas pris en charge"
+  "findHome.reason.region": "le logement sur son monde d'origine n'est pas pris en charge",
+  "batch.member.held": "{0} : attend pendant la vérification d'une participation de son groupe de propriété"
 }

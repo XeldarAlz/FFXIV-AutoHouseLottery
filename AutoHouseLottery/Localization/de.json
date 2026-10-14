@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "Probelauf für jeden Charakter: Jeder geht bis zu seiner Bestätigung der Verlosung und schließt sie. Echte Stapelteilnahmen bleiben aus, bis Stapel im Spiel geprüft sind.",
   "dev.refundSwitchingWarning": "WECHSEL FÜR DIE ERSTATTUNGSWARTESCHLANGE ERLAUBT für zwei Stunden: Wenn Charaktere zum Abholen von Erstattungen wechseln an ist, darf die Warteschlange die in der Charakterliste angehakten Charaktere über Lifestream aus- und einloggen, um ihre Ergebnisse zu prüfen. /ahl dev revoke-switching nimmt es zurück.",
   "findHome.reason.groupPlot": "seine Besitzgruppe geht auf ein anderes Grundstück",
-  "runFailure.groupEnteredElsewhere": "Ein anderer Charakter seiner Besitzgruppe hat an einem anderen Grundstück teilgenommen, und die Gruppe könnte nur eines beanspruchen, daher bleibt dieser draußen.",
+  "runFailure.groupEnteredElsewhere": "Ein anderer Charakter seiner Besitzgruppe hat an einem Grundstück teilgenommen, dem dieser nicht folgen kann (ein anderes Grundstück oder eines, das nicht gelesen werden konnte), und die Gruppe könnte nur eines beanspruchen, daher bleibt dieser draußen.",
   "runStart.batchWaiting": "Ein Stapel wartet noch. Setze ihn fort oder verwirf ihn zuerst.",
   "diagnostics.name.batchEntry": "Teilnahme für mehrere Charaktere",
   "diagnostics.name.characterSwitch": "Charakterwechsel",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "Aus, bis bestätigt, aber eine in dieser Sitzung gegebene Erlaubnis lässt die Erstattungswarteschlange zwei Stunden lang Charaktere wechseln. /ahl dev revoke-switching nimmt sie zurück.",
   "diagnostics.reason.switchPermittedBoth": "Aus, bis bestätigt, aber in dieser Sitzung gegebene Erlaubnisse lassen den nächsten Stapel und die Erstattungswarteschlange Charaktere wechseln, höchstens zwei Stunden. /ahl dev revoke-switching nimmt sie zurück.",
   "diagnostics.reason.switchLifestreamMissing": "Lifestream bietet seinen Charakterwechsel anderen Plugins nicht an, daher wird nie gewechselt. Aktualisiere Lifestream.",
-  "findHome.reason.region": "Wohnen auf seiner Stammwelt wird nicht unterstützt"
+  "findHome.reason.region": "Wohnen auf seiner Stammwelt wird nicht unterstützt",
+  "batch.member.held": "{0}: wartet, während eine Teilnahme seiner Besitzgruppe geprüft wird"
 }

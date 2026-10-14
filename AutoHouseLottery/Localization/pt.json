@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "Simulação para cada personagem: cada um vai até a confirmação da loteria e a fecha. As inscrições reais em lote ficam desativadas até os lotes serem validados no jogo.",
   "dev.refundSwitchingWarning": "TROCA PARA A FILA DE REEMBOLSOS PERMITIDA por duas horas: com Trocar de personagem para retirar reembolsos ativado, a fila pode desconectar e conectar os personagens marcados na lista Personagens pelo Lifestream para verificar os resultados. /ahl dev revoke-switching a retira.",
   "findHome.reason.groupPlot": "seu grupo de propriedade vai para outro terreno",
-  "runFailure.groupEnteredElsewhere": "Outro personagem do seu grupo de propriedade se inscreveu em um terreno diferente, e o grupo só poderia reivindicar um, então este fica de fora.",
+  "runFailure.groupEnteredElsewhere": "Outro personagem do seu grupo de propriedade se inscreveu em um terreno que este não pode seguir (outro terreno, ou um que não pôde ser lido), e o grupo só poderia reivindicar um, então este fica de fora.",
   "runStart.batchWaiting": "Ainda há um lote aguardando. Continue-o ou descarte-o primeiro.",
   "diagnostics.name.batchEntry": "Inscrição de vários personagens",
   "diagnostics.name.characterSwitch": "Troca de personagem",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "Desativado até ser validado, mas uma permissão dada nesta sessão deixa a fila de reembolsos trocar de personagem por duas horas. /ahl dev revoke-switching a retira.",
   "diagnostics.reason.switchPermittedBoth": "Desativado até ser validado, mas permissões dadas nesta sessão deixam o próximo lote e a fila de reembolsos trocar de personagem, por no máximo duas horas. /ahl dev revoke-switching as retira.",
   "diagnostics.reason.switchLifestreamMissing": "O Lifestream não oferece a troca de personagem a outros plugins, então nunca há troca. Atualize o Lifestream.",
-  "findHome.reason.region": "moradia no mundo de origem dele não é suportada"
+  "findHome.reason.region": "moradia no mundo de origem dele não é suportada",
+  "batch.member.held": "{0}: aguardando enquanto uma inscrição do seu grupo de propriedade é verificada"
 }

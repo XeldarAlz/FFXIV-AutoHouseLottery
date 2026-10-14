@@ -9,7 +9,8 @@ using AutoHouseLottery.Core.Tasks.Model;
 
 namespace AutoHouseLottery.Core.Batch.Model;
 
-internal enum BatchStepKind : byte { Process, Switch, WaitForLogin, Finished }
+// Held: every member still waiting belongs to an ownership group with an entry in question, so none may go yet.
+internal enum BatchStepKind : byte { Process, Switch, WaitForLogin, Held, Finished }
 
 internal readonly record struct BatchStep(BatchStepKind Kind, int MemberIndex);
 
@@ -60,15 +61,23 @@ internal static class BatchRules
     }
 
     // The logged-in character goes first when it is still waiting, so a switch is never spent on it. Otherwise the next
-    // waiting member is switched to when switching is allowed, or waits for its own login when it is not.
+    // waiting member is switched to when switching is allowed, or waits for its own login when it is not. A member whose
+    // ownership group has an entry in question is held until that entry is read back, since the group's plot is not known.
     public static BatchStep Next(BatchCheckpoint checkpoint, ulong? loggedIn, bool switchingAllowed)
     {
         var firstWaiting = -1;
+        var firstHeld = -1;
         for (var index = 0; index < checkpoint.Members.Length; index++)
         {
             var member = checkpoint.Members[index];
             if (!member.Waiting)
             {
+                continue;
+            }
+
+            if (Held(checkpoint, index))
+            {
+                firstHeld = firstHeld < 0 ? index : firstHeld;
                 continue;
             }
 
@@ -85,10 +94,30 @@ internal static class BatchRules
 
         if (firstWaiting < 0)
         {
-            return new BatchStep(BatchStepKind.Finished, -1);
+            return firstHeld < 0 ? new BatchStep(BatchStepKind.Finished, -1) : new BatchStep(BatchStepKind.Held, firstHeld);
         }
 
         return switchingAllowed ? new BatchStep(BatchStepKind.Switch, firstWaiting) : new BatchStep(BatchStepKind.WaitForLogin, firstWaiting);
+    }
+
+    // A waiting member another member of whose ownership group has an entry in question.
+    public static bool Held(BatchCheckpoint checkpoint, int index)
+    {
+        if (checkpoint.Members[index] is not { Waiting: true, Assignment: { } assignment })
+        {
+            return false;
+        }
+
+        for (var otherIndex = 0; otherIndex < checkpoint.Members.Length; otherIndex++)
+        {
+            var other = checkpoint.Members[otherIndex];
+            if (otherIndex != index && other.State == BatchMemberState.Uncertain && other.Assignment is { } otherAssignment && otherAssignment.Group == assignment.Group)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static BatchCheckpoint Begin(BatchCheckpoint checkpoint, int index, DateTime nowUtc)
@@ -101,13 +130,17 @@ internal static class BatchRules
             UpdatedUtc = nowUtc,
         };
 
-    // A member a fresh check rules out before its run starts: its slot, an earlier entry still to settle, its gil.
-    public static BatchCheckpoint Skip(BatchCheckpoint checkpoint, int index, EligibilityReason reasons, EntryFailure failure, DateTime nowUtc)
-        => checkpoint with
+    // A member a fresh check rules out before its run starts: its slot, an earlier entry still to settle, its gil. One
+    // found already entered holds its ownership group on that plot, as an entry the batch made would.
+    public static BatchCheckpoint Skip(BatchCheckpoint checkpoint, int index, EligibilityReason reasons, EntryFailure failure, PlotKey? enteredPlot, DateTime nowUtc)
+        => Settle(checkpoint, index, checkpoint.Members[index] with
         {
-            Members = checkpoint.Members.SetItem(index, checkpoint.Members[index] with { State = BatchMemberState.NotEntered, Reasons = reasons, Failure = failure, UpdatedUtc = nowUtc }),
+            State = BatchMemberState.NotEntered,
+            Reasons = reasons,
+            Failure = failure,
+            Plot = failure == EntryFailure.AlreadyEntered ? enteredPlot : null,
             UpdatedUtc = nowUtc,
-        };
+        }, nowUtc);
 
     // How a member's run ended, for the batch. A run that ended before anything was entered leaves the member waiting
     // when the player stopped it or something cut it short, so a resume starts it again from a fresh check. A press that
@@ -145,27 +178,28 @@ internal static class BatchRules
         };
     }
 
-    // Records a member's outcome. An entry, or a dry run that reached its confirmation, on a Same plot assignment keeps its
-    // ownership group on that plot: members still waiting whose own targets hold it are pinned to it, and every other one,
-    // an exact member included, is left out rather than entering a second plot the group could not claim with the first.
+    // Records a member's outcome. An entry, a dry run that reached its confirmation, or a member its own run found already
+    // entered keeps its ownership group on that plot (Same plot and By group placement): members still waiting whose own
+    // targets hold it are pinned to it, and every other one, an exact member included, is left out rather than entering a
+    // second plot the group could not claim with the first.
     public static BatchCheckpoint Record(BatchCheckpoint checkpoint, int index, BatchMemberState state, EntryFailure failure, PlotKey? plot, long? deposit, DateTime nowUtc)
-    {
-        var member = checkpoint.Members[index] with
+        => Settle(checkpoint, index, checkpoint.Members[index] with
         {
             State = state,
             Failure = state is BatchMemberState.Entered or BatchMemberState.DryRun ? EntryFailure.None : failure,
             Plot = plot,
             Deposit = deposit,
             UpdatedUtc = nowUtc,
-        };
-        var members = checkpoint.Members.SetItem(index, member);
-        if (state is BatchMemberState.Entered or BatchMemberState.DryRun && plot is { } entered && member.Assignment is { Placement: PlacementMode.SamePlot } lead && lead.TargetOrder.IndexOf(entered) >= 0)
-        {
-            members = KeepGroupOnPlot(Follow(members, lead.ContentId, entered), lead, entered, nowUtc);
-        }
+        }, nowUtc);
 
-        return checkpoint with { Members = members, UpdatedUtc = nowUtc };
-    }
+    // A continued batch may only process the members its next step names; a step that holds every waiting member behind
+    // an entry in question is the reconciliation the player still owes, and anything else is a character to log in.
+    public static StartRefusal ContinueRefusal(BatchStepKind kind) => kind switch
+    {
+        BatchStepKind.Process or BatchStepKind.Switch => StartRefusal.None,
+        BatchStepKind.Held => StartRefusal.ReconciliationPending,
+        _ => StartRefusal.CharacterNotInPolicy,
+    };
 
     // A member a fresh check before its run rules out: its character blockers, then its funds against its targets.
     public static (EligibilityReason Reasons, EntryFailure Failure) Recheck(EligibilityReason characterBlockers, BudgetCheck funds)
@@ -242,8 +276,38 @@ internal static class BatchRules
             }
         }
 
-        return updated;
+        return ReapplyGroupPlots(updated, nowUtc);
     }
+
+    // A member put back in the queue keeps to the plot its group entered while it was in question.
+    private static BatchCheckpoint ReapplyGroupPlots(BatchCheckpoint checkpoint, DateTime nowUtc)
+    {
+        var members = checkpoint.Members;
+        for (var index = 0; index < members.Length; index++)
+        {
+            if (HoldsPlot(members[index]) && members[index].Assignment is { Placement: PlacementMode.SamePlot } lead)
+            {
+                members = KeepGroupOnPlot(members, lead, members[index].Plot, nowUtc);
+            }
+        }
+
+        return members == checkpoint.Members ? checkpoint : checkpoint with { Members = members, UpdatedUtc = nowUtc };
+    }
+
+    private static BatchCheckpoint Settle(BatchCheckpoint checkpoint, int index, BatchMember member, DateTime nowUtc)
+    {
+        var members = checkpoint.Members.SetItem(index, member);
+        if (HoldsPlot(member) && member.Assignment is { Placement: PlacementMode.SamePlot } lead)
+        {
+            members = KeepGroupOnPlot(members, lead, member.Plot, nowUtc);
+        }
+
+        return checkpoint with { Members = members, UpdatedUtc = nowUtc };
+    }
+
+    private static bool HoldsPlot(BatchMember member)
+        => member.State is BatchMemberState.Entered or BatchMemberState.DryRun
+        || (member.State == BatchMemberState.NotEntered && member.Failure == EntryFailure.AlreadyEntered);
 
     // A maintainer's batch switching grant serves one batch: it ends when that batch is finished or dropped, or when a
     // switch of it failed.
@@ -371,55 +435,32 @@ internal static class BatchRules
         _ => 6,
     };
 
-    private static ImmutableArray<BatchMember> Follow(ImmutableArray<BatchMember> members, ulong leadContentId, PlotKey plot)
+    // A plot that could not be read leaves every waiting member of the group out: any plot it entered might be a second.
+    private static ImmutableArray<BatchMember> KeepGroupOnPlot(ImmutableArray<BatchMember> members, in RunAssignment lead, PlotKey? held, DateTime nowUtc)
     {
-        var assignments = ImmutableArray.CreateBuilder<RunAssignment>();
+        var updated = members;
         for (var index = 0; index < members.Length; index++)
         {
-            if (members[index].Assignment is { } assignment)
-            {
-                assignments.Add(assignment);
-            }
-        }
-
-        var followed = AssignmentPlanner.FollowConfirmedEntry(assignments.ToImmutable(), leadContentId, plot);
-        var updated = members.ToBuilder();
-        var assignmentIndex = 0;
-        for (var index = 0; index < updated.Count; index++)
-        {
-            if (updated[index].Assignment is null)
+            var member = members[index];
+            if (!member.Waiting
+                || member.ContentId == lead.ContentId
+                || member.Assignment is not { Placement: PlacementMode.SamePlot } assignment
+                || assignment.Group != lead.Group)
             {
                 continue;
             }
 
-            if (updated[index].Waiting)
+            if (held is not { } plot || assignment.TargetOrder.IndexOf(plot) < 0)
             {
-                updated[index] = updated[index] with { Assignment = followed[assignmentIndex] };
+                updated = updated.SetItem(index, member with { State = BatchMemberState.NotEntered, Failure = EntryFailure.GroupEnteredElsewhere, UpdatedUtc = nowUtc });
             }
-
-            assignmentIndex++;
-        }
-
-        return updated.MoveToImmutable();
-    }
-
-    private static ImmutableArray<BatchMember> KeepGroupOnPlot(ImmutableArray<BatchMember> members, in RunAssignment lead, PlotKey plot, DateTime nowUtc)
-    {
-        var updated = members.ToBuilder();
-        for (var index = 0; index < updated.Count; index++)
-        {
-            var member = updated[index];
-            if (member.Waiting
-                && member.ContentId != lead.ContentId
-                && member.Assignment is { Placement: PlacementMode.SamePlot } assignment
-                && assignment.Group == lead.Group
-                && assignment.TargetOrder.IndexOf(plot) < 0)
+            else if (!assignment.Exact && assignment.TargetOrder.Length > 1)
             {
-                updated[index] = member with { State = BatchMemberState.NotEntered, Failure = EntryFailure.GroupEnteredElsewhere, UpdatedUtc = nowUtc };
+                updated = updated.SetItem(index, member with { Assignment = assignment with { TargetOrder = [plot] } });
             }
         }
 
-        return updated.MoveToImmutable();
+        return updated;
     }
 
     private static long? DepositOf(ImmutableArray<RankedPlot> ranking, PlotKey plot)

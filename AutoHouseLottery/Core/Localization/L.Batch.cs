@@ -61,6 +61,7 @@ internal static partial class L
         public static readonly LocString MemberDryRun = new("batch.member.dryRun", "{0}: dry run reached {1} at {2}");
         public static readonly LocString MemberRunning = new("batch.member.running", "{0}: entering now");
         public static readonly LocString MemberQueued = new("batch.member.queued", "{0}: waiting for its turn");
+        public static readonly LocString MemberHeld = new("batch.member.held", "{0}: waiting while an entry in its ownership group is being checked");
         public static readonly LocString MemberUncertain = new("batch.member.uncertain", "{0}: checking whether its entry completed");
         public static readonly LocString MemberNotEntered = new("batch.member.notEntered", "{0}: not entered. {1}");
         public static readonly LocString MemberExcluded = new("batch.member.excluded", "{0}: left out, {1}");

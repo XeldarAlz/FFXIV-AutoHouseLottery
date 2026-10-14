@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "Her karakter için deneme: her biri çekiliş onayına kadar gider ve onu kapatır. Toplu katılımlar oyun içinde doğrulanana kadar gerçek toplu katılım kapalı kalır.",
   "dev.refundSwitchingWarning": "İADE KUYRUĞU İÇİN KARAKTER DEĞİŞTİRMEYE iki saat İZİN VERİLDİ: İadeleri almak için karakter değiştir açıkken kuyruk, Karakterler listesinde işaretli karakterlerle sonuçlarını kontrol etmek için Lifestream üzerinden çıkış ve giriş yapabilir. /ahl dev revoke-switching izni geri alır.",
   "findHome.reason.groupPlot": "sahiplik grubu başka bir arsaya gidiyor",
-  "runFailure.groupEnteredElsewhere": "Sahiplik grubundaki başka bir karakter farklı bir arsaya katıldı ve grup yalnızca birini satın alabilir, bu yüzden bu karakter dışarıda kalır.",
+  "runFailure.groupEnteredElsewhere": "Sahiplik grubundaki başka bir karakter bu karakterin izleyemeyeceği bir arsaya katıldı (farklı bir arsa ya da okunamayan bir arsa) ve grup yalnızca birini satın alabilir, bu yüzden bu karakter dışarıda kalır.",
   "runStart.batchWaiting": "Bekleyen bir toplu katılım var. Önce ona devam edin veya onu atın.",
   "diagnostics.name.batchEntry": "Birden fazla karakterle katılım",
   "diagnostics.name.characterSwitch": "Karakter değiştirme",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "Doğrulanana kadar kapalı, ama bu oturumda verilen bir izin iade kuyruğunun iki saat boyunca karakter değiştirmesine izin verir. /ahl dev revoke-switching izni geri alır.",
   "diagnostics.reason.switchPermittedBoth": "Doğrulanana kadar kapalı, ama bu oturumda verilen izinler sıradaki toplu katılımın ve iade kuyruğunun en fazla iki saat karakter değiştirmesine izin verir. /ahl dev revoke-switching izinleri geri alır.",
   "diagnostics.reason.switchLifestreamMissing": "Lifestream karakter değiştirmeyi başka eklentilere sunmuyor, bu yüzden karakter hiç değiştirilmez. Lifestream'i güncelleyin.",
-  "findHome.reason.region": "ana dünyasındaki konut desteklenmiyor"
+  "findHome.reason.region": "ana dünyasındaki konut desteklenmiyor",
+  "batch.member.held": "{0}: sahiplik grubundaki bir katılım kontrol edilirken bekliyor"
 }

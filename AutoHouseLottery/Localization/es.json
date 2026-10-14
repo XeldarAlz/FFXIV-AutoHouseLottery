@@ -866,7 +866,7 @@
   "batch.dryRunOnly": "Simulación para cada personaje: cada uno llega hasta su confirmación de la lotería y la cierra. Las inscripciones reales en lote siguen desactivadas hasta que los lotes se validen en el juego.",
   "dev.refundSwitchingWarning": "CAMBIO PARA LA COLA DE REEMBOLSOS PERMITIDO durante dos horas: con Cambiar de personaje para recoger reembolsos activado, la cola puede desconectar y conectar a los personajes marcados en la lista de Personajes mediante Lifestream para comprobar sus resultados. /ahl dev revoke-switching lo retira.",
   "findHome.reason.groupPlot": "su grupo de propiedad va a otra parcela",
-  "runFailure.groupEnteredElsewhere": "Otro personaje de su grupo de propiedad se inscribió en una parcela distinta, y el grupo solo podría reclamar una, así que este se queda fuera.",
+  "runFailure.groupEnteredElsewhere": "Otro personaje de su grupo de propiedad se inscribió en una parcela que este no puede seguir (otra parcela, o una que no se pudo leer), y el grupo solo podría reclamar una, así que este se queda fuera.",
   "runStart.batchWaiting": "Hay un lote en espera. Continúalo o descártalo primero.",
   "diagnostics.name.batchEntry": "Participar con varios personajes",
   "diagnostics.name.characterSwitch": "Cambio de personaje",
@@ -879,5 +879,6 @@
   "diagnostics.reason.switchPermittedRefunds": "Desactivado hasta validarlo, pero un permiso dado en esta sesión deja que la cola de reembolsos cambie de personaje durante dos horas. /ahl dev revoke-switching lo retira.",
   "diagnostics.reason.switchPermittedBoth": "Desactivado hasta validarlo, pero los permisos dados en esta sesión dejan que el próximo lote y la cola de reembolsos cambien de personaje, dos horas como máximo. /ahl dev revoke-switching los retira.",
   "diagnostics.reason.switchLifestreamMissing": "Lifestream no ofrece su cambio de personaje a otros plugins, así que nunca se cambia de personaje. Actualiza Lifestream.",
-  "findHome.reason.region": "la vivienda en su mundo de origen no es compatible"
+  "findHome.reason.region": "la vivienda en su mundo de origen no es compatible",
+  "batch.member.held": "{0}: esperando mientras se comprueba una inscripción de su grupo de propiedad"
 }
