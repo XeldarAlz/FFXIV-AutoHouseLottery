@@ -4,7 +4,7 @@ namespace AutoHouseLottery.Core.Tasks;
 // must not reach a command handler, so it ends in the log instead.
 internal static class TaskStarter
 {
-    // Completed runs on the framework thread once the task has ended, however it ended.
+    // Completed runs on the framework thread once the task has ended, whether it finished, failed or was stopped.
     public static bool TryStart(Func<AutoCommon> build, Action<AutoCommon>? completed = null)
     {
         if (Busy)
