@@ -89,8 +89,16 @@ internal sealed partial class FindHomePage
         Styling.VSpace(10f);
         DrawPreview(view);
         Styling.VSpace(10f);
-        DrawEnterAction(Loc.T(L.Find.EnterBestMatch), RunMode.BestMatch, view.PreviewPolicy, BestMatchMissing(view), bestMatchCheck);
+        var current = PlannedFromCurrentSelection(view);
+        DrawEnterAction(Loc.T(L.Find.EnterBestMatch), RunMode.BestMatch, current ? view.PreviewPolicy : null, current ? BestMatchMissing(view) : null, bestMatchCheck);
     }
+
+    // The view is rebuilt on a task, so for a moment after a change to the shortlist, the filters or the reserve the
+    // preview's policy still describes the old ones; Enter waits until it describes what is on screen.
+    private bool PlannedFromCurrentSelection(FindView view)
+        => view.QueryRevision == State.QueryRevision
+            && view.ShortlistRevision == State.Shortlist.Revision
+            && (view.PreviewPolicy is not { } policy || (policy.Shortlist?.Revision == State.Shortlist.Revision && policy.Characters[0].GilReserve == State.GilReserve));
 
     // Why the shortlist cannot be planned yet, in the words the preview above uses.
     private string? BestMatchMissing(FindView view) => view.Preview?.PolicyError switch

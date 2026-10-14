@@ -146,8 +146,8 @@ internal sealed partial class FindHomePage
         UnavailableAction(FontAwesomeIcon.Search, Loc.T(L.Find.InspectPlot), Styling.AccentBlue, Loc.T(L.Find.InspectLater));
     }
 
-    // Enter starts a dry run from the frozen policy; while the controller would refuse it, the button is locked and its
-    // reason is shown under it.
+    // Enter always asks for a dry run, which no grant can turn real, from the frozen policy; while the controller would
+    // refuse it, the button is locked and its reason is shown under it.
     private void DrawEnterAction(string title, RunMode mode, RunPolicy? policy, string? missing, StartCheck check)
     {
         var controller = plugin.Controller;
