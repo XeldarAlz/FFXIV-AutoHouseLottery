@@ -3,7 +3,7 @@ using System.Collections.Immutable;
 namespace AutoHouseLottery.Core.Commands.Model;
 
 // Every subcommand of the plugin's chat commands, in the order the command help lists them. The plugin dispatches from
-// this table, and the tests check the README and the command help in every catalog against it.
+// this table, and the tests check the README, docs/testing-commands.md and the command help in every catalog against it.
 internal static class PluginCommands
 {
     public const string Primary = "/autohouselottery";

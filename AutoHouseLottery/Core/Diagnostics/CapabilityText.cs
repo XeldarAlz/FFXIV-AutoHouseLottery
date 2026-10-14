@@ -21,8 +21,6 @@ internal static class CapabilityText
     {
         CapabilityState.Ready => L.Diagnostics.StateReady,
         CapabilityState.Fallback => L.Diagnostics.StateFallback,
-        CapabilityState.DryRunOnly => L.Diagnostics.StateDryRunOnly,
-        CapabilityState.PermittedOnce => L.Diagnostics.StatePermittedOnce,
         CapabilityState.NotChecked => L.Diagnostics.StateNotChecked,
         CapabilityState.Missing => L.Diagnostics.StateMissing,
         _ => L.Diagnostics.StateBlocked,
@@ -34,7 +32,7 @@ internal static class CapabilityText
         var detail = reason switch
         {
             CapabilityReason.LifestreamReady or CapabilityReason.LifestreamPartial or CapabilityReason.LifestreamCannotTravel => facts.LifestreamVersion,
-            CapabilityReason.AutoAnswerLoaded => facts.AutoAnswerPlugin,
+            CapabilityReason.AutoAnswerLoaded or CapabilityReason.AutoAnswerPaused => facts.AutoAnswerPlugin,
             CapabilityReason.RecordTimersText => facts.GameVersion,
             _ => null,
         };
@@ -55,11 +53,7 @@ internal static class CapabilityText
         CapabilityKind.LotteryRecord => L.Diagnostics.NameLotteryRecord,
         CapabilityKind.PlacardSale => L.Diagnostics.NamePlacardSale,
         CapabilityKind.WardList => L.Diagnostics.NameWardList,
-        CapabilityKind.WardPackets => L.Diagnostics.NameWardPackets,
-        CapabilityKind.EntryConfirm => L.Diagnostics.NameEntryConfirm,
-        CapabilityKind.Refund => L.Diagnostics.NameRefund,
-        CapabilityKind.Claim => L.Diagnostics.NameClaim,
-        _ => L.Diagnostics.NameAbsence,
+        _ => L.Diagnostics.NameWardPackets,
     };
 
     private static LocString ReasonOf(CapabilityReason reason) => reason switch
@@ -81,6 +75,7 @@ internal static class CapabilityText
         CapabilityReason.NavmeshReady => L.Diagnostics.NavmeshReady,
         CapabilityReason.NavmeshMissing => L.Diagnostics.NavmeshMissing,
         CapabilityReason.AutoAnswerNone => L.Diagnostics.AutoAnswerNone,
+        CapabilityReason.AutoAnswerPaused => L.Diagnostics.AutoAnswerPaused,
         CapabilityReason.AutoAnswerLoaded => L.Diagnostics.AutoAnswerLoaded,
         CapabilityReason.RecordValidated => L.Diagnostics.RecordValidated,
         CapabilityReason.RecordTimersText => L.Diagnostics.RecordTimersText,
@@ -91,17 +86,6 @@ internal static class CapabilityText
         CapabilityReason.WardListNotSeen => L.Diagnostics.WardListNotSeen,
         CapabilityReason.WardListMismatch => L.Diagnostics.WardListMismatch,
         CapabilityReason.WardPacketsActive => L.Diagnostics.WardPacketsActive,
-        CapabilityReason.WardPacketsOff => L.Diagnostics.WardPacketsOff,
-        CapabilityReason.EntryValidated => L.Diagnostics.EntryValidated,
-        CapabilityReason.EntryDryRunOnly => L.Diagnostics.EntryDryRunOnly,
-        CapabilityReason.EntryPermittedOnce => L.Diagnostics.EntryPermittedOnce,
-        CapabilityReason.RefundValidated => L.Diagnostics.RefundValidated,
-        CapabilityReason.RefundDryRunOnly => L.Diagnostics.RefundDryRunOnly,
-        CapabilityReason.RefundPermittedOnce => L.Diagnostics.RefundPermittedOnce,
-        CapabilityReason.ClaimValidated => L.Diagnostics.ClaimValidated,
-        CapabilityReason.ClaimDryRunOnly => L.Diagnostics.ClaimDryRunOnly,
-        CapabilityReason.ClaimPermittedOnce => L.Diagnostics.ClaimPermittedOnce,
-        CapabilityReason.AbsenceValidated => L.Diagnostics.AbsenceValidated,
-        _ => L.Diagnostics.AbsenceDryRunOnly,
+        _ => L.Diagnostics.WardPacketsOff,
     };
 }

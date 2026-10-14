@@ -58,12 +58,10 @@ internal sealed class SettlementNoticeAnnouncer(HousingContext housing, Configur
         var address = notice.Plot is { } plot ? PlotNames.Address(plot) : notice.AddressText ?? Loc.T(L.Lottery.PlotNotNamed);
         var character = configuration.Characters.TryGetValue(notice.ContentId, out var known) && known.Name.Length > 0 ? known.Name : Loc.T(L.Lottery.UnknownCharacter);
         var deadline = notice.DeadlineUtc is { } at ? at.ToLocalTime().ToString(DateFormat, Loc.Culture) : Loc.T(L.Lottery.DeadlineUnknown);
-        // Until claiming is validated in game, Claim house only reads the win, so a winner is sent to the placard instead.
-        var claimHere = SettlementGate.Validated(ActionKind.Claim);
         return notice.Kind switch
         {
-            SettlementNoticeKind.Won => Loc.T(claimHere ? L.Settlement.NoticeWon : L.Settlement.NoticeClaimInGame, address, character, deadline),
-            SettlementNoticeKind.ClaimDeadline => Loc.T(claimHere ? L.Settlement.NoticeClaimDeadline : L.Settlement.NoticeClaimInGame, address, character, deadline),
+            SettlementNoticeKind.Won => Loc.T(L.Settlement.NoticeWon, address, character, deadline),
+            SettlementNoticeKind.ClaimDeadline => Loc.T(L.Settlement.NoticeClaimDeadline, address, character, deadline),
             SettlementNoticeKind.RefundDeadline => Loc.T(L.Settlement.NoticeRefundDeadline, address, character, deadline),
             _ => Loc.T(L.Settlement.NoticeResults, address, character),
         };

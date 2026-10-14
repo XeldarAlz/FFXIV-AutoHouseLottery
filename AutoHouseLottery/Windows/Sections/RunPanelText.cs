@@ -91,9 +91,6 @@ internal sealed class RunPanelText
     {
         switch (status.Step)
         {
-            case EntryStep.Completed when status.Trace is { } trace:
-                var body = Loc.T(L.Run.DryRunBody, PlotNames.Address(trace.Plot), Loc.Gil(trace.Deposit));
-                return (FontAwesomeIcon.Flask, Styling.AccentBlue, Loc.T(L.Run.DryRunTitle), trace.GilUnchanged ? body : string.Concat(body, " ", Loc.T(L.Run.DryRunGilMoved)));
             case EntryStep.Completed:
                 return (FontAwesomeIcon.CheckCircle, Styling.AccentMint, Loc.T(L.Run.EnteredTitle), Loc.T(L.Run.EnteredBody, Address, Loc.Gil(status.Deposited)));
             case EntryStep.NeedsReconciliation:

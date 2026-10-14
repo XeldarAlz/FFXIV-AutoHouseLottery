@@ -30,7 +30,7 @@ internal sealed partial class SettlementTask
         var offered = placard is { } shownPlacard && ResultsOffered(shownPlacard);
         var evidence = placard is { } read ? EvidenceOf(read) : default;
         Move(SettlementStep.ViewResult);
-        if (AutoAnswerGuard.Blocks)
+        if (AutoAnswerGuard.Answering)
         {
             End(SettlementResult.NeedsPlayer, SettlementFailure.AutoAnswerPlugin);
             return;
@@ -57,7 +57,6 @@ internal sealed partial class SettlementTask
         var ownsPlot = context is { } character && ClaimRules.Owns(buyer, character.PersonalEstate, character.FreeCompanyEstate, plot);
         var claimBy = SettlementDeadlines.ResultsEnd(cycle, position, services.Housing.Schedule);
         var absence = new AbsenceEvidence(
-            SettlementCapabilities.AbsenceSettlementValidated,
             evidence,
             currentCycle,
             readingShowsNoEntry,
@@ -181,7 +180,7 @@ internal sealed partial class SettlementTask
     }
 
     // An earlier cycle's entry attempt in question: a result at its plot proves the entry and makes it a receipt, which
-    // the rest of the visit then settles. Only the validated absence rule can prove there was none.
+    // the rest of the visit then settles. Only the absence rule can prove there was none.
     private async Task<bool> SettleUncertainEntry(ActionAttempt attempt, PlacardIdentityVerdict identity, bool offered, ResultKind kind, bool ownsPlot, AbsenceEvidence absence)
     {
         var verdict = InspectionRules.DecideAttempt(identity, offered, kind, ownsPlot, absence);

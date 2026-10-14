@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 
 namespace AutoHouseLottery.Core.Commands.Model;
 
-// The words after /ahl probe. Every one is listed in the README's testing section.
+// The words after /ahl probe. Every one is listed in docs/testing-commands.md.
 internal static class ProbeVerbs
 {
     public const string Scan = "scan";
@@ -22,16 +22,11 @@ internal static class ProbeVerbs
     public static readonly ImmutableArray<string> PressTargets = [PressEnter, PressResults, PressCancel, PressNo];
 }
 
-// The words after /ahl dev, the maintainer's tools for the in-game validation ladder.
+// The words after /ahl dev, the maintainer's tools.
 internal static class DevVerbs
 {
     public const string Run = "run";
-    public const string AllowRealEntry = "allow-real-entry";
-    public const string RevokeRealEntry = "revoke-real-entry";
     public const string Settle = "settle";
-    public const string AllowRealRefund = "allow-real-refund";
-    public const string AllowRealClaim = "allow-real-claim";
-    public const string RevokeRealSettlement = "revoke-real-settlement";
 
-    public static readonly ImmutableArray<string> All = [Run, AllowRealEntry, RevokeRealEntry, Settle, AllowRealRefund, AllowRealClaim, RevokeRealSettlement];
+    public static readonly ImmutableArray<string> All = [Run, Settle];
 }

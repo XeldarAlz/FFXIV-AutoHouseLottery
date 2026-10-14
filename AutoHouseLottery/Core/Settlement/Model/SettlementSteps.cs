@@ -19,15 +19,13 @@ internal enum SettlementStep : byte
     Finished,
 }
 
-// Classified: the result was read and recorded, and nothing was pressed. DryRun: a refund or claim was due, and the
-// dialog was closed instead because nothing permits the press. Refunded and Claimed: the press went through and was
-// confirmed. NeedsReconciliation: a press may have reached the game and its outcome is not known.
+// Classified: the result was read and recorded, and nothing was pressed. Refunded and Claimed: the press went through
+// and was confirmed. NeedsReconciliation: a press may have reached the game and its outcome is not known.
 // NeedsPlayer: the visit stopped short and says why. Stopped: the visit was stopped before it pressed anything.
 internal enum SettlementResult : byte
 {
     None,
     Classified,
-    DryRun,
     Refunded,
     Claimed,
     NeedsReconciliation,
@@ -107,9 +105,8 @@ internal static class SettlementSteps
     };
 }
 
-// The published state of one settlement visit, rebuilt on every change and read by the windows. Real: the press this
-// visit is for would be allowed when it comes to it. OfferedRefund: what the result dialog offered; Received: what the
-// gil showed coming back.
+// The published state of one settlement visit, rebuilt on every change and read by the windows. OfferedRefund: what the
+// result dialog offered; Received: what the gil showed coming back.
 internal sealed record SettlementStatus
 {
     public static readonly SettlementStatus Idle = new();
@@ -133,8 +130,6 @@ internal sealed record SettlementStatus
     public PlotKey? Plot { get; init; }
 
     public string? AddressText { get; init; }
-
-    public bool Real { get; init; }
 
     public SettlementResult Result { get; init; }
 

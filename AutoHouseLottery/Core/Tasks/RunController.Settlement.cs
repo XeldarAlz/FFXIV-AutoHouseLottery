@@ -4,9 +4,7 @@ using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
-using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Ipc;
-using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Settlement;
 using AutoHouseLottery.Core.Settlement.Model;
 using AutoHouseLottery.Core.Tasks.Model;
@@ -18,7 +16,7 @@ namespace AutoHouseLottery.Core.Tasks;
 
 // Settlement visits under the same execution lease as entry runs: one at a time, never while anything else drives the
 // game. A visit started by the scheduler is paused the moment the player acts, unless it is past its intent; a visit in
-// its press window always finishes verifying first. The real-refund and real-claim permissions live here, in memory.
+// its press window always finishes verifying first.
 internal sealed partial class RunController
 {
     private readonly SettlementServices settlementServices;
@@ -28,8 +26,6 @@ internal sealed partial class RunController
     private LeaseOwner? settlementOwner;
     private SettlementWork? scheduledWork;
     private SettlementFailure stopReason;
-    private SettlementGrant? refundGrant;
-    private SettlementGrant? claimGrant;
     private SettlementStatus lastSettlement = SettlementStatus.Idle;
     private Guid settlementSession = Guid.NewGuid();
 
@@ -39,12 +35,7 @@ internal sealed partial class RunController
 
     public SchedulerBlock SchedulerBlock => scheduler.Block;
 
-    // A maintainer's session permission for one real refund or one real claim that has not been used yet.
-    public bool RealRefundAllowed => refundGrant is { Used: false };
-
-    public bool RealClaimAllowed => claimGrant is { Used: false };
-
-    public SettlementRefusal StartSettlement(Guid id, SettlementMode mode, SettlementOrigin origin, bool dryRun)
+    public SettlementRefusal StartSettlement(Guid id, SettlementMode mode, SettlementOrigin origin)
     {
         var context = CharacterContextReader.Read();
         var region = context is null ? WorldRegion.Unknown : WorldRegionReader.Of(context.HomeWorldId);
@@ -64,12 +55,12 @@ internal sealed partial class RunController
 
         var configuration = Plugin.Instance.Configuration;
         long? allowance = origin == SettlementOrigin.Scheduler ? scheduler.TravelAllowance(context!.ContentId, context.Gil) : null;
-        var visit = new SettlementTask(new SettlementRequest(id, mode, origin, dryRun, allowance, configuration.Find.GilReserve), settlementServices);
+        var visit = new SettlementTask(new SettlementRequest(id, mode, origin, allowance, configuration.Find.GilReserve), settlementServices);
         settlement = visit;
         settlementOwner = leaseGrant.Owner;
         stopReason = SettlementFailure.StoppedByPlayer;
         lastSettlement = SettlementStatus.Idle;
-        RunLog.Info($"Settlement visit authorized: {mode} for {id}, asked by {origin}, {(dryRun ? "dry run requested" : "presses allowed where a permission covers them")}.");
+        RunLog.Info($"Settlement visit authorized: {mode} for {id}, asked by {origin}.");
         try
         {
             ClibServices.Automation.Start(visit, OnCompleted: () => _ = Svc.Framework.RunOnFrameworkThread(() => FinishSettlement(visit)));
@@ -128,97 +119,14 @@ internal sealed partial class RunController
         }
     }
 
-    // A maintainer's permission for one real refund or one real claim, in memory only: the logged-in character, one plot
-    // on its home world and the one unsettled receipt it entered there. It ends at logout, at unload, or with the one press
-    // it opens.
-    public SettlementGrant? GrantRealSettlement(ActionKind kind, string characterName, uint districtId, int ward, int plot)
-    {
-        if (kind == ActionKind.Entry
-            || CharacterContextReader.Read() is not { } context
-            || !string.Equals(context.Name, characterName, StringComparison.OrdinalIgnoreCase)
-            || !PlotKey.TryCreate(HousingContext.Region, context.HomeWorldId, districtId, ward, plot, out var key)
-            || UnsettledReceiptAt(context.ContentId, key) is not { } receiptId)
-        {
-            return null;
-        }
-
-        var granted = new SettlementGrant(kind, context.ContentId, context.Name, key, receiptId, DateTime.UtcNow);
-        if (kind == ActionKind.Refund)
-        {
-            refundGrant = granted;
-        }
-        else
-        {
-            claimGrant = granted;
-        }
-
-        RunLog.Warning($"REAL {kind.ToString().ToUpperInvariant()} ALLOWED for this session: {context.Name}, {key}, receipt {receiptId}, one press only. It ends at logout or unload.");
-        return granted;
-    }
-
-    public void RevokeRealSettlement()
-    {
-        if (refundGrant is null && claimGrant is null)
-        {
-            return;
-        }
-
-        refundGrant = null;
-        claimGrant = null;
-        RunLog.Warning("Real refund and claim permissions revoked; every settlement is a dry run again.");
-    }
-
-    // Whether a refund already known to be owed can be collected for real now, so the scheduler knows a visit would do
-    // more than inspect it again.
-    public bool RefundCollectable(ulong contentId, Guid receiptId, PlotKey plot)
-        => SettlementGate.MayPress(ActionKind.Refund, SettlementGate.Validated(ActionKind.Refund), dryRun: false, refundGrant, contentId, plot, receiptId);
-
     public bool AutomaticRefunds(ulong contentId) => Plugin.Instance.Configuration.AutomaticRefunds(contentId);
 
-    private Guid? UnsettledReceiptAt(ulong contentId, PlotKey plot)
-    {
-        var snapshot = housing.JournalSnapshot;
-        var receipts = snapshot.Receipts;
-        for (var index = 0; index < receipts.Length; index++)
-        {
-            var receipt = receipts[index];
-            if (receipt.CharacterContentId == contentId && receipt.Plot == plot && SettlementLookups.Settlement(snapshot, receipt.ReceiptId) is { IsSettled: false })
-            {
-                return receipt.ReceiptId;
-            }
-        }
-
-        return null;
-    }
-
     // The refund driver for an entry run's SettleOutstanding step, run inside the run's own lease.
-    private SettlementTask CollectForEntry(Guid receiptId, bool dryRun)
+    private SettlementTask CollectForEntry(Guid receiptId)
     {
         var context = CharacterContextReader.Read();
         var allowance = context is null ? 0 : scheduler.TravelAllowance(context.ContentId, context.Gil);
-        return new SettlementTask(new SettlementRequest(receiptId, SettlementMode.Refund, SettlementOrigin.EntryRun, dryRun, allowance, Plugin.Instance.Configuration.Find.GilReserve), settlementServices);
-    }
-
-    private SettlementGrant? SettlementGrantFor(ActionKind kind) => kind switch
-    {
-        ActionKind.Refund => refundGrant,
-        ActionKind.Claim => claimGrant,
-        _ => null,
-    };
-
-    private void ConsumeSettlementGrant(ActionKind kind)
-    {
-        switch (kind)
-        {
-            case ActionKind.Refund when refundGrant is { Used: false } open:
-                refundGrant = open with { Used = true };
-                RunLog.Warning($"Real refund permission for {open.CharacterName}, {open.Plot} used; it opens nothing more.");
-                break;
-            case ActionKind.Claim when claimGrant is { Used: false } open:
-                claimGrant = open with { Used = true };
-                RunLog.Warning($"Real claim permission for {open.CharacterName}, {open.Plot} used; it opens nothing more.");
-                break;
-        }
+        return new SettlementTask(new SettlementRequest(receiptId, SettlementMode.Refund, SettlementOrigin.EntryRun, allowance, Plugin.Instance.Configuration.Find.GilReserve), settlementServices);
     }
 
     private void RecordSettlementTravel(ulong contentId, long spent) => scheduler.RecordTravel(contentId, spent);
@@ -279,8 +187,6 @@ internal sealed partial class RunController
     // Logout or unload ends a visit wherever it is; the visit itself leaves a press it may have made for reconciliation.
     private void EndSettlement(string reason)
     {
-        refundGrant = null;
-        claimGrant = null;
         scheduler.Reset();
         if (settlement is not { } visit)
         {
@@ -300,8 +206,7 @@ internal sealed partial class RunController
     {
         var ownWork = Busy || TaskStarter.Busy || HousingTravel.CurrentToken is not null;
         var otherWork = TaskStarter.Busy || lease.Owner is not null || LifestreamIpc.Instance.IsBusy() == true;
-        var contentId = Svc.PlayerState.ContentId;
-        var next = scheduler.Tick(now, ownWork, Busy || otherWork, Settling, (receiptId, plot) => RefundCollectable(contentId, receiptId, plot));
+        var next = scheduler.Tick(now, ownWork, Busy || otherWork, Settling);
         if (settlement is { } visit)
         {
             if (visit.Request.Origin == SettlementOrigin.Scheduler
@@ -322,7 +227,7 @@ internal sealed partial class RunController
             return;
         }
 
-        if (StartSettlement(due.Id, due.Mode, SettlementOrigin.Scheduler, dryRun: false) == SettlementRefusal.None)
+        if (StartSettlement(due.Id, due.Mode, SettlementOrigin.Scheduler) == SettlementRefusal.None)
         {
             scheduler.Started(due, now);
             scheduledWork = due;

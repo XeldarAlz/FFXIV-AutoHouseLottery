@@ -15,13 +15,11 @@ internal static partial class L
         public static readonly LocString DepositUnknown = new("lottery.depositUnknown", "Deposit unknown");
         public static readonly LocString EntriesClose = new("lottery.entriesClose", "Entries close {0}");
         public static readonly LocString ResultsUntil = new("lottery.resultsUntil", "Results until {0}");
-        public static readonly LocString ClaimInGame = new("lottery.claimInGame", "Claim it in game at the plot's placard by {0}");
         public static readonly LocString DeadlineUnknown = new("lottery.deadlineUnknown", "Deadline unknown");
         public static readonly LocString Imported = new("lottery.imported", "From your Timers");
         public static readonly LocString StateEntered = new("lottery.state.entered", "Entered");
         public static readonly LocString StateResultsAvailable = new("lottery.state.resultsAvailable", "Results available");
         public static readonly LocString StateWon = new("lottery.state.won", "Won");
-        public static readonly LocString StateWonClaimInGame = new("lottery.state.wonClaimInGame", "Won: claim it in game");
         public static readonly LocString StateRefundDue = new("lottery.state.refundDue", "Refund due");
         public static readonly LocString StateSettlementPending = new("lottery.state.settlementPending", "Outcome unclear");
         public static readonly LocString StateUncertain = new("lottery.state.uncertain", "Checking whether your entry completed");

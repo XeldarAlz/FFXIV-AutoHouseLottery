@@ -16,21 +16,14 @@ internal enum CapabilityKind : byte
     PlacardSale,
     WardList,
     WardPackets,
-    EntryConfirm,
-    Refund,
-    Claim,
-    AbsenceSettlement,
 }
 
-// Fallback: it works through a slower or less direct path. DryRunOnly: the action stops before its committing press
-// until it has been validated in game. NotChecked: nothing has told yet, such as a window not opened this session.
-// PermittedOnce: still dry run only by default, but a maintainer's session permission allows one real press now.
+// Fallback: it works through a slower or less direct path. NotChecked: nothing has told yet, such as a window not opened
+// this session.
 internal enum CapabilityState : byte
 {
     Ready,
     Fallback,
-    DryRunOnly,
-    PermittedOnce,
     NotChecked,
     Missing,
     Blocked,
@@ -55,6 +48,7 @@ internal enum CapabilityReason : byte
     NavmeshReady,
     NavmeshMissing,
     AutoAnswerNone,
+    AutoAnswerPaused,
     AutoAnswerLoaded,
     RecordValidated,
     RecordTimersText,
@@ -66,17 +60,6 @@ internal enum CapabilityReason : byte
     WardListMismatch,
     WardPacketsActive,
     WardPacketsOff,
-    EntryValidated,
-    EntryDryRunOnly,
-    EntryPermittedOnce,
-    RefundValidated,
-    RefundDryRunOnly,
-    RefundPermittedOnce,
-    ClaimValidated,
-    ClaimDryRunOnly,
-    ClaimPermittedOnce,
-    AbsenceValidated,
-    AbsenceDryRunOnly,
 }
 
 internal readonly record struct Capability(CapabilityKind Kind, CapabilityState State, CapabilityReason Reason);
@@ -124,6 +107,8 @@ internal readonly record struct CapabilityFacts
 
     public string? AutoAnswerPlugin { get; init; }
 
+    public bool AutoAnswerPausable { get; init; }
+
     public bool LotteryRecordValidated { get; init; }
 
     public string? GameVersion { get; init; }
@@ -133,18 +118,4 @@ internal readonly record struct CapabilityFacts
     public WardListFact WardList { get; init; }
 
     public bool WardPacketsActive { get; init; }
-
-    public bool EntryConfirmValidated { get; init; }
-
-    public bool RefundValidated { get; init; }
-
-    public bool ClaimValidated { get; init; }
-
-    public bool AbsenceSettlementValidated { get; init; }
-
-    public bool EntryPermitted { get; init; }
-
-    public bool RefundPermitted { get; init; }
-
-    public bool ClaimPermitted { get; init; }
 }

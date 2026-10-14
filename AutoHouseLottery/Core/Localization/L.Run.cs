@@ -19,9 +19,6 @@ internal static partial class L
         public static readonly LocString Inspection = new("run.inspection", "Plot {0} of {1} on the shortlist");
         public static readonly LocString FinishingVerification = new("run.finishingVerification", "Finishing verification");
         public static readonly LocString PausedLabel = new("run.paused", "Paused before the next step");
-        public static readonly LocString DryRunBadge = new("run.dryRunBadge", "DRY RUN");
-        public static readonly LocString RealEntryBadge = new("run.realEntryBadge", "REAL ENTRY");
-        public static readonly LocString DryRunHint = new("run.dryRunHint", "Dry run: it goes as far as the lottery confirmation and closes it. Nothing is paid.");
         public static readonly LocString RealEntryHint = new("run.realEntryHint", "Enters for real: the deposit is paid at the confirmation and cannot be taken back.");
         public static readonly LocString ShowDetails = new("run.showDetails", "Show details");
         public static readonly LocString HideDetails = new("run.hideDetails", "Hide details");
@@ -31,9 +28,6 @@ internal static partial class L
         public static readonly LocString LiveDeposit = new("run.liveDeposit", "Deposit on the confirmation: {0}");
         public static readonly LocString EnteredTitle = new("run.enteredTitle", "Entered the lottery");
         public static readonly LocString EnteredBody = new("run.enteredBody", "{0} is entered for {1}. My lottery keeps the receipt.");
-        public static readonly LocString DryRunTitle = new("run.dryRunTitle", "Dry run finished");
-        public static readonly LocString DryRunBody = new("run.dryRunBody", "At the confirmation for {0}, the run would have entered for {1}. It closed the confirmation instead and nothing was paid.");
-        public static readonly LocString DryRunGilMoved = new("run.dryRunGilMoved", "Your gil changed while the confirmation was open. Check the Console before trusting this dry run.");
         public static readonly LocString NoEntryTitle = new("run.noEntryTitle", "No entry this time");
         public static readonly LocString StoppedTitle = new("run.stoppedTitle", "Run stopped");
         public static readonly LocString NeedsPlayerTitle = new("run.needsPlayerTitle", "Waiting for you");
@@ -72,12 +66,10 @@ internal static partial class L
         public static readonly LocString GilUnknown = new("runFailure.gilUnknown", "This character's gil could not be read.");
         public static readonly LocString CheckboxNotTicked = new("runFailure.checkboxNotTicked", "The confirmation's checkbox could not be ticked. Nothing was submitted.");
         public static readonly LocString ConfirmRefused = new("runFailure.confirmRefused", "Confirm could not be pressed. Nothing was submitted.");
-        public static readonly LocString RealEntryNotCovered = new("runFailure.realEntryNotCovered", "This entry is not covered by the real-entry permission. Nothing was submitted.");
         public static readonly LocString Rejected = new("runFailure.rejected", "The game refused the entry.");
         public static readonly LocString CharacterIneligible = new("runFailure.characterIneligible", "This character cannot enter this lottery.");
         public static readonly LocString AlreadyEntered = new("runFailure.alreadyEntered", "This character already has an entry this lottery period.");
         public static readonly LocString CollectRefundFirst = new("runFailure.collectRefundFirst", "Collect refund first. The game refuses a new entry until an earlier refund is collected.");
-        public static readonly LocString RefundDryRun = new("runFailure.refundDryRun", "A dry run cannot collect the earlier refund, so the entry stops here. The refund is still due.");
         public static readonly LocString UnclaimedWin = new("runFailure.unclaimedWin", "You won an earlier lottery. Claim that plot or give it up before entering again.");
         public static readonly LocString CycleChanged = new("runFailure.cycleChanged", "A new lottery period began during the run.");
         public static readonly LocString JournalUnavailable = new("runFailure.journalUnavailable", "Entries cannot be recorded right now, so none is made.");

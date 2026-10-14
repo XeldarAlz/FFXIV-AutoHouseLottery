@@ -140,8 +140,8 @@ internal sealed partial class FindHomePage
 
     }
 
-    // Enter asks for a dry run until entries are validated in game, and a requested dry run no grant can turn real; it
-    // starts from the frozen policy. While the controller would refuse it, the button is locked and its reason is shown.
+    // Enter starts a real entry from the frozen policy. While the controller would refuse it, the button is locked and its
+    // reason is shown.
     private void DrawEnterAction(string title, RunMode mode, RunPolicy? policy, string? missing, StartCheck check)
     {
         var controller = plugin.Controller;
@@ -149,8 +149,7 @@ internal sealed partial class FindHomePage
         var enabled = policy is not null && reason.Length == 0;
         if (HeroButton.Draw(FontAwesomeIcon.Ticket, title, BuyerLabel(State.Filter.Buyer), Styling.AccentGlow, enabled) && policy is not null && enabled)
         {
-            var dryRun = EntryCapabilities.PlayerDryRun;
-            var refusal = mode == RunMode.Exact ? controller.StartExact(policy, dryRun) : controller.StartBestMatch(policy, dryRun);
+            var refusal = mode == RunMode.Exact ? controller.StartExact(policy) : controller.StartBestMatch(policy);
             check.Invalidate();
             if (refusal != StartRefusal.None)
             {
@@ -162,7 +161,7 @@ internal sealed partial class FindHomePage
         ImGui.PushTextWrapPos();
         using (ImRaii.PushColor(ImGuiCol.Text, enabled ? Styling.TextDim : Styling.TextMuted))
         {
-            ImGui.TextUnformatted(enabled ? Loc.T(EntryCapabilities.PlayerDryRun ? L.Run.DryRunHint : L.Run.RealEntryHint) : reason);
+            ImGui.TextUnformatted(enabled ? Loc.T(L.Run.RealEntryHint) : reason);
         }
 
         ImGui.PopTextWrapPos();

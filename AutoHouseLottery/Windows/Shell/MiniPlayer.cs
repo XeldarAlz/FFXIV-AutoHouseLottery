@@ -20,7 +20,6 @@ internal static class MiniPlayer
     private const float MinimumBarWidth = 48f;
     private const float BarShare = 0.3f;
     private const float BarHeight = 8f;
-    private const float BadgeGap = 8f;
 
     public static float Height()
     {
@@ -55,12 +54,6 @@ internal static class MiniPlayer
         Paint.Dot(drawList, new Vector2(origin.X + padX + 4f * scale, midY), 4f * scale, dotColor);
 
         var textX = origin.X + padX + 22f * scale;
-        var status = controller.Status;
-        if (status.RunId != Guid.Empty)
-        {
-            var dryRun = status.EntryMode == EntryMode.DryRun;
-            textX += Badge.DrawLeft(drawList, Loc.T(dryRun ? L.Run.DryRunBadge : L.Run.RealEntryBadge), dryRun ? Styling.AccentBlue : Styling.AccentRose, textX, midY) + BadgeGap * scale;
-        }
 
         // The label carries the address, so on a narrow strip the bar gives way first.
         var barRight = end.X - padX - buttonsWidth - 16f * scale;
@@ -82,7 +75,7 @@ internal static class MiniPlayer
             labelRight = barX - 16f * scale;
         }
 
-        var label = TextDraw.Truncate(Label(controller, status, info.Kind), labelRight - textX);
+        var label = TextDraw.Truncate(Label(controller, controller.Status, info.Kind), labelRight - textX);
         TextDraw.At(label, new Vector2(textX, midY - ImGui.GetTextLineHeight() * 0.5f), Styling.TextStrong);
 
         if (controller.Running)

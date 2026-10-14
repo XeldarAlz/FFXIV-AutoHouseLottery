@@ -31,28 +31,12 @@ public sealed class EntrySubmissionTests : IDisposable
     }
 
     [Fact]
-    public async Task ClosedGateWritesNothingAndNeverPresses()
-    {
-        var pressed = false;
-
-        var outcome = await Submit(Attempt(Plot(12, 5), AttemptState.Prepared), gateOpen: false, () =>
-        {
-            pressed = true;
-            return DialogActionResult.Pressed;
-        });
-
-        Assert.Equal(SubmissionOutcome.GateClosed, outcome);
-        Assert.False(pressed);
-        Assert.Empty(journal.Snapshot().Attempts);
-    }
-
-    [Fact]
     public async Task IntentIsDurableBeforeThePress()
     {
         var intent = Attempt(Plot(12, 5), AttemptState.Prepared);
         AttemptState? onDiskAtPress = null;
 
-        var outcome = await Submit(intent, gateOpen: true, () =>
+        var outcome = await Submit(intent, () =>
         {
             using var reopened = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = new StreamReader(reopened);
@@ -71,7 +55,7 @@ public sealed class EntrySubmissionTests : IDisposable
         File.SetAttributes(path, FileAttributes.ReadOnly);
         var pressed = false;
 
-        var outcome = await Submit(Attempt(Plot(12, 5), AttemptState.Prepared), gateOpen: true, () =>
+        var outcome = await Submit(Attempt(Plot(12, 5), AttemptState.Prepared), () =>
         {
             pressed = true;
             return DialogActionResult.Pressed;
@@ -87,7 +71,7 @@ public sealed class EntrySubmissionTests : IDisposable
         Assert.Equal(JournalWrite.Written, journal.Prepare(Attempt(Plot(3, 1), AttemptState.Prepared)));
         var pressed = false;
 
-        var outcome = await Submit(Attempt(Plot(12, 5), AttemptState.Prepared), gateOpen: true, () =>
+        var outcome = await Submit(Attempt(Plot(12, 5), AttemptState.Prepared), () =>
         {
             pressed = true;
             return DialogActionResult.Pressed;
@@ -102,13 +86,13 @@ public sealed class EntrySubmissionTests : IDisposable
     {
         var intent = Attempt(Plot(12, 5), AttemptState.Prepared);
 
-        var outcome = await Submit(intent, gateOpen: true, () => DialogActionResult.LabelMismatch);
+        var outcome = await Submit(intent, () => DialogActionResult.LabelMismatch);
 
         Assert.Equal(SubmissionOutcome.PressRefused, outcome);
         Assert.Equal(AttemptState.Rejected, Assert.Single(journal.Snapshot().Attempts).State);
         Assert.Null(journal.FindSlotHolder(intent.Key));
     }
 
-    private Task<SubmissionOutcome> Submit(ActionAttempt intent, bool gateOpen, Func<DialogActionResult> press)
-        => new EntrySubmission(journal).Submit(intent, gateOpen, () => Task.CompletedTask, press, () => ObservedAt);
+    private Task<SubmissionOutcome> Submit(ActionAttempt intent, Func<DialogActionResult> press)
+        => new EntrySubmission(journal).Submit(intent, () => Task.CompletedTask, press, () => ObservedAt);
 }

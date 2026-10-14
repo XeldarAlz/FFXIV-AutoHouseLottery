@@ -85,14 +85,10 @@ These are read or pressed exactly as the community sources describe them, behind
 | Lifestream IPC gates (GoToHousingAddress, IsBusy, Abort, IsHere, IsQuickTravelAvailable, GetPlotEntrance, GetCurrentPlotInfo) on the installed version | `Core/Ipc/LifestreamIpc.cs` | Lifestream `IPC/IPCProvider.cs` |
 | The Korean data center region row (6) | `Core/Housing/Model/WorldRegion.cs` | Assumed; refused either way |
 
-## Actions and their validation flags
+## Readings and their validation
 
-| Action | Flag | Current state |
+| Reading | Flag | Current state |
 | --- | --- | --- |
-| Entering the lottery | `EntryCapabilities.EntryConfirmValidated` | false: dry run only until validated |
-| Collecting refunds | `SettlementCapabilities.RefundConfirmValidated` | false: dry run only until validated |
-| Claiming a house | `SettlementCapabilities.ClaimConfirmValidated` | false: dry run only until validated |
-| Placards without a result | `SettlementCapabilities.AbsenceSettlementValidated` | false: dry run only until validated |
 | Direct lottery record read | `LotteryRecordAccess.ValidatedGameVersions` | empty: the Timers window is read instead |
 
-A flag is set only after the matching step of the in-game validation ladder (VALIDATION_PLAN section 10) has passed on the game version above, with its report attached here.
+A game version is added only after the record has been read correctly in game on that version, with its report attached here.

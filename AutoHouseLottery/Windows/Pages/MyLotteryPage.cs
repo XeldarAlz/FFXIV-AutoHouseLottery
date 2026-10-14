@@ -297,7 +297,7 @@ internal sealed class MyLotteryPage
         {
         LotteryAction.ViewPlot => (Loc.T(L.Lottery.ViewPlot), true, null),
         LotteryAction.CheckResult => SettleAction(plugin, view, Loc.T(L.Lottery.CheckResult)),
-        LotteryAction.ClaimHouse => SettleAction(plugin, view, Loc.T(ClaimValidated ? L.Lottery.ClaimHouse : L.Lottery.CheckResult)),
+        LotteryAction.ClaimHouse => SettleAction(plugin, view, Loc.T(L.Lottery.ClaimHouse)),
         LotteryAction.CollectRefund => SettleAction(plugin, view, Loc.T(L.Lottery.CollectRefund)),
         LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending => SettleAction(plugin, view, Loc.T(L.Lottery.VerifyOutcome)),
         LotteryAction.VerifyOutcome => (Loc.T(L.Lottery.VerifyOutcome), !plugin.Controller.Busy && row.ContentId == Svc.PlayerState.ContentId,
@@ -307,8 +307,7 @@ internal sealed class MyLotteryPage
         };
     }
 
-    // A settlement action runs only for the logged-in entrant and while nothing else drives the game. Until a refund or
-    // claim has been validated in game, the player's own click is a dry run: it reads the result and closes it.
+    // A settlement action runs only for the logged-in entrant and while nothing else drives the game.
     private static (string Label, bool Enabled, string? Tooltip) SettleAction(Plugin plugin, in RowView view, string label)
     {
         var mine = view.Row.ContentId == Svc.PlayerState.ContentId;
@@ -317,36 +316,28 @@ internal sealed class MyLotteryPage
 
     private static void Settle(Plugin plugin, LotteryRow row, SettlementMode mode)
     {
-        var refusal = plugin.Controller.StartSettlement(row.Id, mode, SettlementOrigin.Player, SettlementGate.PlayerDryRun(mode));
+        var refusal = plugin.Controller.StartSettlement(row.Id, mode, SettlementOrigin.Player);
         if (refusal != SettlementRefusal.None)
         {
             Svc.Chat.Print($"{Core.HouseLotteryConstants.LogPrefix} {SettlementText.Refusal(refusal)}");
         }
     }
 
-    // What the click will do: a dry run's limits, and for a claim whether it gives a first estate or moves the one held.
+    // What a claim will do: whether it gives a first estate or moves the one held.
     private static string? SettleHint(in JournalSnapshot snapshot, LotteryRow row, CharacterContext? context)
     {
-        var mode = row.Action switch
+        if (row.Action != LotteryAction.ClaimHouse || context is null || SettlementLookups.Receipt(snapshot, row.Id) is not { } receipt)
         {
-            LotteryAction.ClaimHouse => SettlementMode.Claim,
-            LotteryAction.CollectRefund => SettlementMode.Refund,
-            _ => SettlementMode.Inspect,
-        };
-        var dryRun = SettlementGate.PlayerDryRun(mode) && mode != SettlementMode.Inspect ? Loc.T(L.Settlement.DryRunHint) : null;
-        if (mode != SettlementMode.Claim || !ClaimValidated || context is null || SettlementLookups.Receipt(snapshot, row.Id) is not { } receipt)
-        {
-            return dryRun;
+            return null;
         }
 
         var address = row.Plot is { } plot ? PlotNames.Address(plot) : Loc.T(L.Lottery.PlotNotNamed);
-        var effect = ClaimRules.EffectOf(receipt.Buyer, context.FreeCompanyId is not null, context.PersonalEstate, context.FreeCompanyEstate) switch
+        return ClaimRules.EffectOf(receipt.Buyer, context.FreeCompanyId is not null, context.PersonalEstate, context.FreeCompanyEstate) switch
         {
             ClaimEffect.Acquire => Loc.T(L.Settlement.ClaimAcquires, address),
             ClaimEffect.Relocate => Loc.T(L.Settlement.ClaimRelocates, address),
             _ => Loc.T(L.Settlement.ClaimEffectUnknown, address),
         };
-        return dryRun is null ? effect : string.Concat(effect, " ", dryRun);
     }
 
     // Automatically collect refunds for the logged-in character, what the scheduler waits on, and the net return.
@@ -442,21 +433,12 @@ internal sealed class MyLotteryPage
         return row.AddressText ?? Loc.T(L.Lottery.PlotNotNamed);
     }
 
-    // Until claiming is validated in game, Claim house only reads a win, so the row says first, where nothing truncates
-    // it, that the house is claimed in game at its placard.
-    private static bool ClaimValidated => SettlementGate.Validated(ActionKind.Claim);
-
     private static string Facts(LotteryRow row, AbsenceSighting? sighting)
     {
         var number = row.EntryNumber is { } entryNumber ? Loc.T(L.Lottery.Number, entryNumber) : Loc.T(L.Lottery.NumberUnknown);
         var deposit = row.Deposit is { } amount ? Loc.T(L.Lottery.Deposit, Loc.Gil(amount)) : Loc.T(L.Lottery.DepositUnknown);
         var facts = string.Concat(number, Separator, deposit);
-        if (row.State == LotteryRowState.Won && !ClaimValidated)
-        {
-            var deadline = row.DeadlineUtc is { } until ? until.ToLocalTime().ToString(DateFormat, Loc.Culture) : Loc.T(L.Lottery.DeadlineUnknown);
-            facts = string.Concat(Loc.T(L.Lottery.ClaimInGame, deadline), Separator, facts);
-        }
-        else if (row.Section != LotterySection.History)
+        if (row.Section != LotterySection.History)
         {
             facts = string.Concat(facts, Separator, Deadline(row));
         }
@@ -495,7 +477,7 @@ internal sealed class MyLotteryPage
     {
         LotteryRowState.Entered => L.Lottery.StateEntered,
         LotteryRowState.ResultsAvailable => L.Lottery.StateResultsAvailable,
-        LotteryRowState.Won => ClaimValidated ? L.Lottery.StateWon : L.Lottery.StateWonClaimInGame,
+        LotteryRowState.Won => L.Lottery.StateWon,
         LotteryRowState.RefundDue => L.Lottery.StateRefundDue,
         LotteryRowState.SettlementPending => L.Lottery.StateSettlementPending,
         LotteryRowState.Uncertain => L.Lottery.StateUncertain,

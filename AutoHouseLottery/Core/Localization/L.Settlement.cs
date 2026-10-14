@@ -27,8 +27,6 @@ internal static partial class L
         public static readonly LocString SummaryNet = new("settlement.summary.net", "Net returned {0}");
         public static readonly LocString SummaryPending = new("settlement.summary.pending", "Still pending {0}");
         public static readonly LocPlural SummaryUnknown = new("settlement.summary.unknown", "{0} amount not seen", "{0} amounts not seen");
-        public static readonly LocString DryRunHint = new("settlement.dryRunHint", "Dry run: it reads the result and closes it. Nothing is collected or claimed.");
-        public static readonly LocString DryRunNote = new("settlement.dryRunNote", "dry run");
         public static readonly LocString ClaimAcquires = new("settlement.claimAcquires", "Claims {0} as a new estate.");
         public static readonly LocString ClaimRelocates = new("settlement.claimRelocates", "Claims {0} and moves the estate you hold now to it.");
         public static readonly LocString ClaimEffectUnknown = new("settlement.claimEffectUnknown", "Claims {0}. Whether it moves an estate you hold is not known yet.");
@@ -38,8 +36,6 @@ internal static partial class L
         public static readonly LocString StepReading = new("settlement.step.reading", "Reading the result");
         public static readonly LocString StepPressing = new("settlement.step.pressing", "Accepting the result");
         public static readonly LocString CheckedTitle = new("settlement.checkedTitle", "Result checked");
-        public static readonly LocString DryRunTitle = new("settlement.dryRunTitle", "Dry run finished");
-        public static readonly LocString DryRunBody = new("settlement.dryRunBody", "{0} The result was closed instead of accepted, and nothing was collected or claimed.");
         public static readonly LocString RefundedTitle = new("settlement.refundedTitle", "Refund collected");
         public static readonly LocString RefundedBody = new("settlement.refundedBody", "{0} came back for {1}.");
         public static readonly LocString ClaimedTitle = new("settlement.claimedTitle", "House claimed");
@@ -49,7 +45,6 @@ internal static partial class L
         public static readonly LocString StoppedTitle = new("settlement.stoppedTitle", "Visit stopped");
         public static readonly LocString NeedsPlayerTitle = new("settlement.needsPlayerTitle", "Waiting for you");
         public static readonly LocString OutcomeWon = new("settlement.outcome.won", "You won {0}. Claim it on My lottery before the results period ends.");
-        public static readonly LocString OutcomeWonClaimInGame = new("settlement.outcome.wonClaimInGame", "You won {0}. Claim it in game at the plot's placard before the results period ends.");
         public static readonly LocString OutcomeLost = new("settlement.outcome.lost", "{0} went to another entrant. A refund of {1} is due.");
         public static readonly LocString OutcomeForfeit = new("settlement.outcome.forfeit", "The win on {0} was not claimed in time. A refund of {1} is due after the 50% fee.");
         public static readonly LocString OutcomeExpired = new("settlement.outcome.expired", "The refund for {0} has expired.");
@@ -83,7 +78,6 @@ internal static partial class L
         public static readonly LocString NoticeResults = new("settlement.notice.results", "Results are out for {0} ({1}). Check the result on My lottery.");
         public static readonly LocString NoticeWon = new("settlement.notice.won", "{1} won {0}. Claim it on My lottery before {2}.");
         public static readonly LocString NoticeClaimDeadline = new("settlement.notice.claimDeadline", "{1} won {0}. Claim it before {2}.");
-        public static readonly LocString NoticeClaimInGame = new("settlement.notice.claimInGame", "{1} won {0}. Claim it in game at the plot's placard before {2}.");
         public static readonly LocString NoticeRefundDeadline = new("settlement.notice.refundDeadline", "The refund for {0} ({1}) can be collected until about {2}.");
         public static readonly LocPlural NoticeSummary = new("settlement.notice.summary", "{0} lottery notice", "{0} lottery notices");
         public static readonly LocString NoticeSummaryBody = new("settlement.notice.summaryBody", "My lottery shows what needs your attention.");
