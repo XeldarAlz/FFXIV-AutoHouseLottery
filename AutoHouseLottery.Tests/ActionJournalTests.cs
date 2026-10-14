@@ -509,7 +509,7 @@ public sealed class ActionJournalTests : IDisposable
         CharacterContentId = receipt.CharacterContentId,
         HomeWorldId = receipt.HomeWorldId,
         Cycle = receipt.Cycle,
-        Plot = receipt.Plot,
+        Plot = receipt.Plot!.Value,
         Buyer = receipt.Buyer,
         Amount = Deposit,
         PreparedUtc = now,
