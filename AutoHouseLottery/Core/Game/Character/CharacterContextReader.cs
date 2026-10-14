@@ -48,6 +48,12 @@ internal static unsafe class CharacterContextReader
             DateTime.UtcNow);
     }
 
+    public static long? ReadGil()
+    {
+        var inventory = InventoryManager.Instance();
+        return inventory == null ? null : inventory->GetGil();
+    }
+
     public static HousingLocation ReadLocation()
     {
         var territoryTypeId = Svc.ClientState.TerritoryType;

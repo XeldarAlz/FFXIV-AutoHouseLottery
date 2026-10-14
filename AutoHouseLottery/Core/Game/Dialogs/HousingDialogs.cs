@@ -24,8 +24,8 @@ internal static unsafe class HousingDialogs
     private const int ClickThrottleMs = 600;
     private const string ClickThrottleKey = "AutoHouseLottery.HousingDialogs.Click";
 
-    private static readonly HousingText[] entryConfirmation = [HousingText.EntryConfirmation];
     private static readonly HousingText[] confirmLabel = [HousingText.ConfirmLabel];
+    private static readonly HousingText[] proceedLabel = [HousingText.ProceedCheckbox];
 
     public static DialogIdentity? IdentifyEntryConfirmation()
     {
@@ -59,6 +59,38 @@ internal static unsafe class HousingDialogs
         }
 
         return new DialogIdentity(EntryConfirmationAddon, null, firstText);
+    }
+
+    // The confirmation as it stands: whether its text is row 7046, the deposit it names, the checkbox and Confirm.
+    public static EntryConfirmationReading? ReadEntryConfirmation()
+    {
+        if (!AddonReads.TryGetReady(EntryConfirmationAddon, out var addon))
+        {
+            return null;
+        }
+
+        var identified = false;
+        long? deposit = null;
+        if (addon->AtkValues != null)
+        {
+            var pattern = HousingSheetText.Pattern(HousingText.EntryConfirmation);
+            for (var valueIndex = 0; valueIndex < addon->AtkValuesCount && !identified; valueIndex++)
+            {
+                ref readonly var value = ref addon->AtkValues[valueIndex];
+                if (!AddonReads.IsText(value) || !pattern.TryCapture(AddonReads.Text(value), out var gaps))
+                {
+                    continue;
+                }
+
+                identified = true;
+                deposit = EntryConfirmationText.Deposit(gaps);
+            }
+        }
+
+        var checkBox = LabelledButtons.FindCheckBox(addon, proceedLabel);
+        var proceed = checkBox == null ? CheckBoxState.Missing : checkBox->IsChecked ? CheckBoxState.Checked : CheckBoxState.Unchecked;
+        var confirm = LabelledButtons.Find(addon, confirmLabel);
+        return new EntryConfirmationReading(identified, deposit, proceed, confirm != null, confirm != null && confirm->IsEnabled);
     }
 
     public static DialogIdentity? IdentifyResultDialog()
@@ -117,6 +149,30 @@ internal static unsafe class HousingDialogs
         return button == null ? Refused(action, DialogActionResult.ButtonMissing) : Press(action, addon, button, confirmLabel, requestCommits: true);
     }
 
+    // Ticks "I understand and wish to proceed." (Addon 7047), the checkbox that unlocks Confirm. It commits nothing by
+    // itself, but it is only ever permitted on the path to a real entry.
+    public static DialogActionResult TickEntryCheckbox()
+    {
+        const NativeAction action = NativeAction.TickEntryCheckbox;
+        if (!NativeActionGate.IsPermitted(action))
+        {
+            return Refused(action, DialogActionResult.NotPermitted);
+        }
+
+        if (!OpenEntryConfirmation(out var addon))
+        {
+            return Refused(action, DialogActionResult.IdentityMismatch);
+        }
+
+        var checkBox = LabelledButtons.FindCheckBox(addon, proceedLabel);
+        if (checkBox == null)
+        {
+            return Refused(action, DialogActionResult.ButtonMissing);
+        }
+
+        return checkBox->IsChecked ? DialogActionResult.AlreadyChecked : Press(action, addon, checkBox, proceedLabel, requestCommits: false);
+    }
+
     // Cancel never presses a button: the window is closed, so nothing on it can be confirmed by mistake.
     public static DialogActionResult CancelEntry()
     {
@@ -139,6 +195,18 @@ internal static unsafe class HousingDialogs
         RunLog.Info($"Housing dialog: {action} closes {EntryConfirmationAddon}.");
         addon->Close(FireCloseCallback);
         return DialogActionResult.Closed;
+    }
+
+    // The placard only shows a plot's details, so closing it needs no permission.
+    public static bool ClosePlacard()
+    {
+        if (!AddonReads.TryGetReady(PlacardReader.AddonName, out var addon))
+        {
+            return false;
+        }
+
+        addon->Close(FireCloseCallback);
+        return true;
     }
 
     // Yes on a result dialog claims the plot or collects a refund, so the caller names which result it expects.
