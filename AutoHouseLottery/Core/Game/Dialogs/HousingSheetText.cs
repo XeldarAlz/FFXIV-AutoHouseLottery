@@ -13,10 +13,17 @@ namespace AutoHouseLottery.Core.Game.Dialogs;
 // Framework thread only; reloaded when the client language changes.
 internal static class HousingSheetText
 {
-    private const string Space = " ";
-
     private static readonly SheetTextPattern[] patterns = new SheetTextPattern[HousingTextRows.All.Length];
     private static ClientLanguage? loadedLanguage;
+
+    public static ClientLanguage Language
+    {
+        get
+        {
+            EnsureLoaded();
+            return loadedLanguage!.Value;
+        }
+    }
 
     public static SheetTextPattern Pattern(HousingText text)
     {
@@ -39,13 +46,18 @@ internal static class HousingSheetText
         return null;
     }
 
-    public static ClientLanguage Language
+    // A row in any installed client language, uncached, for the probe's cross-language self-check.
+    public static SheetTextPattern PatternIn(HousingText text, ClientLanguage language) => Load(HousingTextRows.Of(text), language);
+
+    // The row rendered by the game's own evaluator with empty parameters and extracted like the readers extract a
+    // dialog, so the self-check sees the same shape a window shows.
+    public static string RenderedSample(HousingText text, ClientLanguage language)
     {
-        get
-        {
-            EnsureLoaded();
-            return loadedLanguage!.Value;
-        }
+        var row = HousingTextRows.Of(text);
+        var rendered = row.Sheet == HousingSheet.Addon
+            ? Svc.SeStringEvaluator.EvaluateFromAddon(row.RowId, default, language)
+            : Svc.SeStringEvaluator.EvaluateFromLogMessage(row.RowId, default, language);
+        return rendered.ExtractText();
     }
 
     private static void EnsureLoaded()
@@ -59,7 +71,16 @@ internal static class HousingSheetText
         for (var rowIndex = 0; rowIndex < HousingTextRows.All.Length; rowIndex++)
         {
             var row = HousingTextRows.All[rowIndex];
-            patterns[rowIndex] = Load(row, language);
+            var pattern = Load(row, language);
+            patterns[rowIndex] = pattern;
+            if (pattern.IsUsable)
+            {
+                RunLog.Debug($"Housing text: {row.Sheet} row {row.RowId} ({row.Text}) loaded in {language} as {pattern.Segments.Length} segment(s).");
+            }
+            else
+            {
+                RunLog.Warning($"Housing text: {row.Sheet} row {row.RowId} ({row.Text}) has no static text in {language}; it is never matched.");
+            }
         }
 
         loadedLanguage = language;
@@ -86,55 +107,39 @@ internal static class HousingSheetText
             return SheetTextPattern.Empty;
         }
 
-        var pattern = ToPattern(found);
-        if (!pattern.IsUsable)
-        {
-            RunLog.Warning($"Housing text: {row.Sheet} row {row.RowId} ({row.Text}) has no static text in {language}; it is never matched.");
-        }
-        else
-        {
-            RunLog.Debug($"Housing text: {row.Sheet} row {row.RowId} ({row.Text}) loaded in {language} as {pattern.Segments.Length} segment(s).");
-        }
-
-        return pattern;
+        return ToPattern(found);
     }
 
-    // Line breaks and non-breaking spaces read as spaces; styling macros render nothing; every other macro is a gap.
     private static SheetTextPattern ToPattern(ReadOnlySeString text)
     {
         var tokens = new List<SheetTextToken>();
         foreach (var payload in text)
         {
-            if (payload.Type == ReadOnlySePayloadType.Text)
-            {
-                tokens.Add(SheetTextToken.Literal(Encoding.UTF8.GetString(payload.Body.Span)));
-                continue;
-            }
-
-            switch (payload.MacroCode)
-            {
-                case MacroCode.NewLine:
-                case MacroCode.NonBreakingSpace:
-                    tokens.Add(SheetTextToken.Literal(Space));
-                    break;
-                case MacroCode.SoftHyphen:
-                case MacroCode.Color:
-                case MacroCode.EdgeColor:
-                case MacroCode.ShadowColor:
-                case MacroCode.ColorType:
-                case MacroCode.EdgeColorType:
-                case MacroCode.Bold:
-                case MacroCode.Italic:
-                case MacroCode.Edge:
-                case MacroCode.Shadow:
-                case MacroCode.Scale:
-                    break;
-                default:
-                    tokens.Add(SheetTextToken.Gap);
-                    break;
-            }
+            tokens.Add(payload.Type == ReadOnlySePayloadType.Text
+                ? SheetTextToken.Literal(Encoding.UTF8.GetString(payload.Body.Span))
+                : SheetTextToken.ForMacro(KindOf(payload.MacroCode)));
         }
 
         return SheetTextPattern.FromTokens(CollectionsMarshal.AsSpan(tokens));
     }
+
+    // Mirrors what Lumina's ExtractText makes of each macro, which is how every reader extracts the shown text.
+    private static SheetMacroKind KindOf(MacroCode code) => code switch
+    {
+        MacroCode.NewLine => SheetMacroKind.LineBreak,
+        MacroCode.NonBreakingSpace => SheetMacroKind.NonBreakingSpace,
+        MacroCode.Hyphen => SheetMacroKind.Hyphen,
+        MacroCode.SoftHyphen
+            or MacroCode.Color
+            or MacroCode.EdgeColor
+            or MacroCode.ShadowColor
+            or MacroCode.ColorType
+            or MacroCode.EdgeColorType
+            or MacroCode.Bold
+            or MacroCode.Italic
+            or MacroCode.Edge
+            or MacroCode.Shadow
+            or MacroCode.Scale => SheetMacroKind.Invisible,
+        _ => SheetMacroKind.Dynamic,
+    };
 }

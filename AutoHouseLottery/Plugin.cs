@@ -130,6 +130,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        TaskStarter.StopCurrent();
         Controller.Shutdown();
         HousingTravel.Release();
 

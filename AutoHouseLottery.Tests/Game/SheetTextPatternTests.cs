@@ -103,6 +103,46 @@ public sealed class SheetTextPatternTests
     }
 
     [Fact]
+    public void CapturesWhatEachMacroRendered()
+    {
+        var pattern = Pattern(SheetTextToken.Literal("Lottery Number: "), Gap);
+        Assert.True(pattern.TryCapture("Lottery Number: 1,234", out var gaps));
+        Assert.Equal(["1,234"], gaps.AsSpan().ToArray());
+    }
+
+    [Fact]
+    public void CapturesLeadingInnerAndTrailingMacros()
+    {
+        var pattern = Pattern(Gap, SheetTextToken.Literal(" Ward, "), Gap, SheetTextToken.Literal(" ("), Gap, SheetTextToken.Literal(")"));
+        Assert.True(pattern.TryCapture("12th Ward, Mist (Small)", out var gaps));
+        Assert.Equal(["12th", "Mist", "Small"], gaps.AsSpan().ToArray());
+    }
+
+    [Fact]
+    public void CapturesNothingFromTextThatDoesNotMatch()
+    {
+        Assert.False(Pattern(SheetTextToken.Literal("Lottery Number: "), Gap).TryCapture("Type of Entry: Private", out var gaps));
+        Assert.Empty(gaps);
+    }
+
+    [Fact]
+    public void MacrosBecomeWhatTheExtractionWrites()
+    {
+        var pattern = Pattern(
+            SheetTextToken.Literal("Fé"),
+            SheetTextToken.ForMacro(SheetMacroKind.Invisible),
+            SheetTextToken.Literal("licitations"),
+            SheetTextToken.ForMacro(SheetMacroKind.NonBreakingSpace),
+            SheetTextToken.Literal("!"),
+            SheetTextToken.ForMacro(SheetMacroKind.LineBreak),
+            SheetTextToken.Literal("Plot"),
+            SheetTextToken.ForMacro(SheetMacroKind.Hyphen),
+            SheetTextToken.Literal("Size"));
+        Assert.True(pattern.Matches("F\u00E9licitations\u00A0!\r\nPlot-Size"));
+        Assert.Equal(SheetTextTokenKind.Gap, SheetTextToken.ForMacro(SheetMacroKind.Dynamic).Kind);
+    }
+
+    [Fact]
     public void NormalizeDropsGameGlyphsAndCollapsesWhitespace()
     {
         Assert.Equal("3,000,000 gil", DisplayText.Normalize(" 3,000,000 \r\n gil​ "));

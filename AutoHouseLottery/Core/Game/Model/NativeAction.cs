@@ -16,10 +16,12 @@ internal enum NativeAction : byte
 internal enum DialogActionResult : byte
 {
     Pressed,
+    Closed,
     NotPermitted,
     WindowNotOpen,
     IdentityMismatch,
     ButtonMissing,
+    LabelMismatch,
     ButtonDisabled,
     Throttled,
 }

@@ -12,6 +12,8 @@ internal static unsafe class AddonReads
     public static bool TryGetReady(string addonName, out AtkUnitBase* addon)
         => GenericHelpers.TryGetAddonByName(addonName, out addon) && GenericHelpers.IsAddonReady(addon);
 
+    public static bool IsReady(string addonName) => TryGetReady(addonName, out _);
+
     public static bool IsInteger(in AtkValue value) => value.Type is AtkValueType.Int or AtkValueType.UInt;
 
     public static uint Unsigned(in AtkValue value) => value.Type switch
@@ -52,33 +54,6 @@ internal static unsafe class AddonReads
 
         var firstEvent = owner->AtkResNode.AtkEventManager.Event;
         return firstEvent == null ? NoEventParam : unchecked((int)firstEvent->Param);
-    }
-
-    // Every string value of the window, for dialogs whose text position is not documented.
-    public static int CollectTexts(AtkUnitBase* addon, Span<string?> destination)
-    {
-        if (addon->AtkValues == null)
-        {
-            return 0;
-        }
-
-        var written = 0;
-        for (var valueIndex = 0; valueIndex < addon->AtkValuesCount && written < destination.Length; valueIndex++)
-        {
-            ref readonly var value = ref addon->AtkValues[valueIndex];
-            if (!IsText(value))
-            {
-                continue;
-            }
-
-            var text = Text(value);
-            if (text.Length > 0)
-            {
-                destination[written++] = text;
-            }
-        }
-
-        return written;
     }
 
     public static string Describe(AtkUnitBase* addon, int maxValues)

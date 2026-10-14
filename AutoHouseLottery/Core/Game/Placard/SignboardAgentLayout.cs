@@ -82,8 +82,9 @@ internal sealed unsafe class SignboardAgentLayout
             return NotResolved;
         }
 
+        // x64 displacements are signed; a negative one cannot be a field of the agent.
         var operand = (byte*)match + pattern.OperandPosition;
-        var offset = pattern.WideOperand ? *(int*)operand : *operand;
+        var offset = pattern.WideOperand ? *(int*)operand : *(sbyte*)operand;
         if (offset < 0 || offset + pattern.FieldSize > AgentHousingSignboard.StructSize)
         {
             RunLog.Warning($"Placard agent layout: {pattern.Name} resolved to 0x{offset:X}, outside the agent; it stays unknown.");

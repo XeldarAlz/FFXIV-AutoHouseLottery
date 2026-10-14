@@ -10,14 +10,17 @@ using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
 using AutoHouseLottery.Core.Travel;
 using AutoHouseLottery.Core.Travel.Model;
+using Dalamud.Game;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using System.Collections.Immutable;
 
 namespace AutoHouseLottery.Core.Debug;
 
 // /ahl probe: logs every housing reading for where the character stands, so M0 can be checked in game, and offers the
-// few debug actions that cost nothing (paging wards, a Timers pass, travel, the walk to a placard, and the presses that
-// open or cancel a dialog). Committing presses (Confirm, Yes) are not reachable from here.
+// few debug actions that cost nothing (paging wards, a Timers pass, travel, the walk to a placard, the presses that
+// open a dialog, No on a result, and closing the entry confirmation). Committing presses (Confirm, Yes) are not
+// reachable from here.
 internal static unsafe class HousingProbe
 {
     private const string Prefix = "Probe:";
@@ -25,6 +28,12 @@ internal static unsafe class HousingProbe
     private const int RecentLogMessages = 8;
     private const int VisibleIdDigits = 4;
     private const int OneBased = 1;
+    private const int GotoArgumentCount = 4;
+    private const int ApproachArgumentCount = 3;
+    private const int PressArgumentCount = 2;
+
+    private static readonly ClientLanguage[] selfCheckLanguages = [ClientLanguage.English, ClientLanguage.German, ClientLanguage.French, ClientLanguage.Japanese];
+    private static readonly HousingText[] dialogLabels = [HousingText.ConfirmLabel, HousingText.YesLabel, HousingText.YesLabelAlternate, HousingText.NoLabel, HousingText.NoLabelAlternate];
 
     public static void Run(string arguments, HousingObservers observers)
     {
@@ -42,13 +51,16 @@ internal static unsafe class HousingProbe
             case "lottery":
                 Start(() => new LotteryTimersPass(force: true));
                 return;
-            case "goto" when tokens.Length == 4 && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
-                Start(() => new ProbeTravelTask(destination, travel: true));
+            case "goto" when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
+                Start(() => new ProbeTravelTask(destination, travel: true, observers));
                 return;
-            case "approach" when tokens.Length == 3 && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
-                Start(() => new ProbeTravelTask(destination, travel: false));
+            case "approach" when tokens.Length == ApproachArgumentCount && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
+                Start(() => new ProbeTravelTask(destination, travel: false, observers));
                 return;
-            case "press" when tokens.Length == 2 && Press(tokens[1].ToLowerInvariant()):
+            case "press" when tokens.Length == PressArgumentCount && UiIsOwned():
+                Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
+                return;
+            case "press" when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
             case "stop":
@@ -69,6 +81,18 @@ internal static unsafe class HousingProbe
     {
         var started = !Plugin.Instance.Controller.Running && TaskStarter.TryStart(build);
         Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(started ? L.Probe.Started : L.Probe.Failed)}");
+    }
+
+    // A press while a run or a task drives the game would fight it for the same window.
+    private static bool UiIsOwned()
+    {
+        if (!Plugin.Instance.Controller.Running && !TaskStarter.Busy)
+        {
+            return false;
+        }
+
+        RunLog.Warning($"{Prefix} press refused; a run or a task is driving the game.");
+        return true;
     }
 
     private static bool TryDestination(uint territoryTypeId, string wardText, string plotText, out HousingDestination destination)
@@ -219,7 +243,7 @@ internal static unsafe class HousingProbe
         {
             var current = PlacardCaptureRule.BelongsToOpenWindow(capture.Sequence, observers.PlacardWindow.LastClosedSequence, AddonReads.TryGetReady(PlacardReader.AddonName, out _));
             RunLog.Info($"{Prefix} sale hook capture{(current ? " (this placard)" : " (an earlier placard)")}: housing type {capture.HousingType?.ToString() ?? $"unknown ({capture.RawHousingType})"}, "
-                      + $"territory {capture.TerritoryTypeId}, ward {capture.WardIndex + OneBased}, plot {capture.PlotIndex + OneBased}, apartment {capture.ApartmentNumber}, sale {Describe(capture.Sale)}.");
+                      + $"{Describe(capture.Address)}, apartment {capture.ApartmentNumber}, sale {Describe(capture.Sale)}.");
         }
 
         if (PlacardReader.Read(observers.PlacardWindow, observers.PlacardSales, observers.SignboardLayout) is not { } reading)
@@ -229,21 +253,26 @@ internal static unsafe class HousingProbe
         }
 
         var agent = AgentHousingSignboard.Instance();
-        if (agent != null && PlacardReader.ReadAgentAddress(agent, observers.SignboardLayout) is { } agentAddress)
+        if (agent != null)
         {
-            RunLog.Info($"{Prefix} placard agent address: territory {agentAddress.TerritoryTypeId}, ward {agentAddress.WardIndex + OneBased}, plot {agentAddress.PlotIndex + OneBased}; "
-                      + $"agent sale block {Describe(observers.SignboardLayout.ReadSaleBlock(agent))}.");
+            RunLog.Info($"{Prefix} placard agent sale block as stored: {Describe(observers.SignboardLayout.ReadSaleBlock(agent))}.");
         }
 
-        RunLog.Info($"{Prefix} placard: territory {Show(reading.TerritoryTypeId)}, ward {ShowOneBased(reading.WardIndex)}, plot {ShowOneBased(reading.PlotIndex)} "
-                  + $"(identity from {reading.IdentitySource}), housing type {Show(reading.HousingType)}, for sale {Show(reading.ForSale)}, size {Show(reading.Size)}, "
-                  + $"owner FC {(reading.OwnerFreeCompanyId is { } owner ? (owner == 0 ? "none" : "set") : "unknown")}, sale {Describe(reading.Sale)} (from {reading.SaleSource}).");
-        RunLog.Info($"{Prefix} placard text: address '{reading.AddressText ?? "missing"}', details '{reading.DetailsText ?? "missing"}'.");
-        for (var buttonIndex = 0; buttonIndex < reading.Buttons.Length; buttonIndex++)
+        RunLog.Info($"{Prefix} placard address: hook {Describe(reading.HookAddress)}, agent {Describe(reading.AgentAddress)}, text '{reading.AddressText ?? "missing"}', "
+                  + $"agreement {reading.Agreement}, address {Describe(reading.Address)}.");
+        RunLog.Info($"{Prefix} placard: housing type {Show(reading.HousingType)}, for sale {Show(reading.ForSale)}, size {Show(reading.Size)}, "
+                  + $"owner FC {(reading.OwnerFreeCompanyId is { } owner ? (owner == 0 ? "none" : "set") : "unknown")}, sale {Describe(reading.Sale)} (from {reading.SaleSource}), "
+                  + $"details '{reading.DetailsText ?? "missing"}'.");
+        LogButtons("placard", reading.Buttons);
+    }
+
+    private static void LogButtons(string window, ImmutableArray<WindowButton> buttons)
+    {
+        for (var buttonIndex = 0; buttonIndex < buttons.Length; buttonIndex++)
         {
-            var button = reading.Buttons[buttonIndex];
-            RunLog.Info($"{Prefix} placard button node {button.NodeId}: '{button.Text}', enabled {button.Enabled}, event param {button.EventParam} "
-                      + $"(LlamaLibrary candidate {HousingDialogs.PlacardButtonCallbackCandidate}), matches {Show(button.MatchedText)}.");
+            var button = buttons[buttonIndex];
+            RunLog.Info($"{Prefix} {window} button node {button.NodeId}: '{button.Text}', enabled {button.Enabled}, visible {button.Visible}, event param {button.EventParam} "
+                      + $"(LlamaLibrary placard candidate {HousingDialogs.PlacardButtonCallbackCandidate}), matches {Show(button.MatchedText)}.");
         }
     }
 
@@ -255,12 +284,17 @@ internal static unsafe class HousingProbe
             if (AddonReads.TryGetReady(HousingDialogs.EntryConfirmationAddon, out var addon))
             {
                 RunLog.Info($"{Prefix} {HousingDialogs.EntryConfirmationAddon} values: {AddonReads.Describe(addon, DescribedDialogValues)}.");
+                LogButtons(HousingDialogs.EntryConfirmationAddon, LabelledButtons.Collect(addon, dialogLabels));
             }
         }
 
         if (HousingDialogs.IdentifyResultDialog() is { } result)
         {
             RunLog.Info($"{Prefix} {result.AddonName}: matches {Show(result.Text)}, shows '{result.ShownText}'.");
+            if (AddonReads.TryGetReady(HousingDialogs.ResultAddon, out var addon))
+            {
+                LogButtons(HousingDialogs.ResultAddon, LabelledButtons.Collect(addon, dialogLabels));
+            }
         }
     }
 
@@ -272,6 +306,42 @@ internal static unsafe class HousingProbe
             var pattern = HousingSheetText.Pattern(row.Text);
             RunLog.Debug($"{Prefix} sheet {row.Sheet} {row.RowId} ({row.Text}): {(pattern.IsUsable ? $"{pattern.Segments.Length} segment(s), first '{pattern.Segments[0]}'" : "not usable")}.");
         }
+
+        for (var languageIndex = 0; languageIndex < selfCheckLanguages.Length; languageIndex++)
+        {
+            SelfCheckResultRows(selfCheckLanguages[languageIndex]);
+        }
+    }
+
+    // Each result row is rendered by the game's evaluator and extracted as a dialog is; it has to match its own row
+    // and no other result row, in every client language the game data holds.
+    private static void SelfCheckResultRows(ClientLanguage language)
+    {
+        var rows = HousingTextRows.ResultDialogs;
+        var failures = 0;
+        try
+        {
+            for (var renderedIndex = 0; renderedIndex < rows.Length; renderedIndex++)
+            {
+                var sample = HousingSheetText.RenderedSample(rows[renderedIndex], language);
+                for (var patternIndex = 0; patternIndex < rows.Length; patternIndex++)
+                {
+                    var matches = HousingSheetText.PatternIn(rows[patternIndex], language).Matches(sample);
+                    if (matches != (patternIndex == renderedIndex))
+                    {
+                        failures++;
+                        RunLog.Warning($"{Prefix} self-check {language}: {rows[patternIndex]} {(matches ? "matches" : "does not match")} the rendered {rows[renderedIndex]} '{sample}'.");
+                    }
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            RunLog.Warning(exception, $"{Prefix} self-check {language}: the rows could not be rendered");
+            return;
+        }
+
+        RunLog.Info($"{Prefix} self-check {language}: {rows.Length} result rows, {failures} mismatch(es).");
     }
 
     private static void LogHousingMessages(HousingLogWatcher watcher)
@@ -297,7 +367,7 @@ internal static unsafe class HousingProbe
         var capabilities = lifestream.Capabilities();
         RunLog.Info($"{Prefix} Lifestream: {capabilities}, busy {Show(lifestream.IsBusy())}, current plot {(lifestream.CurrentPlotInfo() is { } info ? $"kind {info.Kind}, ward {info.Ward + OneBased}, plot {info.Plot + OneBased}" : "none")}, "
                   + $"travel token {Show(HousingTravel.CurrentToken)}.");
-        RunLog.Info($"{Prefix} vnavmesh: {(NavmeshIPC.Instance.Available ? "available" : "not available")}.");
+        RunLog.Info($"{Prefix} vnavmesh: {(NavmeshIpc.Instance.Available ? "available" : "not available")}.");
     }
 
     private static string Describe(PlacardSaleInfo? sale)
@@ -305,6 +375,9 @@ internal static unsafe class HousingProbe
             ? "none"
             : $"purchase {info.PurchaseType?.ToString() ?? $"unknown ({info.RawPurchaseType})"}, tenant {info.TenantType?.ToString() ?? $"unknown ({info.RawTenantType})"}, "
             + $"availability {info.Availability?.ToString() ?? $"unknown ({info.RawAvailability})"}, phase ends {info.PhaseEndsAtUtc?.ToString("u") ?? "unknown"}, entries {info.EntryCount}";
+
+    private static string Describe(PlotAddress? address)
+        => address is not { } plot ? "none" : $"territory {plot.TerritoryTypeId}, ward {plot.WardIndex + OneBased}, plot {plot.PlotIndex + OneBased}";
 
     private static string Describe(EstateAddress? estate)
         => estate is not { } address ? "none" : $"territory {address.TerritoryTypeId}, ward {address.WardIndex + OneBased}, plot {address.PlotIndex + OneBased}{(address.Apartment ? " (apartment)" : string.Empty)}";

@@ -1,10 +1,12 @@
+using AutoHouseLottery.Core.Game.Dialogs;
 using AutoHouseLottery.Core.Game.Model;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace AutoHouseLottery.Core.Game.Placard;
 
-// Reads the open placard from every source there is: the sale handler's capture for this window, the agent's fields
-// and the window's text. Each source is kept apart in the reading, so a disagreement shows instead of being merged away.
+// Reads the open placard from every source there is and keeps each one's address apart: the sale handler's capture
+// for this window, the agent's fields and the window's text. The reading states whether they agree; a disagreement
+// shows instead of being merged away.
 internal static unsafe class PlacardReader
 {
     public const string AddonName = "HousingSignBoard";
@@ -13,6 +15,9 @@ internal static unsafe class PlacardReader
     private const uint AddressTextNodeId = 56;
     private const uint DetailsTextNodeId = 64;
 
+    private static readonly HousingText[] lotteryButtons = [HousingText.EnterLotteryButton, HousingText.ViewResultsButton];
+    private static readonly Func<uint, string?> districtNameOf = DistrictNames.Of;
+
     public static PlacardReading? Read(AddonUpdateCounter window, PlacardSaleHook sales, SignboardAgentLayout layout)
     {
         if (!AddonReads.TryGetReady(AddonName, out var addon))
@@ -20,78 +25,47 @@ internal static unsafe class PlacardReader
             return null;
         }
 
-        var addressText = AddonReads.NodeText(addon->GetTextNodeById(AddressTextNodeId));
-        var identitySource = addressText is null ? PlacardSources.None : PlacardSources.AddonText;
-        var saleSource = PlacardSources.None;
-        uint? territoryTypeId = null;
-        int? wardIndex = null;
-        int? plotIndex = null;
-        short? apartmentNumber = null;
-        PlacardHousingType? housingType = null;
-        PlacardSaleInfo? sale = null;
-
-        if (sales.Latest is { } capture && PlacardCaptureRule.BelongsToOpenWindow(capture.Sequence, window.LastClosedSequence, windowOpen: true))
-        {
-            territoryTypeId = capture.TerritoryTypeId;
-            wardIndex = capture.WardIndex;
-            plotIndex = capture.PlotIndex;
-            apartmentNumber = capture.ApartmentNumber;
-            housingType = capture.HousingType;
-            identitySource |= PlacardSources.SaleInfoHook;
-            if (capture.Sale is { } captured)
-            {
-                sale = captured;
-                saleSource = PlacardSources.SaleInfoHook;
-            }
-        }
+        PlacardSaleCapture? capture = sales.Latest is { } latest && PlacardCaptureRule.BelongsToOpenWindow(latest.Sequence, window.LastClosedSequence, windowOpen: true)
+            ? latest
+            : null;
 
         bool? forSale = null;
         byte? size = null;
         ulong? ownerFreeCompanyId = null;
+        PlotAddress? agentAddress = null;
+        PlacardSaleInfo? agentSale = null;
         var agent = AgentHousingSignboard.Instance();
         if (agent != null)
         {
             forSale = layout.ReadByte(agent, layout.ForSaleOffset) is { } forSaleByte ? forSaleByte != 0 : null;
             size = layout.ReadByte(agent, layout.SizeOffset);
             ownerFreeCompanyId = layout.ReadUInt64(agent, layout.OwnerFreeCompanyOffset);
-            if (territoryTypeId is null && ReadAgentAddress(agent, layout) is { } agentAddress)
-            {
-                territoryTypeId = agentAddress.TerritoryTypeId;
-                wardIndex = agentAddress.WardIndex;
-                plotIndex = agentAddress.PlotIndex;
-                identitySource |= PlacardSources.AgentFields;
-            }
-
-            // The agent keeps the last sale block it was given, so it describes this placard only when the agent says this
-            // plot is for sale.
-            if (sale is null && forSale == true && layout.ReadSaleBlock(agent) is { } agentSale)
-            {
-                sale = agentSale;
-                saleSource = PlacardSources.AgentSaleBlock;
-            }
+            agentAddress = ReadAgentAddress(agent, layout);
+            agentSale = layout.ReadSaleBlock(agent);
         }
 
+        var saleSource = PlacardSaleRule.Choose(capture, forSale, agentSale, out var sale);
+        var hookAddress = capture?.Address;
+        var addressText = AddonReads.NodeText(addon->GetTextNodeById(AddressTextNodeId));
         return new PlacardReading(
-            territoryTypeId,
-            wardIndex,
-            plotIndex,
-            apartmentNumber,
-            housingType,
+            hookAddress,
+            agentAddress,
+            addressText,
+            PlacardAddressRule.Evaluate(hookAddress, agentAddress, addressText, districtNameOf),
+            capture?.ApartmentNumber,
+            capture?.HousingType,
             sale,
+            saleSource,
             forSale,
             size,
             ownerFreeCompanyId,
-            addressText,
             AddonReads.NodeText(addon->GetTextNodeById(DetailsTextNodeId)),
-            PlacardButtons.Collect(addon),
-            identitySource,
-            saleSource,
+            LabelledButtons.Collect(addon, lotteryButtons),
             window.LastUpdateSequence,
             DateTime.UtcNow);
     }
 
-    // The agent's own copy of the address, independent of the hook, so the probe can compare the two.
-    public static (uint TerritoryTypeId, int WardIndex, int PlotIndex)? ReadAgentAddress(AgentHousingSignboard* agent, SignboardAgentLayout layout)
+    private static PlotAddress? ReadAgentAddress(AgentHousingSignboard* agent, SignboardAgentLayout layout)
     {
         if (layout.ReadUInt16(agent, layout.TerritoryOffset) is not { } territoryTypeId
             || layout.ReadByte(agent, layout.WardOffset) is not { } wardIndex
@@ -100,6 +74,6 @@ internal static unsafe class PlacardReader
             return null;
         }
 
-        return (territoryTypeId, wardIndex, plotIndex);
+        return new PlotAddress(territoryTypeId, wardIndex, plotIndex);
     }
 }

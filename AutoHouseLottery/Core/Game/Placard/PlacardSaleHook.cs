@@ -83,9 +83,7 @@ internal sealed unsafe class PlacardSaleHook : IDisposable
             var capture = new PlacardSaleCapture(
                 housingType <= (byte)PlacardHousingType.Apartment ? (PlacardHousingType)housingType : null,
                 housingType,
-                territoryTypeId,
-                wardIndex,
-                plotIndex,
+                new PlotAddress(territoryTypeId, wardIndex, plotIndex),
                 apartmentNumber,
                 saleInfo == null || housingType != (byte)PlacardHousingType.UnownedHouse ? null : PlacardSaleInfo.Parse(new ReadOnlySpan<byte>(saleInfo, PlacardSaleInfo.Length)),
                 sequence);

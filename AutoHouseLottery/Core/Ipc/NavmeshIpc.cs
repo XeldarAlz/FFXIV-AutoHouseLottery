@@ -4,7 +4,7 @@ using System.Numerics;
 
 namespace AutoHouseLottery.Core.Ipc;
 
-internal sealed class NavmeshIPC
+internal sealed class NavmeshIpc
 {
     public const int WaypointsUnavailable = -1;
 
@@ -14,7 +14,7 @@ internal sealed class NavmeshIPC
     private const string NumWaypointsFailed = "Navmesh NumWaypoints failed";
     private const string ListWaypointsFailed = "Navmesh ListWaypoints failed";
 
-    private static NavmeshIPC? instance;
+    private static NavmeshIpc? instance;
 
     private readonly ICallGateSubscriber<bool> navIsReady;
     private readonly ICallGateSubscriber<bool> pathIsRunning;
@@ -30,7 +30,7 @@ internal sealed class NavmeshIPC
     private readonly Func<int> numWaypointsCall;
     private readonly Func<List<Vector3>?> listWaypointsCall;
 
-    private NavmeshIPC()
+    private NavmeshIpc()
     {
         var pluginInterface = Svc.PluginInterface;
         navIsReady = pluginInterface.GetIpcSubscriber<bool>("vnavmesh.Nav.IsReady");
@@ -47,7 +47,7 @@ internal sealed class NavmeshIPC
         listWaypointsCall = pathListWaypoints.InvokeFunc;
     }
 
-    public static NavmeshIPC Instance => instance ??= new NavmeshIPC();
+    public static NavmeshIpc Instance => instance ??= new NavmeshIpc();
 
     // vnavmesh registers its gates when it loads, so a missing IsReady gate means it is not installed or not loaded.
     public bool Available => navIsReady.HasFunction;

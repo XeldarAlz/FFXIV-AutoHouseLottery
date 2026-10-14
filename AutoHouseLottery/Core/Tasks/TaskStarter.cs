@@ -6,7 +6,7 @@ internal static class TaskStarter
 {
     public static bool TryStart(Func<AutoCommon> build)
     {
-        if (clib.Services.Svc.Automation.Running)
+        if (Busy)
         {
             RunLog.Warning($"A task is already running ({clib.Services.Svc.Automation.Name}); not starting another.");
             return false;
@@ -23,6 +23,8 @@ internal static class TaskStarter
             return false;
         }
     }
+
+    public static bool Busy => clib.Services.Svc.Automation.Running;
 
     public static void StopCurrent() => clib.Services.Svc.Automation.Stop();
 }

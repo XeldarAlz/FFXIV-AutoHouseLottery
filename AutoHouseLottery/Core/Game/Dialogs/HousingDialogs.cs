@@ -1,16 +1,14 @@
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Placard;
-using ECommons.Automation.UIInput;
 using ECommons.Throttlers;
-using ECommons.UIHelpers.AddonMasterImplementations;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace AutoHouseLottery.Core.Game.Dialogs;
 
 // Recognises the lottery dialogs by their sheet rows and presses their buttons. Every press is refused unless its
-// action is permitted, the window is open and ready, and the window's text is the expected row; there is no generic
-// "answer whatever is open".
+// action is permitted on this thread, the window is open and ready, the window's text is the expected row, and the
+// button's own label reads as the expected Addon row; there is no generic "answer whatever is open".
 internal static unsafe class HousingDialogs
 {
     public const string EntryConfirmationAddon = "SelectYesNoTextScroll";
@@ -21,14 +19,13 @@ internal static unsafe class HousingDialogs
     // event parameter next to this candidate.
     public const int PlacardButtonCallbackCandidate = 1;
 
-    // HousingHerald: on the entry confirmation, Confirm is component node 5 and Cancel node 6.
-    private const uint ConfirmButtonNodeId = 5;
-    private const uint CancelButtonNodeId = 6;
-    private const int MaxDialogTexts = 16;
+    // Closing the entry confirmation fires its close callback; it has no path to the deposit.
+    private const bool FireCloseCallback = true;
     private const int ClickThrottleMs = 600;
     private const string ClickThrottleKey = "AutoHouseLottery.HousingDialogs.Click";
 
     private static readonly HousingText[] entryConfirmation = [HousingText.EntryConfirmation];
+    private static readonly HousingText[] confirmLabel = [HousingText.ConfirmLabel];
 
     public static DialogIdentity? IdentifyEntryConfirmation()
     {
@@ -37,17 +34,31 @@ internal static unsafe class HousingDialogs
             return null;
         }
 
-        Span<string?> texts = new string?[MaxDialogTexts];
-        var textCount = AddonReads.CollectTexts(addon, texts);
-        for (var textIndex = 0; textIndex < textCount; textIndex++)
+        var firstText = string.Empty;
+        if (addon->AtkValues != null)
         {
-            if (HousingSheetText.Match(texts[textIndex]!, entryConfirmation) is { } matched)
+            for (var valueIndex = 0; valueIndex < addon->AtkValuesCount; valueIndex++)
             {
-                return new DialogIdentity(EntryConfirmationAddon, matched, texts[textIndex]!);
+                ref readonly var value = ref addon->AtkValues[valueIndex];
+                if (!AddonReads.IsText(value))
+                {
+                    continue;
+                }
+
+                var text = AddonReads.Text(value);
+                if (HousingSheetText.Matches(HousingText.EntryConfirmation, text))
+                {
+                    return new DialogIdentity(EntryConfirmationAddon, HousingText.EntryConfirmation, text);
+                }
+
+                if (firstText.Length == 0)
+                {
+                    firstText = text;
+                }
             }
         }
 
-        return new DialogIdentity(EntryConfirmationAddon, null, textCount > 0 ? texts[0]! : string.Empty);
+        return new DialogIdentity(EntryConfirmationAddon, null, firstText);
     }
 
     public static DialogIdentity? IdentifyResultDialog()
@@ -57,7 +68,7 @@ internal static unsafe class HousingDialogs
             return null;
         }
 
-        var shown = new AddonMaster.SelectYesno(addon).Text;
+        var shown = AddonReads.NodeText(((AddonSelectYesno*)addon)->PromptText) ?? string.Empty;
         return new DialogIdentity(ResultAddon, HousingSheetText.Match(shown, HousingTextRows.ResultDialogs.AsSpan()), shown);
     }
 
@@ -79,46 +90,71 @@ internal static unsafe class HousingDialogs
             return Refused(action, DialogActionResult.WindowNotOpen);
         }
 
-        var button = PlacardButtons.Find(addon, label);
+        ReadOnlySpan<HousingText> expected = [label];
+        var button = LabelledButtons.Find(addon, expected);
         if (button == null)
         {
             return Refused(action, DialogActionResult.ButtonMissing);
         }
 
-        return Press(action, addon, button);
+        return Press(action, addon, button, expected, requestCommits: false);
     }
 
-    public static DialogActionResult ConfirmEntry() => PressEntryConfirmation(NativeAction.ConfirmEntry, ConfirmButtonNodeId);
-
-    public static DialogActionResult CancelEntry() => PressEntryConfirmation(NativeAction.CancelEntry, CancelButtonNodeId);
-
-    // Yes on a result dialog claims the plot or collects a refund, so the caller names which result it expects.
-    public static DialogActionResult AcceptResult(HousingText expected) => AnswerResult(NativeAction.AcceptResult, expected);
-
-    public static DialogActionResult DeclineResult(HousingText expected) => AnswerResult(NativeAction.DeclineResult, expected);
-
-    private static DialogActionResult PressEntryConfirmation(NativeAction action, uint buttonNodeId)
+    public static DialogActionResult ConfirmEntry()
     {
+        const NativeAction action = NativeAction.ConfirmEntry;
         if (!NativeActionGate.IsPermitted(action))
         {
             return Refused(action, DialogActionResult.NotPermitted);
         }
 
-        if (IdentifyEntryConfirmation() is not { } identity)
-        {
-            return Refused(action, DialogActionResult.WindowNotOpen);
-        }
-
-        if (identity.Text != HousingText.EntryConfirmation || !AddonReads.TryGetReady(EntryConfirmationAddon, out var addon))
+        if (!OpenEntryConfirmation(out var addon))
         {
             return Refused(action, DialogActionResult.IdentityMismatch);
         }
 
-        var button = addon->GetComponentButtonById(buttonNodeId);
-        return button == null ? Refused(action, DialogActionResult.ButtonMissing) : Press(action, addon, button);
+        var button = LabelledButtons.Find(addon, confirmLabel);
+        return button == null ? Refused(action, DialogActionResult.ButtonMissing) : Press(action, addon, button, confirmLabel, requestCommits: true);
     }
 
-    private static DialogActionResult AnswerResult(NativeAction action, HousingText expected)
+    // Cancel never presses a button: the window is closed, so nothing on it can be confirmed by mistake.
+    public static DialogActionResult CancelEntry()
+    {
+        const NativeAction action = NativeAction.CancelEntry;
+        if (!NativeActionGate.IsPermitted(action))
+        {
+            return Refused(action, DialogActionResult.NotPermitted);
+        }
+
+        if (!OpenEntryConfirmation(out var addon))
+        {
+            return Refused(action, DialogActionResult.IdentityMismatch);
+        }
+
+        if (!EzThrottler.Throttle(ClickThrottleKey, ClickThrottleMs))
+        {
+            return DialogActionResult.Throttled;
+        }
+
+        RunLog.Info($"Housing dialog: {action} closes {EntryConfirmationAddon}.");
+        addon->Close(FireCloseCallback);
+        return DialogActionResult.Closed;
+    }
+
+    // Yes on a result dialog claims the plot or collects a refund, so the caller names which result it expects.
+    public static DialogActionResult AcceptResult(HousingText expected)
+        => AnswerResult(NativeAction.AcceptResult, expected, HousingTextRows.YesLabels.AsSpan(), requestCommits: true);
+
+    public static DialogActionResult DeclineResult(HousingText expected)
+        => AnswerResult(NativeAction.DeclineResult, expected, HousingTextRows.NoLabels.AsSpan(), requestCommits: false);
+
+    private static bool OpenEntryConfirmation(out AtkUnitBase* addon)
+    {
+        addon = null;
+        return IdentifyEntryConfirmation() is { Text: HousingText.EntryConfirmation } && AddonReads.TryGetReady(EntryConfirmationAddon, out addon);
+    }
+
+    private static DialogActionResult AnswerResult(NativeAction action, HousingText expected, ReadOnlySpan<HousingText> labels, bool requestCommits)
     {
         if (!NativeActionGate.IsPermitted(action))
         {
@@ -137,14 +173,15 @@ internal static unsafe class HousingDialogs
 
         var dialog = (AddonSelectYesno*)addon;
         var button = action == NativeAction.AcceptResult ? dialog->YesButton : dialog->NoButton;
-        return button == null ? Refused(action, DialogActionResult.ButtonMissing) : Press(action, addon, button);
+        return button == null ? Refused(action, DialogActionResult.ButtonMissing) : Press(action, addon, button, labels, requestCommits);
     }
 
-    private static DialogActionResult Press(NativeAction action, AtkUnitBase* addon, AtkComponentButton* button)
+    private static DialogActionResult Press(NativeAction action, AtkUnitBase* addon, AtkComponentButton* button, ReadOnlySpan<HousingText> expectedLabels, bool requestCommits)
     {
-        if (!button->IsEnabled)
+        if (!LabelledButtons.MayPress(button, expectedLabels, requestCommits))
         {
-            return Refused(action, DialogActionResult.ButtonDisabled);
+            RunLog.Warning($"Housing dialog: {action} refused; the button reads '{LabelledButtons.Label(button)}', not the expected label.");
+            return DialogActionResult.LabelMismatch;
         }
 
         if (!EzThrottler.Throttle(ClickThrottleKey, ClickThrottleMs))
@@ -152,9 +189,9 @@ internal static unsafe class HousingDialogs
             return DialogActionResult.Throttled;
         }
 
-        RunLog.Info($"Housing dialog: {action} pressed.");
-        button->ClickAddonButton(addon);
-        return DialogActionResult.Pressed;
+        var result = ButtonPress.Press(addon, button);
+        RunLog.Info($"Housing dialog: {action} {(result == DialogActionResult.Pressed ? "pressed" : $"refused ({result})")}.");
+        return result;
     }
 
     private static DialogActionResult Refused(NativeAction action, DialogActionResult result)

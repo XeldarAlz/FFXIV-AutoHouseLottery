@@ -30,7 +30,7 @@ internal sealed class MoveStallTracker
 
         var now = Environment.TickCount64;
         var position = player.Position;
-        var navmesh = NavmeshIPC.Instance;
+        var navmesh = NavmeshIpc.Instance;
         var navigating = navmesh.IsRunning();
         var navigationBusy = navigating || navmesh.IsPathfinding();
         var frozenLegitimately = StuckDetector.IsPositionFrozenLegit();
@@ -68,7 +68,7 @@ internal sealed class MoveStallTracker
 
         followedOnce = true;
         var waypointCount = navmesh.NumWaypoints();
-        var progressed = waypointCount == NavmeshIPC.WaypointsUnavailable
+        var progressed = waypointCount == NavmeshIpc.WaypointsUnavailable
             ? DisplacedFromAnchor(position)
             : ClosedOnWaypoint(navmesh, waypointCount, position);
 
@@ -92,7 +92,7 @@ internal sealed class MoveStallTracker
         return true;
     }
 
-    private bool ClosedOnWaypoint(NavmeshIPC navmesh, int waypointCount, Vector3 position)
+    private bool ClosedOnWaypoint(NavmeshIpc navmesh, int waypointCount, Vector3 position)
     {
         var consumed = target is not null && !pathInterrupted && waypointCount < lastWaypointCount;
         var newPath = target is null || pathInterrupted || waypointCount > lastWaypointCount;

@@ -51,7 +51,7 @@ internal sealed class PlacardApproach(HousingDestination destination) : AutoComm
             return;
         }
 
-        if (!NavmeshIPC.Instance.Available)
+        if (!NavmeshIpc.Instance.Available)
         {
             Finish(ApproachOutcome.ManualArrivalNeeded);
             return;

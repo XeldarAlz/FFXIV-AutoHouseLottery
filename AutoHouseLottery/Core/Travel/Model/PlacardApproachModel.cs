@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.Game.Model;
 using System.Numerics;
 
 namespace AutoHouseLottery.Core.Travel.Model;
@@ -14,12 +15,36 @@ internal enum ApproachOutcome : byte
     Cancelled,
 }
 
-// PlotEntrance: Lifestream's entrance point for the plot, so the nearest placard to it is the plot's own. Player: no
-// entrance is known, so the nearest placard to the character is only a candidate until the placard reader confirms it.
+// Where the search for the plot's placard is centred: Lifestream's entrance point for the plot, or the character when
+// Lifestream has none. Either way the nearest placard is only a candidate; distance is not identity, and the plot is
+// confirmed only by the placard reading's agreed address once the placard is open (PlacardIdentity).
 internal enum PlacardAnchor : byte
 {
     PlotEntrance,
     Player,
+}
+
+internal enum PlacardIdentityVerdict : byte
+{
+    Confirmed,
+    WrongPlot,
+    Unverified,
+}
+
+internal static class PlacardIdentity
+{
+    // Unverified when the placard's sources do not agree on an address, so a single unconfirmed source never passes.
+    public static PlacardIdentityVerdict Verify(in HousingDestination destination, PlotAddress? agreedAddress)
+    {
+        if (agreedAddress is not { } address)
+        {
+            return PlacardIdentityVerdict.Unverified;
+        }
+
+        return address.TerritoryTypeId == destination.TerritoryTypeId && address.WardIndex == destination.WardIndex && address.PlotIndex == destination.PlotIndex
+            ? PlacardIdentityVerdict.Confirmed
+            : PlacardIdentityVerdict.WrongPlot;
+    }
 }
 
 internal static class PlacardSelection

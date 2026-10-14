@@ -57,14 +57,25 @@ internal sealed class SheetTextPattern
         return new SheetTextPattern(collected.ToImmutable(), openStart, openEnd);
     }
 
-    public bool Matches(string shown)
+    public bool Matches(string shown) => IsUsable && MatchNormalized(DisplayText.Normalize(shown), null);
+
+    // The text each macro rendered, in order: before the first segment when the row opens with a macro, between
+    // segments, and after the last when the row ends with one.
+    public bool TryCapture(string shown, out ImmutableArray<string> gaps)
     {
-        if (!IsUsable)
+        var captured = new List<string>();
+        if (!IsUsable || !MatchNormalized(DisplayText.Normalize(shown), captured))
         {
+            gaps = [];
             return false;
         }
 
-        var text = DisplayText.Normalize(shown);
+        gaps = [.. captured];
+        return true;
+    }
+
+    private bool MatchNormalized(string text, List<string>? gaps)
+    {
         var lastIndex = segments.Length - 1;
         var cursor = 0;
         for (var segmentIndex = 0; segmentIndex <= lastIndex; segmentIndex++)
@@ -74,9 +85,13 @@ internal sealed class SheetTextPattern
             {
                 var tailStart = text.Length - segment.Length;
                 var anchoredBoth = segmentIndex == 0 && !openStart;
-                return tailStart >= cursor
-                    && text.EndsWith(segment, StringComparison.OrdinalIgnoreCase)
-                    && (!anchoredBoth || tailStart == 0);
+                if (tailStart < cursor || !text.EndsWith(segment, StringComparison.OrdinalIgnoreCase) || (anchoredBoth && tailStart != 0))
+                {
+                    return false;
+                }
+
+                AddGap(gaps, text, cursor, tailStart, segmentIndex);
+                return true;
             }
 
             if (segmentIndex == 0 && !openStart)
@@ -96,10 +111,22 @@ internal sealed class SheetTextPattern
                 return false;
             }
 
+            AddGap(gaps, text, cursor, found, segmentIndex);
             cursor = found + segment.Length;
         }
 
+        gaps?.Add(text[cursor..].Trim());
         return true;
+    }
+
+    private void AddGap(List<string>? gaps, string text, int start, int end, int segmentIndex)
+    {
+        if (gaps is null || (segmentIndex == 0 && !openStart))
+        {
+            return;
+        }
+
+        gaps.Add(text[start..end].Trim());
     }
 
     private static bool Flush(StringBuilder pending, ImmutableArray<string>.Builder collected)
