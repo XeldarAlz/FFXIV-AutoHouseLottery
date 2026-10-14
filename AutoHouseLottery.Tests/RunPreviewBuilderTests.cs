@@ -16,7 +16,7 @@ public sealed class RunPreviewBuilderTests
     {
         var (plots, shortlist) = Shortlisted(42);
 
-        var preview = RunPreviewBuilder.Build(CharacterFixtures.Character(1), BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots);
+        var preview = RunPreviewBuilder.Build(CharacterFixtures.Character(1), BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
 
         Assert.Equal(42, preview.PlotCount);
         Assert.Equal(1, preview.MaxNewEntries);
@@ -29,7 +29,7 @@ public sealed class RunPreviewBuilderTests
         var (plots, shortlist) = Shortlisted(3);
         var bare = new CharacterProfile { ContentId = 7, Name = "Bare", Region = GameRegion.Global, HomeWorldId = HomeWorld };
 
-        var preview = RunPreviewBuilder.Build(bare, BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots);
+        var preview = RunPreviewBuilder.Build(bare, BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
 
         Assert.Equal(EligibilityVerdict.Unknown, preview.Assignments[0].Eligibility.Verdict);
     }
@@ -40,8 +40,8 @@ public sealed class RunPreviewBuilderTests
         var (plots, shortlist) = Shortlisted(3);
         var character = CharacterFixtures.Character(1);
 
-        var noBuyer = RunPreviewBuilder.Build(character, BuyerType.Unknown, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots);
-        var noCeiling = RunPreviewBuilder.Build(character, BuyerType.Private, 0, 0, shortlist, VerifiedEntryPhase(), plots);
+        var noBuyer = RunPreviewBuilder.Build(character, BuyerType.Unknown, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
+        var noCeiling = RunPreviewBuilder.Build(character, BuyerType.Private, 0, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
 
         Assert.Equal(RunPolicyError.MissingBuyerType, noBuyer.PolicyError);
         Assert.Equal(RunPolicyError.NonPositiveDepositCap, noCeiling.PolicyError);

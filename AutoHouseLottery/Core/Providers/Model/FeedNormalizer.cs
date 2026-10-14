@@ -6,9 +6,13 @@ namespace AutoHouseLottery.Core.Providers.Model;
 
 // The service relays PaissaDB, whose wards and plots are zero-based. They become the canonical one-based address here and
 // nowhere else. A row that cannot be read exactly is rejected rather than repaired, and a district with a rejected row
-// is reported as partial so the plots it may have dropped are never taken for unlisted.
+// is reported as partial so the plots it may have dropped are never taken for unlisted. The phase end most rows agree on
+// anchors the region's lottery calendar; a row whose own phase end is off that calendar keeps its plot but loses the
+// fields that belong to a cycle.
 internal static class FeedNormalizer
 {
+    public const int GridToleranceMinutes = 60;
+
     private const int LotteryFlag = 1;
     private const int FreeCompanyFlag = 2;
     private const int PrivateFlag = 4;
@@ -21,6 +25,8 @@ internal static class FeedNormalizer
     private const int SmallSize = 0;
     private const int MediumSize = 1;
     private const int LargeSize = 2;
+
+    private static readonly TimeSpan gridTolerance = TimeSpan.FromMinutes(GridToleranceMinutes);
 
     public static bool TryParseWorld(ReadOnlySpan<byte> body, out FeedWorldDetail? detail)
     {
@@ -67,7 +73,7 @@ internal static class FeedNormalizer
         return worlds.ToImmutable();
     }
 
-    public static FeedResult Normalize(FeedWorldDetail? payload, uint requestedWorldId, in FeedReceipt receipt, in LotterySchedule schedule)
+    public static FeedResult Normalize(FeedWorldDetail? payload, uint requestedWorldId, in FeedReceipt receipt, LotterySchedules schedules)
     {
         if (payload?.Districts is not { } districts)
         {
@@ -79,6 +85,8 @@ internal static class FeedNormalizer
             return FeedResult.Failed(FeedProblem.WrongWorld);
         }
 
+        var update = Anchor(districts, schedules);
+        schedules.TryGet(GameRegion.Global, out var schedule);
         var built = ImmutableArray.CreateBuilder<DistrictFeed>(HousingDistricts.All.Length);
         var positions = ImmutableArray.CreateBuilder<CyclePosition>();
         var seen = new HashSet<uint>();
@@ -95,8 +103,46 @@ internal static class FeedNormalizer
             built.Add(NormalizeDistrict(detail, requestedWorldId, districtId, scope, receipt, schedule, positions));
         }
 
-        return new FeedResult(FeedProblem.None, new WorldFeed(requestedWorldId, receipt, built.ToImmutable(), positions.ToImmutable()));
+        return new FeedResult(FeedProblem.None, new WorldFeed(requestedWorldId, receipt, built.ToImmutable(), positions.ToImmutable(), update));
     }
+
+    private static ScheduleUpdate Anchor(FeedDistrictDetail?[] districts, LotterySchedules schedules)
+    {
+        var votes = new Dictionary<(LotteryPhase Phase, DateTime End), int>();
+        for (var districtIndex = 0; districtIndex < districts.Length; districtIndex++)
+        {
+            var rows = districts[districtIndex]?.OpenPlots ?? [];
+            for (var rowIndex = 0; rowIndex < rows.Length; rowIndex++)
+            {
+                if (rows[rowIndex] is not { } row || ReportedPhase(row.LotteryPhase) is not { } phase || !UnixTime.TryFromSeconds(row.LotteryPhaseUntil, out var end))
+                {
+                    continue;
+                }
+
+                votes[(phase, end)] = votes.GetValueOrDefault((phase, end)) + 1;
+            }
+        }
+
+        var best = default((LotteryPhase Phase, DateTime End));
+        var bestVotes = 0;
+        foreach (var vote in votes)
+        {
+            if (vote.Value > bestVotes || (vote.Value == bestVotes && vote.Key.End > best.End))
+            {
+                best = vote.Key;
+                bestVotes = vote.Value;
+            }
+        }
+
+        return bestVotes == 0 ? ScheduleUpdate.Unchanged : schedules.Observe(GameRegion.Global, best.Phase, best.End, out _);
+    }
+
+    private static LotteryPhase? ReportedPhase(int? phase) => phase switch
+    {
+        EntryPhase => LotteryPhase.Entry,
+        ResultsPhase => LotteryPhase.Results,
+        _ => null,
+    };
 
     private static DistrictFeed NormalizeDistrict(
         FeedDistrictDetail detail,
@@ -208,8 +254,9 @@ internal static class FeedNormalizer
         };
     }
 
-    // A plot reported as unavailable sits between lotteries: its phase end is either the end of the entry period or the
-    // end of the cycle. Only the reading that lands on the lottery calendar is accepted.
+    // A plot reported as unavailable sits between lotteries: its phase end is either the end of the cycle or the end of
+    // the entry period. Only the reading that lands on the lottery calendar is accepted, and only a reported entry or
+    // results phase counts as evidence of where the calendar stands.
     private static CycleKey? ResolveCycle(in LotterySchedule schedule, int? phase, DateTime? phaseEnd, ImmutableArray<CyclePosition>.Builder positions)
     {
         if (phaseEnd is not { } end)
@@ -217,32 +264,29 @@ internal static class FeedNormalizer
             return null;
         }
 
-        switch (phase)
+        return phase switch
         {
-            case EntryPhase:
-                return Verify(schedule, LotteryPhase.Entry, end, positions);
-            case ResultsPhase:
-                return Verify(schedule, LotteryPhase.Results, end, positions);
-            case UnavailablePhase:
-                if (LotteryCalendar.TryVerify(schedule, LotteryPhase.Results, end, out var cycleEnd))
-                {
-                    return cycleEnd.Cycle;
-                }
-
-                return LotteryCalendar.TryVerify(schedule, LotteryPhase.Entry, end, out var entryEnd) ? entryEnd.Cycle : null;
-            default:
-                return null;
-        }
+            EntryPhase => OnCalendar(schedule, LotteryPhase.Entry, end, positions),
+            ResultsPhase => OnCalendar(schedule, LotteryPhase.Results, end, positions),
+            UnavailablePhase => OnCalendar(schedule, LotteryPhase.Results, end, null) ?? OnCalendar(schedule, LotteryPhase.Entry, end, null),
+            _ => null,
+        };
     }
 
-    private static CycleKey? Verify(in LotterySchedule schedule, LotteryPhase phase, DateTime phaseEnd, ImmutableArray<CyclePosition>.Builder positions)
+    private static CycleKey? OnCalendar(in LotterySchedule schedule, LotteryPhase phase, DateTime phaseEnd, ImmutableArray<CyclePosition>.Builder? positions)
     {
         if (!LotteryCalendar.TryVerify(schedule, phase, phaseEnd, out var position))
         {
             return null;
         }
 
-        if (!positions.Contains(position))
+        var calendarEnd = LotteryCalendar.EntryStartOf(schedule, position.Cycle.Number) + (phase == LotteryPhase.Entry ? LotteryCalendar.EntryPeriod : LotteryCalendar.CycleLength);
+        if ((phaseEnd - calendarEnd).Duration() > gridTolerance)
+        {
+            return null;
+        }
+
+        if (positions is not null && !positions.Contains(position))
         {
             positions.Add(position);
         }

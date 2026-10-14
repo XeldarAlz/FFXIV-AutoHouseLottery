@@ -3,7 +3,7 @@ using AutoHouseLottery.Core.Housing.Model;
 
 namespace AutoHouseLottery.Core.Providers.Model;
 
-internal sealed record WorldFeed(uint WorldId, FeedReceipt Receipt, ImmutableArray<DistrictFeed> Districts, ImmutableArray<CyclePosition> Positions)
+internal sealed record WorldFeed(uint WorldId, FeedReceipt Receipt, ImmutableArray<DistrictFeed> Districts, ImmutableArray<CyclePosition> Positions, ScheduleUpdate Schedule)
 {
     public int ObservationCount
     {

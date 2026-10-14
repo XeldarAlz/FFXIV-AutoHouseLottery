@@ -12,7 +12,7 @@ internal static class FeedIntake
         in FeedTicket ticket,
         ReadOnlySpan<uint> scope,
         in FeedFetch fetch,
-        in LotterySchedule schedule)
+        LotterySchedules schedules)
     {
         if (!fetch.Succeeded)
         {
@@ -29,7 +29,7 @@ internal static class FeedIntake
             return FeedIntakeResult.Ignored(FeedIntakeStatus.Malformed);
         }
 
-        var result = FeedNormalizer.Normalize(detail, ticket.WorldId, fetch.Receipt, schedule);
+        var result = FeedNormalizer.Normalize(detail, ticket.WorldId, fetch.Receipt, schedules);
         return result.Problem switch
         {
             FeedProblem.None => Apply(store, result.Feed!),
@@ -43,6 +43,7 @@ internal static class FeedIntake
         var merged = 0;
         var rejected = feed.RejectedRows;
         var marked = 0;
+        var firstRejection = MergeRejection.None;
         for (var index = 0; index < feed.Districts.Length; index++)
         {
             var district = feed.Districts[index];
@@ -50,8 +51,12 @@ internal static class FeedIntake
             merged += batch.Merged;
             rejected += batch.Rejected;
             marked += batch.MarkedNotReported;
+            if (firstRejection == MergeRejection.None)
+            {
+                firstRejection = batch.BatchRejection != MergeRejection.None ? batch.BatchRejection : batch.FirstRowRejection;
+            }
         }
 
-        return new FeedIntakeResult(FeedIntakeStatus.Applied, feed, merged, rejected, marked);
+        return new FeedIntakeResult(FeedIntakeStatus.Applied, feed, merged, rejected, marked) { FirstRejection = firstRejection };
     }
 }

@@ -16,7 +16,8 @@ internal static class RunPreviewBuilder
         long gilReserve,
         in ShortlistSnapshot shortlist,
         in CyclePosition position,
-        IReadOnlyDictionary<PlotKey, PlotSnapshot> plots)
+        IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
+        DateTime nowUtc)
     {
         var policy = new RunPolicy
         {
@@ -26,6 +27,6 @@ internal static class RunPreviewBuilder
             TravelAllowance = PreviewTravelAllowance,
             Shortlist = shortlist,
         };
-        return AssignmentPlanner.Build(policy, [character], plots);
+        return AssignmentPlanner.Build(policy, [character], plots, nowUtc);
     }
 }

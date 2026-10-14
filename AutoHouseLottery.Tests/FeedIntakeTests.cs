@@ -98,8 +98,8 @@ public sealed class FeedIntakeTests
         var left = session.Issue(OtherWorld);
         var current = session.Issue(HomeWorld);
 
-        var late = FeedIntake.Accept(store, session, left, [HomeWorld], Fetched(World(OtherWorld, Row(0, 0, world: OtherWorld))), LotteryCalendar.Global);
-        var fresh = FeedIntake.Accept(store, session, current, [HomeWorld], Fetched(World(HomeWorld, Row(0, 0))), LotteryCalendar.Global);
+        var late = FeedIntake.Accept(store, session, left, [HomeWorld], Fetched(World(OtherWorld, Row(0, 0, world: OtherWorld))), LotterySchedules.Create([]));
+        var fresh = FeedIntake.Accept(store, session, current, [HomeWorld], Fetched(World(HomeWorld, Row(0, 0))), LotterySchedules.Create([]));
 
         Assert.Equal(FeedIntakeStatus.Stale, late.Status);
         Assert.True(fresh.Applied);
@@ -114,8 +114,8 @@ public sealed class FeedIntakeTests
         var older = session.Issue(HomeWorld);
         var newer = session.Issue(HomeWorld);
 
-        var fresh = FeedIntake.Accept(store, session, newer, [HomeWorld], Fetched(World(HomeWorld, Row(0, 0))), LotteryCalendar.Global);
-        var late = FeedIntake.Accept(store, session, older, [HomeWorld], Fetched(World(HomeWorld)), LotteryCalendar.Global);
+        var fresh = FeedIntake.Accept(store, session, newer, [HomeWorld], Fetched(World(HomeWorld, Row(0, 0))), LotterySchedules.Create([]));
+        var late = FeedIntake.Accept(store, session, older, [HomeWorld], Fetched(World(HomeWorld)), LotterySchedules.Create([]));
 
         Assert.True(fresh.Applied);
         Assert.Equal(FeedIntakeStatus.Stale, late.Status);
@@ -129,7 +129,7 @@ public sealed class FeedIntakeTests
         var session = new FeedSession();
         var ticket = session.Issue(HomeWorld);
 
-        var result = FeedIntake.Accept(store, session, ticket, [HomeWorld], Fetched(World(OtherWorld, Row(0, 0, world: OtherWorld))), LotteryCalendar.Global);
+        var result = FeedIntake.Accept(store, session, ticket, [HomeWorld], Fetched(World(OtherWorld, Row(0, 0, world: OtherWorld))), LotterySchedules.Create([]));
 
         Assert.Equal(FeedIntakeStatus.WrongWorld, result.Status);
         Assert.Empty(store.Plots);
@@ -155,7 +155,7 @@ public sealed class FeedIntakeTests
     private static FeedIntakeResult Accept(PlotStore store, FeedSession session, in FeedFetch fetch)
     {
         var ticket = session.Issue(HomeWorld);
-        return FeedIntake.Accept(store, session, ticket, [HomeWorld], fetch, LotteryCalendar.Global);
+        return FeedIntake.Accept(store, session, ticket, [HomeWorld], fetch, LotterySchedules.Create([]));
     }
 
     private static void AssertBothStillListed(PlotStore store)
