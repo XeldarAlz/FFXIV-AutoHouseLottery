@@ -62,6 +62,14 @@ internal static class JournalCodec
         },
     };
 
+    public static JournalRecordJson Confirmation(ActionAttempt attempt, EntryReceipt receipt, in EntrySettlement settlement) => new()
+    {
+        Kind = JournalRecordKind.Confirmation,
+        Attempt = Encode(attempt).Attempt,
+        Receipt = Encode(receipt).Receipt,
+        Settlement = Encode(settlement).Settlement,
+    };
+
     public static bool TryDecode(in AttemptJson json, [NotNullWhen(true)] out ActionAttempt? attempt)
     {
         attempt = null;

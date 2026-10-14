@@ -32,6 +32,11 @@ internal sealed record PlotSnapshot(PlotKey Key)
 
     public PlotAvailability AvailabilityAt(in CyclePosition position)
     {
+        if (HasAvailabilityConflict())
+        {
+            return PlotAvailability.Unknown;
+        }
+
         if (Occupancy is { Value: PlotOccupancy.Occupied } occupied
             && (Sale is not { } laterSale || !PlotMerge.Supersedes(laterSale.Provenance, occupied.Provenance)))
         {
@@ -60,5 +65,18 @@ internal sealed record PlotSnapshot(PlotKey Key)
             PlotSale.LotteryResults when current && position.Phase == LotteryPhase.Results => PlotAvailability.LotteryResults,
             _ => PlotAvailability.Unknown,
         };
+    }
+
+    private bool HasAvailabilityConflict()
+    {
+        for (var index = 0; index < Conflicts.Length; index++)
+        {
+            if (Conflicts[index].Field is PlotField.Occupancy or PlotField.Sale or PlotField.Availability)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

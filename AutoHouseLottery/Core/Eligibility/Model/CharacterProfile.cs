@@ -16,6 +16,8 @@ internal readonly record struct CharacterProfile
 
     public long? ObservedGil { get; init; }
 
+    public DateTime? GilObservedUtc { get; init; }
+
     public bool? PrivateBuyerQualified { get; init; }
 
     public bool? FreeCompanyBuyerQualified { get; init; }
@@ -30,5 +32,5 @@ internal readonly record struct CharacterProfile
 
     public CycleParticipation Participation { get; init; }
 
-    public DateTime? ObservedUtc { get; init; }
+    public DateTime? FactsObservedUtc { get; init; }
 }

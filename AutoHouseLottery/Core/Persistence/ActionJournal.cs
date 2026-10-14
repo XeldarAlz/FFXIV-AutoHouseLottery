@@ -2,39 +2,36 @@ using System.Buffers;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
+using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Persistence.Model;
 
 namespace AutoHouseLottery.Core.Persistence;
 
-internal sealed class ActionJournal
+internal sealed class ActionJournal : IDisposable
 {
     private readonly Lock gate = new();
     private readonly string path;
     private readonly int schema;
+    private readonly FileStream fileLock;
     private readonly Dictionary<Guid, ActionAttempt> attempts = [];
     private readonly Dictionary<Guid, EntryReceipt> receipts = [];
     private readonly Dictionary<Guid, EntrySettlement> settlements = [];
-    private bool faulted;
+    private StrongBox<JournalSnapshot> published = new(new JournalSnapshot([], [], []));
+    private long committedLength;
+    private volatile bool faulted;
 
-    private ActionJournal(string path, int schema)
+    private ActionJournal(string path, int schema, FileStream fileLock)
     {
         this.path = path;
         this.schema = schema;
+        this.fileLock = fileLock;
     }
 
-    public bool Faulted
-    {
-        get
-        {
-            lock (gate)
-            {
-                return faulted;
-            }
-        }
-    }
+    public bool Faulted => faulted;
 
     public static JournalOpenResult Open(string path, DateTime nowUtc)
     {
@@ -43,42 +40,69 @@ internal sealed class ActionJournal
 
     internal static JournalOpenResult Open(string path, DateTime nowUtc, int currentSchema, ImmutableArray<JournalMigration> migrations)
     {
+        FileStream fileLock;
         try
         {
-            return Load(path, nowUtc, currentSchema, migrations);
+            fileLock = JournalFile.AcquireLock(path);
         }
         catch (IOException)
         {
-            return new JournalOpenResult(JournalOpenStatus.ReadFailed, null, 0, false, null);
+            return Failed(JournalOpenStatus.Locked, false);
         }
         catch (UnauthorizedAccessException)
         {
-            return new JournalOpenResult(JournalOpenStatus.ReadFailed, null, 0, false, null);
+            return Failed(JournalOpenStatus.ReadFailed, false);
         }
+
+        JournalOpenResult result;
+        try
+        {
+            result = Load(path, nowUtc, currentSchema, migrations, fileLock);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            result = Failed(JournalOpenStatus.ReadFailed, false);
+        }
+
+        if (result.Journal is null)
+        {
+            fileLock.Dispose();
+        }
+
+        return result;
     }
 
-    public JournalSnapshot Snapshot()
-    {
-        lock (gate)
-        {
-            return new JournalSnapshot([.. attempts.Values], [.. receipts.Values], [.. settlements.Values]);
-        }
-    }
+    public JournalSnapshot Snapshot() => Volatile.Read(ref published).Value;
 
     public ActionAttempt? FindSlotHolder(OperationKey key)
     {
-        lock (gate)
+        var attemptsSnapshot = Snapshot().Attempts;
+        for (var index = 0; index < attemptsSnapshot.Length; index++)
         {
-            return FindSlotHolderLocked(key);
+            var attempt = attemptsSnapshot[index];
+            if (attempt.Key == key && AttemptTransitions.HoldsSlot(attempt.State))
+            {
+                return attempt;
+            }
         }
+
+        return null;
     }
 
     public bool TryGetSettlement(Guid receiptId, out EntrySettlement settlement)
     {
-        lock (gate)
+        var settlementsSnapshot = Snapshot().Settlements;
+        for (var index = 0; index < settlementsSnapshot.Length; index++)
         {
-            return settlements.TryGetValue(receiptId, out settlement);
+            if (settlementsSnapshot[index].ReceiptId == receiptId)
+            {
+                settlement = settlementsSnapshot[index];
+                return true;
+            }
         }
+
+        settlement = default;
+        return false;
     }
 
     public JournalWrite Prepare(ActionAttempt attempt)
@@ -95,6 +119,15 @@ internal sealed class ActionJournal
                 return JournalWrite.Invalid;
             }
 
+            if (attempt.Kind != ActionKind.Entry)
+            {
+                var outcome = ValidateSettlementIntent(attempt);
+                if (outcome != JournalWrite.Written)
+                {
+                    return outcome;
+                }
+            }
+
             if (FindSlotHolderLocked(attempt.Key) is not null)
             {
                 return JournalWrite.SlotTaken;
@@ -107,6 +140,7 @@ internal sealed class ActionJournal
             }
 
             attempts[prepared.AttemptId] = prepared;
+            Publish();
             return JournalWrite.Written;
         }
     }
@@ -121,6 +155,11 @@ internal sealed class ActionJournal
     {
         lock (gate)
         {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
             if (!attempts.TryGetValue(attemptId, out var attempt))
             {
                 return JournalWrite.UnknownRecord;
@@ -141,15 +180,15 @@ internal sealed class ActionJournal
                 return CommitTransition(attempt with { State = AttemptState.Confirmed, UpdatedUtc = nowUtc });
             }
 
-            if (receipt is null || !receipt.Matches(attempt) || receipts.ContainsKey(receipt.ReceiptId))
+            if (receipt is null || !IsReceiptFor(receipt, attempt))
             {
                 return JournalWrite.Invalid;
             }
 
             var linkedReceipt = receipt with { AttemptId = attempt.AttemptId };
-            var settlement = EntrySettlement.Entered(receipt.ReceiptId, nowUtc);
+            var settlement = settlements.TryGetValue(receipt.ReceiptId, out var existing) ? existing : EntrySettlement.Entered(receipt.ReceiptId, nowUtc);
             var confirmed = attempt with { State = AttemptState.Confirmed, UpdatedUtc = nowUtc, ReceiptId = receipt.ReceiptId };
-            if (!TryAppend(JournalCodec.Encode(linkedReceipt), JournalCodec.Encode(settlement), JournalCodec.Encode(confirmed)))
+            if (!TryAppend(JournalCodec.Confirmation(confirmed, linkedReceipt, settlement)))
             {
                 return JournalWrite.WriteFailed;
             }
@@ -157,6 +196,7 @@ internal sealed class ActionJournal
             receipts[linkedReceipt.ReceiptId] = linkedReceipt;
             settlements[settlement.ReceiptId] = settlement;
             attempts[confirmed.AttemptId] = confirmed;
+            Publish();
             return JournalWrite.Written;
         }
     }
@@ -165,6 +205,11 @@ internal sealed class ActionJournal
     {
         lock (gate)
         {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
             if (!settlements.TryGetValue(receiptId, out var current))
             {
                 return JournalWrite.UnknownRecord;
@@ -172,7 +217,7 @@ internal sealed class ActionJournal
 
             if (current.State == next)
             {
-                return JournalWrite.AlreadyRecorded;
+                return amount is { } given && given != RecordedAmount(current) ? JournalWrite.AmountMismatch : JournalWrite.AlreadyRecorded;
             }
 
             if (!current.TryAdvance(next, amount, nowUtc, out var advanced))
@@ -186,21 +231,28 @@ internal sealed class ActionJournal
             }
 
             settlements[receiptId] = advanced;
-            return JournalWrite.Written;
+            Publish();
+            var differs = next == SettlementState.Refunded && amount is { } received && received != advanced.ExpectedRefund;
+            return differs ? JournalWrite.WrittenAmountDiffers : JournalWrite.Written;
         }
     }
 
-    public JournalWrite Compact(DateTime pruneSettledBeforeUtc, out int prunedReceipts)
+    public JournalWrite Compact(DateTime pruneSettledBeforeUtc, CycleKey currentCycle, out int prunedReceipts)
     {
         lock (gate)
         {
             prunedReceipts = 0;
-            var prunable = new HashSet<Guid>();
-            foreach (var settlement in settlements.Values)
+            if (faulted)
             {
-                if (settlement.IsSettled && settlement.UpdatedUtc < pruneSettledBeforeUtc)
+                return JournalWrite.Faulted;
+            }
+
+            var prunable = new HashSet<Guid>();
+            foreach (var receipt in receipts.Values)
+            {
+                if (IsPrunable(receipt, pruneSettledBeforeUtc, currentCycle))
                 {
-                    prunable.Add(settlement.ReceiptId);
+                    prunable.Add(receipt.ReceiptId);
                 }
             }
 
@@ -231,24 +283,25 @@ internal sealed class ActionJournal
             }
 
             prunedReceipts = prunable.Count;
+            Publish();
             return JournalWrite.Written;
         }
     }
 
-    private static JournalOpenResult Load(string path, DateTime nowUtc, int currentSchema, ImmutableArray<JournalMigration> migrations)
+    public void Dispose() => fileLock.Dispose();
+
+    private static JournalOpenResult Load(string path, DateTime nowUtc, int currentSchema, ImmutableArray<JournalMigration> migrations, FileStream fileLock)
     {
-        if (!File.Exists(path))
+        if (!File.Exists(path) || new FileInfo(path).Length == 0)
         {
-            return Create(path, currentSchema, false);
+            return Create(path, currentSchema, fileLock);
         }
 
         var file = JournalFile.Read(path);
-        if (file.Lines.IsEmpty)
-        {
-            return Create(path, currentSchema, file.TruncatedTail);
-        }
-
-        if (!TryParse(file.Content.AsSpan(file.Lines[0]), out var header) || header.Kind != JournalRecordKind.Header || header.Schema is not { } fileSchema)
+        if (file.Lines.IsEmpty
+            || !TryParse(file.Content.AsSpan(file.Lines[0]), out var header)
+            || header.Kind != JournalRecordKind.Header
+            || header.Schema is not { } fileSchema)
         {
             return Failed(JournalOpenStatus.Corrupt, file.TruncatedTail);
         }
@@ -260,25 +313,39 @@ internal sealed class ActionJournal
 
         if (fileSchema < currentSchema)
         {
-            return Migrate(path, nowUtc, file, fileSchema, currentSchema, migrations);
+            return Migrate(path, nowUtc, file, fileSchema, currentSchema, migrations, fileLock);
         }
 
-        var journal = new ActionJournal(path, currentSchema);
+        var journal = new ActionJournal(path, currentSchema, fileLock);
+        var completeLength = file.CompleteLength;
         for (var lineIndex = 1; lineIndex < file.Lines.Length; lineIndex++)
         {
-            if (!TryParse(file.Content.AsSpan(file.Lines[lineIndex]), out var record) || !journal.TryApply(record))
+            var line = file.Lines[lineIndex];
+            if (!TryParse(file.Content.AsSpan(line), out var record))
+            {
+                if (lineIndex != file.Lines.Length - 1)
+                {
+                    return Failed(JournalOpenStatus.Corrupt, file.TruncatedTail);
+                }
+
+                completeLength = line.Start.Value;
+                break;
+            }
+
+            if (!journal.TryApply(record))
             {
                 return Failed(JournalOpenStatus.Corrupt, file.TruncatedTail);
             }
         }
 
-        if (file.TruncatedTail)
+        var torn = completeLength != file.Content.Length;
+        if (torn)
         {
-            JournalFile.TruncateDurably(path, file.CompleteLength);
+            JournalFile.TruncateDurably(path, completeLength);
         }
 
-        var recovered = journal.RecoverUncertainAttempts(nowUtc);
-        return new JournalOpenResult(JournalOpenStatus.Opened, journal, recovered, file.TruncatedTail, null);
+        journal.committedLength = completeLength;
+        return journal.Recover(nowUtc, JournalOpenStatus.Opened, torn, null);
     }
 
     private static JournalOpenResult Migrate(
@@ -287,21 +354,26 @@ internal sealed class ActionJournal
         JournalLines file,
         int fileSchema,
         int currentSchema,
-        ImmutableArray<JournalMigration> migrations)
+        ImmutableArray<JournalMigration> migrations,
+        FileStream fileLock)
     {
-        var nodes = new JsonObject[file.Lines.Length - 1];
+        var nodes = new List<JsonObject>(file.Lines.Length - 1);
         for (var lineIndex = 1; lineIndex < file.Lines.Length; lineIndex++)
         {
-            if (!TryParseNode(file.Content.AsSpan(file.Lines[lineIndex]), out var node))
+            if (TryParseNode(file.Content.AsSpan(file.Lines[lineIndex]), out var node))
+            {
+                nodes.Add(node);
+                continue;
+            }
+
+            if (lineIndex != file.Lines.Length - 1)
             {
                 return Failed(JournalOpenStatus.Corrupt, file.TruncatedTail);
             }
-
-            nodes[lineIndex - 1] = node;
         }
 
         var backupPath = JournalFile.BackUp(path, fileSchema, nowUtc);
-        var journal = new ActionJournal(path, currentSchema);
+        var journal = new ActionJournal(path, currentSchema, fileLock);
         for (var stepSchema = fileSchema; stepSchema < currentSchema; stepSchema++)
         {
             if (!TryUpgrade(nodes, stepSchema, migrations))
@@ -310,7 +382,7 @@ internal sealed class ActionJournal
             }
         }
 
-        for (var nodeIndex = 0; nodeIndex < nodes.Length; nodeIndex++)
+        for (var nodeIndex = 0; nodeIndex < nodes.Count; nodeIndex++)
         {
             if (!TryConvert(nodes[nodeIndex], out var record) || !journal.TryApply(record))
             {
@@ -318,26 +390,26 @@ internal sealed class ActionJournal
             }
         }
 
-        if (!journal.TryRewriteAll())
+        if (!journal.TryRewrite([], [.. journal.attempts.Values]))
         {
             return new JournalOpenResult(JournalOpenStatus.MigrationFailed, null, 0, file.TruncatedTail, backupPath);
         }
 
-        var recovered = journal.RecoverUncertainAttempts(nowUtc);
-        return new JournalOpenResult(JournalOpenStatus.Migrated, journal, recovered, file.TruncatedTail, backupPath);
+        return journal.Recover(nowUtc, JournalOpenStatus.Migrated, file.TruncatedTail, backupPath);
     }
 
-    private static JournalOpenResult Create(string path, int currentSchema, bool truncatedTail)
+    private static JournalOpenResult Create(string path, int currentSchema, FileStream fileLock)
     {
         var buffer = new ArrayBufferWriter<byte>();
         WriteLines(buffer, JournalCodec.Header(currentSchema));
         JournalFile.RewriteAtomically(path, buffer.WrittenSpan);
-        return new JournalOpenResult(JournalOpenStatus.Created, new ActionJournal(path, currentSchema), 0, truncatedTail, null);
+        var journal = new ActionJournal(path, currentSchema, fileLock) { committedLength = buffer.WrittenCount };
+        return new JournalOpenResult(JournalOpenStatus.Created, journal, 0, false, null);
     }
 
     private static JournalOpenResult Failed(JournalOpenStatus status, bool truncatedTail) => new(status, null, 0, truncatedTail, null);
 
-    private static bool TryUpgrade(JsonObject[] nodes, int fromSchema, ImmutableArray<JournalMigration> migrations)
+    private static bool TryUpgrade(List<JsonObject> nodes, int fromSchema, ImmutableArray<JournalMigration> migrations)
     {
         for (var migrationIndex = 0; migrationIndex < migrations.Length; migrationIndex++)
         {
@@ -349,7 +421,7 @@ internal sealed class ActionJournal
 
             try
             {
-                for (var nodeIndex = 0; nodeIndex < nodes.Length; nodeIndex++)
+                for (var nodeIndex = 0; nodeIndex < nodes.Count; nodeIndex++)
                 {
                     nodes[nodeIndex] = migration.Upgrade(nodes[nodeIndex]);
                 }
@@ -426,6 +498,11 @@ internal sealed class ActionJournal
             return false;
         }
 
+        if (attempt.Plot.WorldId != attempt.HomeWorldId || attempt.Plot.Region != attempt.Cycle.Region)
+        {
+            return false;
+        }
+
         return attempt.Kind == ActionKind.Entry || attempt.ReceiptId is not null;
     }
 
@@ -444,6 +521,77 @@ internal sealed class ActionJournal
         return attempt.State == AttemptState.Rejected && attempt.UpdatedUtc < pruneSettledBeforeUtc;
     }
 
+    private static long? RecordedAmount(in EntrySettlement settlement) => settlement.State switch
+    {
+        SettlementState.Refunded => settlement.ReceivedRefund,
+        SettlementState.LostRefundDue or SettlementState.ForfeitRefundDue or SettlementState.RefundPending => settlement.ExpectedRefund,
+        _ => null,
+    };
+
+    private bool IsPrunable(EntryReceipt receipt, DateTime pruneSettledBeforeUtc, CycleKey currentCycle)
+    {
+        return settlements.TryGetValue(receipt.ReceiptId, out var settlement)
+            && settlement.IsSettled
+            && settlement.UpdatedUtc < pruneSettledBeforeUtc
+            && receipt.Cycle.Region == currentCycle.Region
+            && currentCycle.IsLaterThan(receipt.Cycle)
+            && IsConfirmedBy(receipt);
+    }
+
+    private bool IsConfirmedBy(EntryReceipt receipt)
+    {
+        return receipt.AttemptId is { } attemptId
+            && attempts.TryGetValue(attemptId, out var attempt)
+            && attempt.State == AttemptState.Confirmed
+            && attempt.ReceiptId == receipt.ReceiptId;
+    }
+
+    private bool IsReceiptFor(EntryReceipt receipt, ActionAttempt attempt)
+    {
+        if (!receipt.Matches(attempt) || receipt.Deposit is not { } deposit || deposit <= 0 || deposit > attempt.Amount)
+        {
+            return false;
+        }
+
+        foreach (var existing in receipts.Values)
+        {
+            var sameReceipt = existing.ReceiptId == receipt.ReceiptId;
+            var sameAttempt = existing.AttemptId == attempt.AttemptId;
+            if (sameReceipt != sameAttempt)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private JournalWrite ValidateSettlementIntent(ActionAttempt attempt)
+    {
+        var receiptId = attempt.ReceiptId.GetValueOrDefault();
+        if (!receipts.TryGetValue(receiptId, out var receipt) || !settlements.TryGetValue(receiptId, out var settlement))
+        {
+            return JournalWrite.UnknownRecord;
+        }
+
+        if (!receipt.Matches(attempt))
+        {
+            return JournalWrite.Invalid;
+        }
+
+        if (attempt.Kind == ActionKind.Claim)
+        {
+            return settlement.State == SettlementState.WonUnclaimed ? JournalWrite.Written : JournalWrite.IllegalTransition;
+        }
+
+        if (settlement.State is not (SettlementState.LostRefundDue or SettlementState.ForfeitRefundDue or SettlementState.RefundPending))
+        {
+            return JournalWrite.IllegalTransition;
+        }
+
+        return settlement.ExpectedRefund is { } expected && attempt.Amount <= expected ? JournalWrite.Written : JournalWrite.AmountMismatch;
+    }
+
     private bool TryApply(in JournalRecordJson record)
     {
         switch (record.Kind)
@@ -457,12 +605,23 @@ internal sealed class ActionJournal
             case JournalRecordKind.Settlement when record.Settlement is { } json && JournalCodec.TryDecode(json, out var settlement):
                 settlements[settlement.ReceiptId] = settlement;
                 return true;
+            case JournalRecordKind.Confirmation
+                when record.Attempt is { } attemptJson
+                && record.Receipt is { } receiptJson
+                && record.Settlement is { } settlementJson
+                && JournalCodec.TryDecode(attemptJson, out var confirmed)
+                && JournalCodec.TryDecode(receiptJson, out var confirmedReceipt)
+                && JournalCodec.TryDecode(settlementJson, out var opened):
+                attempts[confirmed.AttemptId] = confirmed;
+                receipts[confirmedReceipt.ReceiptId] = confirmedReceipt;
+                settlements[opened.ReceiptId] = opened;
+                return true;
             default:
                 return false;
         }
     }
 
-    private int RecoverUncertainAttempts(DateTime nowUtc)
+    private JournalOpenResult Recover(DateTime nowUtc, JournalOpenStatus status, bool truncatedTail, string? backupPath)
     {
         var uncertain = new List<ActionAttempt>();
         foreach (var attempt in attempts.Values)
@@ -473,32 +632,36 @@ internal sealed class ActionJournal
             }
         }
 
-        if (uncertain.Count == 0)
+        var persisted = true;
+        if (uncertain.Count > 0)
         {
-            return 0;
-        }
+            var buffer = new ArrayBufferWriter<byte>();
+            for (var index = 0; index < uncertain.Count; index++)
+            {
+                WriteLines(buffer, JournalCodec.Encode(uncertain[index]));
+            }
 
-        var buffer = new ArrayBufferWriter<byte>();
-        for (var index = 0; index < uncertain.Count; index++)
-        {
-            WriteLines(buffer, JournalCodec.Encode(uncertain[index]));
-        }
-
-        if (TryAppendBytes(buffer.WrittenSpan))
-        {
+            persisted = TryAppendBytes(buffer.WrittenSpan);
             for (var index = 0; index < uncertain.Count; index++)
             {
                 attempts[uncertain[index].AttemptId] = uncertain[index];
             }
         }
 
-        return uncertain.Count;
+        Publish();
+        var finalStatus = persisted ? status : JournalOpenStatus.RecoveryFailed;
+        return new JournalOpenResult(finalStatus, this, uncertain.Count, truncatedTail, backupPath);
     }
 
     private JournalWrite Transition(Guid attemptId, AttemptState next, DateTime nowUtc)
     {
         lock (gate)
         {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
             if (!attempts.TryGetValue(attemptId, out var attempt))
             {
                 return JournalWrite.UnknownRecord;
@@ -526,6 +689,7 @@ internal sealed class ActionJournal
         }
 
         attempts[updated.AttemptId] = updated;
+        Publish();
         return JournalWrite.Written;
     }
 
@@ -542,10 +706,10 @@ internal sealed class ActionJournal
         return null;
     }
 
-    private bool TryAppend(params ReadOnlySpan<JournalRecordJson> records)
+    private bool TryAppend(in JournalRecordJson record)
     {
         var buffer = new ArrayBufferWriter<byte>();
-        WriteLines(buffer, records);
+        WriteLines(buffer, record);
         return TryAppendBytes(buffer.WrittenSpan);
     }
 
@@ -553,22 +717,15 @@ internal sealed class ActionJournal
     {
         try
         {
-            JournalFile.AppendDurably(path, bytes);
+            committedLength = JournalFile.AppendDurably(path, committedLength, bytes);
             return true;
         }
-        catch (IOException)
-        {
-            faulted = true;
-            return false;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             faulted = true;
             return false;
         }
     }
-
-    private bool TryRewriteAll() => TryRewrite([], [.. attempts.Values]);
 
     private bool TryRewrite(HashSet<Guid> excludedReceipts, List<ActionAttempt> keptAttempts)
     {
@@ -598,15 +755,28 @@ internal sealed class ActionJournal
         try
         {
             JournalFile.RewriteAtomically(path, buffer.WrittenSpan);
+            committedLength = buffer.WrittenCount;
             return true;
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            faulted = true;
             return false;
         }
-        catch (UnauthorizedAccessException)
+    }
+
+    private void Publish()
+    {
+        var orphans = ImmutableArray.CreateBuilder<Guid>();
+        foreach (var receipt in receipts.Values)
         {
-            return false;
+            if (!IsConfirmedBy(receipt) || !settlements.ContainsKey(receipt.ReceiptId))
+            {
+                orphans.Add(receipt.ReceiptId);
+            }
         }
+
+        var snapshot = new JournalSnapshot([.. attempts.Values], [.. receipts.Values], [.. settlements.Values]) { OrphanedReceipts = orphans.ToImmutable() };
+        Volatile.Write(ref published, new StrongBox<JournalSnapshot>(snapshot));
     }
 }

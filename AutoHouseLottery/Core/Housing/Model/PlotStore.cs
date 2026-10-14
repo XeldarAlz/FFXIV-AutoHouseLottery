@@ -1,24 +1,32 @@
+using System.Collections.Frozen;
+using System.Threading;
+
 namespace AutoHouseLottery.Core.Housing.Model;
 
 internal sealed class PlotStore
 {
     private readonly Dictionary<PlotKey, PlotSnapshot> plots = [];
     private readonly Dictionary<(CoverageScope Scope, ObservationSource Source), CoverageSnapshot> coverage = [];
+    private FrozenDictionary<PlotKey, PlotSnapshot> published = FrozenDictionary<PlotKey, PlotSnapshot>.Empty;
+    private FrozenDictionary<(CoverageScope Scope, ObservationSource Source), CoverageSnapshot> publishedCoverage =
+        FrozenDictionary<(CoverageScope Scope, ObservationSource Source), CoverageSnapshot>.Empty;
+    private int revision;
 
-    public IReadOnlyDictionary<PlotKey, PlotSnapshot> Plots => plots;
+    public IReadOnlyDictionary<PlotKey, PlotSnapshot> Plots => Volatile.Read(ref published);
+
+    public int Revision => Volatile.Read(ref revision);
 
     public bool TryGetCoverage(in CoverageScope scope, ObservationSource source, out CoverageSnapshot snapshot)
     {
-        return coverage.TryGetValue((scope, source), out snapshot);
+        return Volatile.Read(ref publishedCoverage).TryGetValue((scope, source), out snapshot);
     }
 
     public MergeRejection Merge(in PlotObservation observation)
     {
-        plots.TryGetValue(observation.Key, out var current);
-        var rejection = PlotMerge.TryMerge(current, observation, out var merged);
+        var rejection = MergeRow(observation);
         if (rejection == MergeRejection.None)
         {
-            plots[observation.Key] = merged;
+            Publish();
         }
 
         return rejection;
@@ -28,7 +36,7 @@ internal sealed class PlotStore
     {
         if (snapshot.Outcome == CoverageOutcome.Failed)
         {
-            return default;
+            return new PlotBatchResult(MergeRejection.None, 0, 0, 0) { RecordedOutcome = CoverageOutcome.Failed };
         }
 
         for (var index = 0; index < observations.Length; index++)
@@ -36,26 +44,58 @@ internal sealed class PlotStore
             var observation = observations[index];
             if (!snapshot.Scope.Contains(observation.Key) || observation.Provenance.Source != snapshot.Source)
             {
-                return new PlotBatchResult(MergeRejection.IdentityMismatch, 0, observations.Length, 0);
+                return new PlotBatchResult(MergeRejection.IdentityMismatch, 0, observations.Length, 0) { FirstRowRejection = MergeRejection.IdentityMismatch };
             }
         }
 
         var reported = new HashSet<PlotKey>(observations.Length);
         var merged = 0;
+        var firstRejection = MergeRejection.None;
         for (var index = 0; index < observations.Length; index++)
         {
-            reported.Add(observations[index].Key);
-            if (Merge(observations[index]) == MergeRejection.None)
+            var observation = observations[index];
+            reported.Add(observation.Key);
+            var rejection = PlotMerge.Validate(observation);
+            if (rejection == MergeRejection.None)
+            {
+                if (plots.TryGetValue(observation.Key, out var current))
+                {
+                    plots[observation.Key] = PlotMerge.ReleaseOmission(current, snapshot.Source, snapshot.ObservedFromUtc);
+                }
+
+                rejection = MergeRow(observation);
+            }
+
+            if (rejection == MergeRejection.None)
             {
                 merged++;
             }
+            else if (firstRejection == MergeRejection.None)
+            {
+                firstRejection = rejection;
+            }
         }
 
-        var marked = snapshot.Outcome == CoverageOutcome.Complete && snapshot.Source == ObservationSource.PublicFeed
+        var rejected = observations.Length - merged;
+        var outcome = rejected > 0 && snapshot.Outcome == CoverageOutcome.Complete ? CoverageOutcome.Partial : snapshot.Outcome;
+        var marked = outcome == CoverageOutcome.Complete && snapshot.Source == ObservationSource.PublicFeed
             ? MarkUnreported(snapshot, reported)
             : 0;
-        RecordCoverage(snapshot);
-        return new PlotBatchResult(MergeRejection.None, merged, observations.Length - merged, marked);
+        RecordCoverage(snapshot with { Outcome = outcome });
+        Publish();
+        return new PlotBatchResult(MergeRejection.None, merged, rejected, marked) { FirstRowRejection = firstRejection, RecordedOutcome = outcome };
+    }
+
+    private MergeRejection MergeRow(in PlotObservation observation)
+    {
+        plots.TryGetValue(observation.Key, out var current);
+        var rejection = PlotMerge.TryMerge(current, observation, out var merged);
+        if (rejection == MergeRejection.None)
+        {
+            plots[observation.Key] = merged;
+        }
+
+        return rejection;
     }
 
     private int MarkUnreported(in CoverageSnapshot snapshot, HashSet<PlotKey> reported)
@@ -92,5 +132,12 @@ internal sealed class PlotStore
         }
 
         coverage[key] = snapshot;
+    }
+
+    private void Publish()
+    {
+        Volatile.Write(ref published, plots.ToFrozenDictionary());
+        Volatile.Write(ref publishedCoverage, coverage.ToFrozenDictionary());
+        Interlocked.Increment(ref revision);
     }
 }

@@ -10,26 +10,66 @@ public sealed class OwnershipGroupTests
     [Fact]
     public void UngroupedPrivateCharactersOnOneWorldShareAGroup()
     {
-        Assert.Equal(OwnershipGroups.For(Character(1), BuyerType.Private), OwnershipGroups.For(Character(2), BuyerType.Private));
+        var groups = OwnershipGroups.Assign([Character(1), Character(2)], [BuyerType.Private, BuyerType.Private]);
+
+        Assert.Equal(groups[0], groups[1]);
     }
 
     [Fact]
-    public void ServiceAccountsAndWorldsSeparatePrivateGroups()
+    public void ServiceAccountsSeparatePrivateGroupsOnlyWhenEveryoneIsGrouped()
     {
-        var firstAccount = OwnershipGroups.For(Character(1, accountGroup: 1), BuyerType.Private);
+        var groups = OwnershipGroups.Assign(
+            [Character(1, accountGroup: 1), Character(2, accountGroup: 2), Character(3, accountGroup: 1)],
+            [BuyerType.Private, BuyerType.Private, BuyerType.Private]);
 
-        Assert.NotEqual(firstAccount, OwnershipGroups.For(Character(2, accountGroup: 2), BuyerType.Private));
-        Assert.NotEqual(firstAccount, OwnershipGroups.For(Character(3, homeWorld: OtherWorld, accountGroup: 1), BuyerType.Private));
-        Assert.Equal(firstAccount, OwnershipGroups.For(Character(4, accountGroup: 1), BuyerType.Private));
+        Assert.NotEqual(groups[0], groups[1]);
+        Assert.Equal(groups[0], groups[2]);
     }
 
     [Fact]
-    public void FreeCompanyPlotsGroupByFreeCompany()
+    public void OneUngroupedCharacterMergesEveryPrivateCharacterOnItsWorld()
     {
-        var company = OwnershipGroups.For(Character(1, accountGroup: 1), BuyerType.FreeCompany);
+        var groups = OwnershipGroups.Assign(
+            [Character(1, accountGroup: 1), Character(2, accountGroup: 2), Character(3), Character(4, homeWorld: OtherWorld, accountGroup: 1)],
+            [BuyerType.Private, BuyerType.Private, BuyerType.Private, BuyerType.Private]);
 
-        Assert.Equal(OwnershipGroupKind.FreeCompany, company.Kind);
-        Assert.Equal(company, OwnershipGroups.For(Character(2, accountGroup: 2), BuyerType.FreeCompany));
-        Assert.NotEqual(company, OwnershipGroups.For(Character(3) with { FreeCompanyId = 901 }, BuyerType.FreeCompany));
+        Assert.Equal(groups[0], groups[1]);
+        Assert.Equal(groups[0], groups[2]);
+        Assert.Equal(OwnershipGroupKind.UngroupedHomeWorld, groups[0].Kind);
+        Assert.NotEqual(groups[0], groups[3]);
+        Assert.Equal(OwnershipGroupKind.ServiceAccount, groups[3].Kind);
+    }
+
+    [Fact]
+    public void KnownFreeCompaniesStaySeparate()
+    {
+        var groups = OwnershipGroups.Assign(
+            [Character(1, accountGroup: 1), Character(2, accountGroup: 2), Character(3) with { FreeCompanyId = 901 }],
+            [BuyerType.FreeCompany, BuyerType.FreeCompany, BuyerType.FreeCompany]);
+
+        Assert.Equal(OwnershipGroupKind.FreeCompany, groups[0].Kind);
+        Assert.Equal(groups[0], groups[1]);
+        Assert.NotEqual(groups[0], groups[2]);
+    }
+
+    [Fact]
+    public void UnknownFreeCompanyMergesWithTheKnownCompaniesOnItsWorld()
+    {
+        var groups = OwnershipGroups.Assign(
+            [Character(1), Character(2) with { FreeCompanyId = 901 }, Character(3) with { FreeCompanyId = null }, Character(4, homeWorld: OtherWorld)],
+            [BuyerType.FreeCompany, BuyerType.FreeCompany, BuyerType.FreeCompany, BuyerType.FreeCompany]);
+
+        Assert.Equal(OwnershipGroupKind.FreeCompaniesOnHomeWorld, groups[0].Kind);
+        Assert.Equal(groups[0], groups[1]);
+        Assert.Equal(groups[0], groups[2]);
+        Assert.Equal(OwnershipGroupKind.FreeCompany, groups[3].Kind);
+    }
+
+    [Fact]
+    public void FreeCompanyAndPrivateEntriesAreDifferentGroups()
+    {
+        var groups = OwnershipGroups.Assign([Character(1), Character(2)], [BuyerType.FreeCompany, BuyerType.Private]);
+
+        Assert.NotEqual(groups[0], groups[1]);
     }
 }

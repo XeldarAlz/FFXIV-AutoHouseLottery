@@ -12,4 +12,5 @@ internal enum MergeRejection : byte
     NegativeEntryCount,
     MissingCycle,
     UnknownValue,
+    ContradictoryFields,
 }

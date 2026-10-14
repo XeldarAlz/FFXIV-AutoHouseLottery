@@ -42,7 +42,7 @@ internal static class EligibilityRules
             Accumulate(landFree, EligibilityReason.AccountOwnsLandOnWorld, ref blockers, ref unresolved);
         }
 
-        return new EligibilityResult(blockers, unresolved, character.ObservedUtc);
+        return new EligibilityResult(blockers, unresolved, Earliest(character.Participation.ObservedUtc, character.FactsObservedUtc));
     }
 
     public static EligibilityResult EvaluatePlot(
@@ -60,6 +60,11 @@ internal static class EligibilityRules
         }
 
         Accumulate(Allows(candidate.Buyers, buyer), EligibilityReason.BuyerTypeMismatch, ref blockers, ref unresolved);
+        if (candidate.NeedsVerification)
+        {
+            blockers |= EligibilityReason.PlotNeedsVerification;
+        }
+
         switch (candidate.Availability)
         {
             case PlotAvailability.LotteryEntry:
@@ -91,7 +96,7 @@ internal static class EligibilityRules
                 break;
         }
 
-        return new EligibilityResult(blockers, unresolved, character.ObservedUtc);
+        return new EligibilityResult(blockers, unresolved, character.GilObservedUtc);
     }
 
     public static bool? Allows(PlotBuyers buyers, BuyerType buyer) => buyers switch
@@ -112,6 +117,16 @@ internal static class EligibilityRules
             BuyerType.FreeCompany => character.FreeCompanyBuyerQualified,
             _ => false,
         };
+    }
+
+    private static DateTime? Earliest(DateTime? first, DateTime? second)
+    {
+        if (first is { } left && second is { } right)
+        {
+            return left < right ? left : right;
+        }
+
+        return first ?? second;
     }
 
     private static void Accumulate(bool? passes, EligibilityReason reason, ref EligibilityReason blockers, ref EligibilityReason unresolved)

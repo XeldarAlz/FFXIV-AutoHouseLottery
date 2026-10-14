@@ -10,4 +10,5 @@ internal enum RunBlocker : byte
     NoAssignment = 1 << 3,
     MultipleWinsNeedConfirmation = 1 << 4,
     DepositTotalOverflow = 1 << 5,
+    CycleExpired = 1 << 6,
 }

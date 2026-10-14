@@ -65,15 +65,25 @@ internal sealed class ExecutionLease
 
     public bool CancelOwner()
     {
+        CancellationTokenSource? current;
         lock (gate)
         {
-            if (cancellation is null)
-            {
-                return false;
-            }
+            current = cancellation;
+        }
 
-            cancellation.Cancel();
+        if (current is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            current.Cancel();
             return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
         }
     }
 }
