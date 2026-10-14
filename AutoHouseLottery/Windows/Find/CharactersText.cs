@@ -10,7 +10,7 @@ using AutoHouseLottery.Core.Selection.Model;
 namespace AutoHouseLottery.Windows.Find;
 
 // One character's row on the Characters expander. TargetKeys line up with TargetLabels; its first entry is the best match
-// (null). TargetIndex is -1 when the chosen plot has left the shortlist.
+// (null). TargetIndex is -1 when the chosen plot has left the shortlist. Ids keeps each row's widgets and their motion apart.
 internal sealed record CharacterRowText(
     RosterEntry Entry,
     string Title,
@@ -19,7 +19,19 @@ internal sealed record CharacterRowText(
     string[] TargetLabels,
     PlotKey?[] TargetKeys,
     int TargetIndex,
-    string? Exclusion);
+    string? Exclusion,
+    CharacterRowIds Ids);
+
+internal sealed record CharacterRowIds(string Private, string FreeCompany, string Target, string Cap, string Reserve, string Account)
+{
+    public static CharacterRowIds For(ulong contentId) => new(
+        $"##ahl_character_private_{contentId:X}",
+        $"##ahl_character_fc_{contentId:X}",
+        $"##ahl_character_target_{contentId:X}",
+        $"##ahl_character_cap_{contentId:X}",
+        $"##ahl_character_reserve_{contentId:X}",
+        $"##ahl_character_account_{contentId:X}");
+}
 
 // One planned entry of the batch preview: who goes where, and what that character must hold.
 internal readonly record struct BatchLineText(string Title, string Detail, string? Note);
@@ -32,7 +44,7 @@ internal sealed class CharactersText
 
     private const string Separator = " · ";
     private const string Arrow = " → ";
-    private const string HeaderId = "##ahl_find_characters";
+    private const string HeaderId = "###ahl_find_characters";
 
     private (int View, int Roster, bool Switching, LanguageInfo? Language, bool Named) builtFor = (-1, -1, false, null, false);
 
@@ -122,7 +134,8 @@ internal sealed class CharactersText
                 labels,
                 keys,
                 selected,
-                ExclusionOf(view.Batch?.Preview, entry.ContentId)));
+                ExclusionOf(view.Batch?.Preview, entry.ContentId),
+                CharacterRowIds.For(entry.ContentId)));
         }
 
         return rows.MoveToImmutable();

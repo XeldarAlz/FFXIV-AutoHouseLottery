@@ -406,7 +406,7 @@ internal sealed class FindState
         }
 
         var selected = CollectionsMarshal.AsSpan(chosen);
-        if (!RunPreviewBuilder.IsBatch(selected, request.Character?.ContentId))
+        if (!RunPreviewBuilder.IsBatch(selected))
         {
             return null;
         }

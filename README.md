@@ -35,7 +35,7 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 
 ## Multiple characters
 
-Version 1.1 enters for several of your characters in one run. Each character still makes at most one entry per lottery period and pays from its own gil; nothing is pooled.
+Version 1.1 enters for several of your characters in one run: tick them on the Characters list, and the shortlist drawer plans exactly the ticked ones (with none ticked it plans the logged-in character as before). Each character still makes at most one entry per lottery period and pays from its own gil; nothing is pooled.
 
 - **Characters list**: the Characters expander in the shortlist drawer lists every character the plugin has seen logged in. Tick the ones that should enter, and give each its own buyer type, target (the best match or one plot of the shortlist on its home world), deposit cap and reserve; anything left blank takes the filters' buyer type, the price ceiling and the shared reserve. A character that is not logged in shows the gil it had at its last login, marked as an estimate: that amount never proves or rules out that it can pay, and its gil is read again before its turn. Characters that already entered this period say so.
 - **Ownership groups**: the game lets only one plot be claimed per Free Company for Free Company plots, and per service account and home world for private plots. Set each character's service account on the Characters list; until you do, private characters on one world count as one account, which can never produce a second win that cannot be claimed.

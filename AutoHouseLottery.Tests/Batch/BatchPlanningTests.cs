@@ -274,15 +274,12 @@ public sealed class BatchPlanningTests
     }
 
     [Fact]
-    public void OnlyMoreThanTheLoggedInCharacterMakesABatch()
+    public void AnyTickedCharacterMakesABatchOfExactlyTheTickedOnes()
     {
         RosterEntry[] alone = [new(Facts(1), new RosterSelection(true, BuyerType.Unknown, 0, null, null))];
-        RosterEntry[] pair = [alone[0], new(Facts(2), new RosterSelection(true, BuyerType.Unknown, 0, null, null))];
 
-        Assert.False(RunPreviewBuilder.IsBatch([], 1));
-        Assert.False(RunPreviewBuilder.IsBatch(alone, 1));
-        Assert.True(RunPreviewBuilder.IsBatch(alone, 2));
-        Assert.True(RunPreviewBuilder.IsBatch(pair, 1));
+        Assert.False(RunPreviewBuilder.IsBatch([]));
+        Assert.True(RunPreviewBuilder.IsBatch(alone));
     }
 
     internal static RosterFacts Facts(ulong contentId, long? gil = null, bool? ownsLand = null, int? accountGroup = null)

@@ -32,10 +32,9 @@ internal static class RunPreviewBuilder
             Exact = new ExactTarget(plot, deposit),
         };
 
-    // A batch is planned when the roster selects more than the logged-in character, or one character that is not logged in.
-    // Otherwise the shortlist drawer keeps the single-character plan from the filters.
-    public static bool IsBatch(ReadOnlySpan<RosterEntry> selected, ulong? loggedIn)
-        => selected.Length > 1 || (selected.Length == 1 && selected[0].ContentId != loggedIn);
+    // Ticking any character on the Characters list plans a batch for exactly the ticked ones, with their own settings.
+    // With none ticked, the shortlist drawer keeps the single-character plan for the logged-in character from the filters.
+    public static bool IsBatch(ReadOnlySpan<RosterEntry> selected) => !selected.IsEmpty;
 
     // The batch plan: the frozen shortlist and one settings row per selected character, each taking the filters' buyer,
     // the price ceiling and the shared reserve unless the player set its own. Revision follows the shortlist, so a changed

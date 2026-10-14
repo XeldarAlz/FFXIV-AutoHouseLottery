@@ -229,7 +229,13 @@ internal static class BatchRules
     // never hide the entries the others made.
     public static BatchReport Report(BatchCheckpoint checkpoint)
     {
-        int entered = 0, dryRun = 0, notEntered = 0, excluded = 0, uncertain = 0, queued = 0, running = 0;
+        var entered = 0;
+        var dryRun = 0;
+        var notEntered = 0;
+        var excluded = 0;
+        var uncertain = 0;
+        var queued = 0;
+        var running = 0;
         var deposited = 0L;
         for (var index = 0; index < checkpoint.Members.Length; index++)
         {

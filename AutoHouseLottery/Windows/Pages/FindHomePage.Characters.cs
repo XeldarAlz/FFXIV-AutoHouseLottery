@@ -80,10 +80,10 @@ internal sealed partial class FindHomePage
         }
 
         using var indent = ImRaii.PushIndent(CharacterIndent * ImGuiHelpers.GlobalScale, false);
-        DrawCharacterBuyer(entry.ContentId, entry.Selection.Buyer == BuyerType.Unknown ? State.Filter.Buyer : entry.Selection.Buyer);
+        DrawCharacterBuyer(row, entry.Selection.Buyer == BuyerType.Unknown ? State.Filter.Buyer : entry.Selection.Buyer);
         DrawCharacterTarget(row);
-        DrawCharacterLimits(entry.ContentId, entry.Selection.DepositCap, entry.Selection.Reserve);
-        DrawCharacterAccount(entry.ContentId, entry.Facts.AccountGroup);
+        DrawCharacterLimits(row, entry.Selection.DepositCap, entry.Selection.Reserve);
+        DrawCharacterAccount(row, entry.Facts.AccountGroup);
         if (row.TargetIndex < 0)
         {
             Reason(Loc.T(L.Characters.TargetGone));
@@ -95,19 +95,19 @@ internal sealed partial class FindHomePage
         }
     }
 
-    private void DrawCharacterBuyer(ulong contentId, BuyerType buyer)
+    private void DrawCharacterBuyer(CharacterRowText row, BuyerType buyer)
     {
         CharacterLabel(Loc.T(L.Characters.Buyer));
         var height = ImGui.GetFrameHeight();
-        if (FilterChip.Draw("##buyer_private", Loc.T(L.Find.BuyerPrivate), null, Styling.AccentNebula, buyer == BuyerType.Private, height))
+        if (FilterChip.Draw(row.Ids.Private, Loc.T(L.Find.BuyerPrivate), null, Styling.AccentNebula, buyer == BuyerType.Private, height))
         {
-            State.SetBuyer(contentId, BuyerType.Private);
+            State.SetBuyer(row.Entry.ContentId, BuyerType.Private);
         }
 
         ImGui.SameLine(0f, CharacterFieldGap * ImGuiHelpers.GlobalScale);
-        if (FilterChip.Draw("##buyer_fc", Loc.T(L.Find.BuyerFreeCompany), null, Styling.AccentNebula, buyer == BuyerType.FreeCompany, height))
+        if (FilterChip.Draw(row.Ids.FreeCompany, Loc.T(L.Find.BuyerFreeCompany), null, Styling.AccentNebula, buyer == BuyerType.FreeCompany, height))
         {
-            State.SetBuyer(contentId, BuyerType.FreeCompany);
+            State.SetBuyer(row.Entry.ContentId, BuyerType.FreeCompany);
         }
     }
 
@@ -115,22 +115,23 @@ internal sealed partial class FindHomePage
     {
         CharacterLabel(Loc.T(L.Characters.Target));
         var selected = Math.Max(0, row.TargetIndex);
-        if (Dropdown.Draw("##target", row.TargetLabels, ref selected, FieldWidth()))
+        if (Dropdown.Draw(row.Ids.Target, row.TargetLabels, ref selected, FieldWidth()))
         {
             State.SetTarget(row.Entry.ContentId, row.TargetKeys[selected]);
         }
     }
 
-    private void DrawCharacterLimits(ulong contentId, long cap, long? reserve)
+    private void DrawCharacterLimits(CharacterRowText row, long cap, long? reserve)
     {
+        var contentId = row.Entry.ContentId;
         CharacterLabel(Loc.T(L.Characters.Cap));
-        if (GilField.Draw("##cap", BufferFor(capBuffers, contentId), cap, long.MaxValue, Loc.T(L.Characters.CapHint), FieldWidth(), out var newCap))
+        if (GilField.Draw(row.Ids.Cap, BufferFor(capBuffers, contentId), cap, long.MaxValue, Loc.T(L.Characters.CapHint), FieldWidth(), out var newCap))
         {
             State.SetDepositCap(contentId, newCap);
         }
 
         CharacterLabel(Loc.T(L.Find.Reserve));
-        if (GilField.Draw("##reserve", BufferFor(reserveBuffers, contentId), reserve ?? 0, long.MaxValue, Loc.T(L.Characters.ReserveHint), FieldWidth(), out var newReserve, Loc.T(L.Find.ReserveTooltip)))
+        if (GilField.Draw(row.Ids.Reserve, BufferFor(reserveBuffers, contentId), reserve ?? 0, long.MaxValue, Loc.T(L.Characters.ReserveHint), FieldWidth(), out var newReserve, Loc.T(L.Find.ReserveTooltip)))
         {
             State.SetReserve(contentId, newReserve > 0 ? newReserve : null);
         }
@@ -138,7 +139,7 @@ internal sealed partial class FindHomePage
 
     private static float FieldWidth() => MathF.Max(1f, ImGui.GetContentRegionAvail().X / ImGuiHelpers.GlobalScale);
 
-    private void DrawCharacterAccount(ulong contentId, int? accountGroup)
+    private void DrawCharacterAccount(CharacterRowText row, int? accountGroup)
     {
         CharacterLabel(Loc.T(L.Characters.Account));
         if (ImGui.IsItemHovered())
@@ -147,9 +148,9 @@ internal sealed partial class FindHomePage
         }
 
         var selected = accountGroup is { } group and > 0 and <= CharactersText.AccountGroups ? group : 0;
-        if (Dropdown.Draw("##account", charactersText.AccountLabels, ref selected, FieldWidth()))
+        if (Dropdown.Draw(row.Ids.Account, charactersText.AccountLabels, ref selected, FieldWidth()))
         {
-            State.SetAccountGroup(contentId, selected == 0 ? null : selected);
+            State.SetAccountGroup(row.Entry.ContentId, selected == 0 ? null : selected);
         }
     }
 
