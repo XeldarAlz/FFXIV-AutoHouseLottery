@@ -1,6 +1,6 @@
 # Third-party notices
 
-Auto House Lottery ships no third-party data and, so far, no code copied from other plugins. The one bundled third-party asset is the font below; its license travels with it.
+Auto House Lottery ships no third-party data. The few pieces adapted from other projects are listed under [Copied code](#copied-code) with their origin. The one bundled third-party asset is the font below; its license travels with it.
 
 The release zip also carries the compiled libraries the plugin builds against: the ECommons submodule and the NuGet packages pinned in `AutoHouseLottery/packages.lock.json` (the clib automation library and what it depends on). They ship as built and unmodified, each under its own license, and none of their source is copied into this repository. Besides those, the zip holds the plugin itself, its manifest, its icon, the nine language catalogs and the font below.
 
@@ -22,13 +22,31 @@ Lifestream is a separate plugin you install yourself; none of its code ships wit
 
 What this project knows about the game's housing windows (the plot placard, the lottery entry confirmation, the result dialogs and the housing agents) was learned by reading these projects. Reading them is how the facts were found; any code actually taken from one is listed under [Copied code](#copied-code) with its origin.
 
+- [PaissaHouse](https://github.com/zhudotexe/FFXIV_PaissaHouse), MIT, the maintained upstream: the placard sale handler and its sale information block, and the purchase and tenant type bytes of the ward packet.
 - [PaissaHouse-Lite](https://github.com/NightmareXIV/PaissaHouse-Lite), MIT: the placard's sale information block.
-- [LlamaLibrary](https://github.com/nt153133/__LlamaLibrary), MIT: the placard agent's fields and the placard button callback.
+- [LlamaLibrary](https://github.com/nt153133/__LlamaLibrary), MIT: the placard agent's fields, the placard button callback, and the ward selector's values and ward callback.
 - [FFXIVClientStructs](https://github.com/aers/FFXIVClientStructs), MIT: `AgentHousingSignboard`, `HousingManager` and the housing packets. It also ships with Dalamud, which the plugin builds against.
 - [AltMate](https://github.com/naco-ff14/AltMate), AGPL-3.0: the placard text nodes, the entry confirmation and the result dialogs.
 - [HousingHerald](https://github.com/mashirochan/FFXIV-HousingHerald), AGPL-3.0: the placard text nodes and the entry confirmation.
-- [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining), no license: only the row IDs of the game's Addon and LogMessage sheets are used, and their text is read from your own client.
+- [Lifestream](https://github.com/NightmareXIV/Lifestream): the names and signatures of the IPC gates the travel adapter calls, read from its public `IPC/IPCProvider.cs`.
+- [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining), no license: only the row IDs of the game's Addon, LogMessage and EObjName sheets are used, and their text is read from your own client.
 
 ## Copied code
 
-None yet. Each piece of code copied from another project gets an entry here naming the file it became, the project and commit it came from, and its license.
+Each piece of code copied from another project has an entry here naming the file it became, the project and commit it came from, and its license.
+
+- `AutoHouseLottery/Core/Game/Placard/PlacardSaleHook.cs` and `AutoHouseLottery/Core/Game/Model/PlacardSaleInfo.cs`: the placard sale handler's signature, the offset from it to the handler, the handler's parameters and the sale information layout, adapted from `Paissa/LotteryObserver.cs` and `Structures/Lottery.cs` of [PaissaHouse](https://github.com/zhudotexe/FFXIV_PaissaHouse) at commit `2ac7ba9c20cf087a6e28199ed9e59f12a1716ccb`. MIT, Copyright (c) 2021 Andrew Zhu.
+- `AutoHouseLottery/Core/Game/Ward/WardPortalObserver.cs`: the offsets of the ward packet's purchase and tenant type bytes, from `Structures/HousingWardInfo.cs` of the same PaissaHouse commit. MIT, Copyright (c) 2021 Andrew Zhu.
+- `AutoHouseLottery/Core/Game/Placard/SignboardAgentLayout.cs`: the six code patterns that locate the placard agent's fields, from `Memory/Offsets.cs` (`AgentHousingSignBoardOffsets`) of [LlamaLibrary](https://github.com/nt153133/__LlamaLibrary) at commit `073b4a4e02fde7f02ca9c30c6a8a4e8610e7cd44`. MIT, Copyright (c) 2022 nt153133.
+
+The MIT license of both projects reads:
+
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### Ported from Aetherphone
+
+- `AutoHouseLottery/Core/Ipc/LifestreamIpc.cs`: the Lifestream housing address and the `GoToHousingAddress` call, from `src/Aetherphone/Core/Venues/LifestreamBridge.cs` at Aetherphone commit `255d4dd538d016036c8432a284948be4e0e74512`. AGPL-3.0.
