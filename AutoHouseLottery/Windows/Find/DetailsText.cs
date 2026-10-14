@@ -3,6 +3,7 @@ using AutoHouseLottery.Core.Find;
 using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
+using AutoHouseLottery.Core.Selection.Model;
 using System.Numerics;
 
 namespace AutoHouseLottery.Windows.Find;
@@ -31,6 +32,12 @@ internal sealed class DetailsText
 
     public string? EnterTitle { get; private set; }
 
+    // The frozen exact-plot policy Enter starts: this plot, for exactly the deposit shown. Null with EnterMissing saying
+    // why when it cannot be formed yet.
+    public RunPolicy? EnterPolicy { get; private set; }
+
+    public string? EnterMissing { get; private set; }
+
     public string ForCharacter { get; private set; } = string.Empty;
 
     public EligibilityText? Eligibility { get; private set; }
@@ -58,6 +65,7 @@ internal sealed class DetailsText
         Fields = plot is null ? [] : FieldsOf(plot, view.Position, nowUtc);
         Conflicted = plot?.NeedsVerification ?? false;
         EnterTitle = Status == PlotStatus.EntryOpen && plot?.Price?.Value is { } price ? Loc.T(L.Find.EnterFor, Formatting.Gil(price)) : null;
+        (EnterPolicy, EnterMissing) = EnterPolicyOf(plot, key, view, state, character);
         Sources = plot is null ? [] : SourcesOf(plot, nowUtc);
         Eligibility = null;
         Blockers = null;
@@ -68,6 +76,24 @@ internal sealed class DetailsText
             Eligibility = EligibilityText.From(result);
             Blockers = result.Blockers == EligibilityReason.None ? null : FindText.Reasons(result.Blockers);
         }
+    }
+
+    private static (RunPolicy? Policy, string? Missing) EnterPolicyOf(PlotSnapshot? plot, PlotKey key, FindView view, FindState state, CharacterProfile? character)
+    {
+        if (plot?.Price?.Value is not { } deposit || PlotStatuses.Classify(plot, view.Position) != PlotStatus.EntryOpen)
+        {
+            return (null, null);
+        }
+
+        if (character is not { } profile)
+        {
+            return (null, Loc.T(L.Find.NeedCharacter));
+        }
+
+        var buyer = RunPreviewBuilder.BuyerFor(plot.Buyers?.Value, state.Filter.Buyer);
+        return buyer == BuyerType.Unknown
+            ? (null, Loc.T(L.Find.NeedBuyer))
+            : (RunPreviewBuilder.ExactPolicy(profile, buyer, key, deposit, state.GilReserve, view.Position, view.Revision), null);
     }
 
     // Without a price ceiling the cap would refuse every plot, so this view shows the other checks; the run preview keeps

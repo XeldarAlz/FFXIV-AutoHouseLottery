@@ -236,9 +236,11 @@ internal sealed class FindState
         var results = request.Area.IsEmpty ? FindResultsBuilder.Build(DiscoverySnapshot.Empty.Plots, query) : FindResultsBuilder.Build(plots, query);
         var rows = ShortlistRules.Rows(request.Shortlist.Plots, plots, position);
         RunPreview? preview = null;
+        RunPolicy? policy = null;
         if (request.Character is { } character && !request.Shortlist.Plots.IsEmpty)
         {
-            preview = RunPreviewBuilder.Build(character, request.Filter.Buyer, request.Filter.PriceCeiling, request.GilReserve, request.Shortlist, position, plots, request.NowUtc);
+            policy = RunPreviewBuilder.BestMatchPolicy(character, request.Filter.Buyer, request.Filter.PriceCeiling, request.GilReserve, request.Shortlist, position);
+            preview = AssignmentPlanner.Build(policy, [character], plots, request.NowUtc);
         }
 
         var ranking = preview is { PolicyError: RunPolicyError.None } planned
@@ -256,6 +258,7 @@ internal sealed class FindState
             QueryRevision = request.QueryRevision,
             BestMatch = BestMatchOrder.For(preview, ranking),
             Preview = preview,
+            PreviewPolicy = preview is { PolicyError: RunPolicyError.None } ? policy : null,
             UnavailableCount = ShortlistRules.Unavailable(rows).Length,
         };
     }

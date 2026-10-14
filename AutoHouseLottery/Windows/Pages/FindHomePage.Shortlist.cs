@@ -3,6 +3,7 @@ using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Selection.Model;
+using AutoHouseLottery.Core.Tasks.Model;
 using AutoHouseLottery.Windows.Components;
 using AutoHouseLottery.Windows.Find;
 using Dalamud.Bindings.ImGui;
@@ -88,8 +89,17 @@ internal sealed partial class FindHomePage
         Styling.VSpace(10f);
         DrawPreview(view);
         Styling.VSpace(10f);
-        UnavailableAction(FontAwesomeIcon.Ticket, Loc.T(L.Find.EnterBestMatch), Styling.AccentGlow, Loc.T(L.Find.EnteringLater));
+        DrawEnterAction(Loc.T(L.Find.EnterBestMatch), RunMode.BestMatch, view.PreviewPolicy, BestMatchMissing(view), bestMatchCheck);
     }
+
+    // Why the shortlist cannot be planned yet, in the words the preview above uses.
+    private string? BestMatchMissing(FindView view) => view.Preview?.PolicyError switch
+    {
+        _ when Discovery.Character is null => Loc.T(L.Find.NeedCharacter),
+        RunPolicyError.MissingBuyerType => Loc.T(L.Find.NeedBuyer),
+        RunPolicyError.NonPositiveDepositCap => Loc.T(L.Find.NeedCeiling),
+        _ => Loc.T(L.Find.BlockerNoAssignment),
+    };
 
     private void DrawShortlistActions(FindView view)
     {

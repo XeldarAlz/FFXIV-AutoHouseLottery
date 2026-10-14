@@ -183,7 +183,6 @@ internal static partial class L
         public static readonly LocString NeedCharacter = new("findHome.needCharacter", "Log in to plan a run for your character.");
         public static readonly LocString EnterBestMatch = new("findHome.enterBestMatch", "Enter best match");
         public static readonly LocString EnterFor = new("findHome.enterFor", "Enter for {0}");
-        public static readonly LocString EnteringLater = new("findHome.enteringLater", "Entering arrives with the entry update");
 
         public static readonly LocString Back = new("findHome.back", "Shortlist");
         public static readonly LocString AddToShortlist = new("findHome.addToShortlist", "Add to shortlist");

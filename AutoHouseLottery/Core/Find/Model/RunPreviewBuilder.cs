@@ -4,7 +4,8 @@ using AutoHouseLottery.Core.Selection.Model;
 
 namespace AutoHouseLottery.Core.Find.Model;
 
-// The preview the shortlist drawer shows for the current character. It only plans; nothing here can enter a lottery.
+// The frozen policies Find a home plans and starts runs with, for the current character. Building one only plans; a run
+// starts from it only through the run controller, which checks it again.
 internal static class RunPreviewBuilder
 {
     public const long PreviewTravelAllowance = 0;
@@ -19,7 +20,12 @@ internal static class RunPreviewBuilder
         IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
         DateTime nowUtc)
     {
-        var policy = new RunPolicy
+        return AssignmentPlanner.Build(BestMatchPolicy(character, buyer, depositCap, gilReserve, shortlist, position), [character], plots, nowUtc);
+    }
+
+    // The shortlist drawer's plan: the frozen shortlist, its ranking and the price ceiling as the deposit cap.
+    public static RunPolicy BestMatchPolicy(in CharacterProfile character, BuyerType buyer, long depositCap, long gilReserve, in ShortlistSnapshot shortlist, in CyclePosition position)
+        => new()
         {
             Revision = shortlist.Revision,
             Cycle = position,
@@ -27,6 +33,24 @@ internal static class RunPreviewBuilder
             TravelAllowance = PreviewTravelAllowance,
             Shortlist = shortlist,
         };
-        return AssignmentPlanner.Build(policy, [character], plots, nowUtc);
-    }
+
+    // One plot for exactly the deposit its details show. The deposit is also the cap, so the run can never pay more.
+    public static RunPolicy ExactPolicy(in CharacterProfile character, BuyerType buyer, PlotKey plot, long deposit, long gilReserve, in CyclePosition position, int revision)
+        => new()
+        {
+            Revision = revision,
+            Cycle = position,
+            Characters = [new CharacterRunSettings(character.ContentId, buyer, deposit, gilReserve)],
+            TravelAllowance = PreviewTravelAllowance,
+            Exact = new ExactTarget(plot, deposit),
+        };
+
+    // A plot sold to one buyer type decides it; a plot open to both, or not reported, takes the buyer chosen in the
+    // filters, which stays unknown until the player picks one.
+    public static BuyerType BuyerFor(PlotBuyers? plotBuyers, BuyerType chosen) => plotBuyers switch
+    {
+        PlotBuyers.Private => BuyerType.Private,
+        PlotBuyers.FreeCompany => BuyerType.FreeCompany,
+        _ => chosen,
+    };
 }

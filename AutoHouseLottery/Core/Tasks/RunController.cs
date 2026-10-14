@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
+using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
@@ -238,7 +239,10 @@ internal sealed class RunController
         RunLog.Warning("Real entry permission revoked; every run is a dry run again.");
     }
 
-    private StartRefusal Start(RunMode mode, RunPolicy policy, bool dryRun)
+    // What Start would say now, without starting anything: Find a home shows it on its Enter buttons.
+    public StartRefusal Check(RunMode mode, RunPolicy policy) => Plan(mode, policy).Refusal;
+
+    private StartPlan Plan(RunMode mode, RunPolicy policy)
     {
         var context = CharacterContextReader.Read();
         CharacterRunSettings? settings = context is null ? null : FindSettings(policy, context.ContentId);
@@ -267,10 +271,21 @@ internal sealed class RunController
             preview?.Blockers ?? RunBlocker.None,
             assignment is not null);
         var refusal = StartRules.Check(facts);
-        if (refusal != StartRefusal.None || context is null || settings is not { } chosen || assignment is not { } planned || preview is null)
+        if (refusal == StartRefusal.None && (context is null || settings is null || assignment is null || preview is null))
         {
-            RunLog.Info($"Run not started ({mode}): {refusal}{(preview is null ? string.Empty : $", preview blockers {preview.Blockers}")}.");
-            return refusal == StartRefusal.None ? StartRefusal.NoAssignment : refusal;
+            refusal = StartRefusal.NoAssignment;
+        }
+
+        return new StartPlan(refusal, context, settings, assignment, preview);
+    }
+
+    private StartRefusal Start(RunMode mode, RunPolicy policy, bool dryRun)
+    {
+        var plan = Plan(mode, policy);
+        if (plan is not { Refusal: StartRefusal.None, Context: { } context, Settings: { } chosen, Assignment: { } planned, Preview: { } preview })
+        {
+            RunLog.Info($"Run not started ({mode}): {plan.Refusal}{(plan.Preview is { } shown ? $", preview blockers {shown.Blockers}" : string.Empty)}.");
+            return plan.Refusal;
         }
 
         if (!lease.TryAcquire(LeaseWork.Entry, out var leaseGrant))
@@ -513,4 +528,6 @@ internal sealed class RunController
     }
 
     private static string Describe(ImmutableArray<PlotKey> targets) => string.Join(", ", targets);
+
+    private readonly record struct StartPlan(StartRefusal Refusal, CharacterContext? Context, CharacterRunSettings? Settings, RunAssignment? Assignment, RunPreview? Preview);
 }

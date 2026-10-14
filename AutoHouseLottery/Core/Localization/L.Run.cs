@@ -21,6 +21,7 @@ internal static partial class L
         public static readonly LocString PausedLabel = new("run.paused", "Paused before the next step");
         public static readonly LocString DryRunBadge = new("run.dryRunBadge", "DRY RUN");
         public static readonly LocString RealEntryBadge = new("run.realEntryBadge", "REAL ENTRY");
+        public static readonly LocString DryRunHint = new("run.dryRunHint", "Dry run: it goes as far as the lottery confirmation and closes it. Nothing is paid.");
         public static readonly LocString ShowDetails = new("run.showDetails", "Show details");
         public static readonly LocString HideDetails = new("run.hideDetails", "Hide details");
         public static readonly LocString ModeExact = new("run.mode.exact", "Exact plot");
