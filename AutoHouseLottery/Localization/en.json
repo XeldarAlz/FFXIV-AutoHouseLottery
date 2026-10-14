@@ -179,7 +179,7 @@
   "settings.general.autoPauseHelp": "Pause the run while you are inside a duty, trial, raid, or any other instanced content, then resume it once you are back outside.",
   "settings.general.pauseTyping": "Hold while typing",
   "settings.general.pauseTypingHelp": "While a text box of the game has focus, like the chat line, a run starts no new move until you close it. A move already under way carries on.",
-  "plugin.commandHelp": "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (dump the current target's BaseId) | probe (log every housing reading for this spot).",
+  "plugin.commandHelp": "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (dump the current target's BaseId).",
   "plugin.commandHelpAlias": "Alias for /autohouselottery.",
   "plugin.configReset": "Your settings could not be read, so Auto House Lottery started with default settings. The old file is kept as {0}.",
   "plugin.configResetUnsaved": "Your settings could not be read, so Auto House Lottery started with default settings. The old file could not be kept; the log has the details.",

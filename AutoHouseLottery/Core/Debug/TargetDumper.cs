@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.Commands.Model;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
@@ -19,7 +20,7 @@ internal static unsafe class TargetDumper
         var target = TargetSystem.Instance()->Target;
         if (target == null)
         {
-            Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} No target. Click an NPC or an object first, then re-run {HouseLotteryConstants.PrimaryCommand} target.");
+            Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} No target. Click an NPC or an object first, then re-run {PluginCommands.Primary} target.");
             return;
         }
 

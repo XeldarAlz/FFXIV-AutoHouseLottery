@@ -179,7 +179,7 @@
   "settings.general.autoPauseHelp": "Pausiert den Lauf, solange du in einem Dungeon, einer Prüfung, einem Raid oder anderem instanzierten Inhalt bist, und setzt ihn fort, sobald du wieder draußen bist.",
   "settings.general.pauseTyping": "Beim Tippen anhalten",
   "settings.general.pauseTypingHelp": "Solange ein Textfeld des Spiels den Fokus hat, etwa die Chatzeile, beginnt ein Lauf keine neue Bewegung, bis du es schließt. Eine laufende Bewegung geht weiter.",
-  "plugin.commandHelp": "Öffnet oder schließt das Fenster von Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (gibt die BaseId des aktuellen Ziels aus) | probe (schreibt alle Wohnungsdaten dieser Stelle ins Protokoll).",
+  "plugin.commandHelp": "Öffnet oder schließt das Fenster von Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (gibt die BaseId des aktuellen Ziels aus).",
   "plugin.commandHelpAlias": "Alias für /autohouselottery.",
   "plugin.configReset": "Deine Einstellungen konnten nicht gelesen werden, daher startet Auto House Lottery mit den Standardeinstellungen. Die alte Datei liegt unter {0}.",
   "plugin.configResetUnsaved": "Deine Einstellungen konnten nicht gelesen werden, daher startet Auto House Lottery mit den Standardeinstellungen. Die alte Datei konnte nicht aufbewahrt werden; das Protokoll enthält die Details.",

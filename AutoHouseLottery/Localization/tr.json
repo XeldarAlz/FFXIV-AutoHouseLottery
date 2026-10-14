@@ -179,7 +179,7 @@
   "settings.general.autoPauseHelp": "Bir zindan, sınav, baskın ya da başka bir örneklenmiş içerikteyken çalıştırmayı duraklatır, dışarı çıkınca sürdürür.",
   "settings.general.pauseTyping": "Yazarken bekle",
   "settings.general.pauseTypingHelp": "Sohbet satırı gibi oyunun bir metin kutusu odaktayken bir çalıştırma, siz kapatana kadar yeni bir harekete başlamaz. Süren bir hareket devam eder.",
-  "plugin.commandHelp": "Auto House Lottery penceresini açar veya kapatır. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (mevcut hedefin BaseId değerini yazar) | probe (bu konumdaki tüm konut okumalarını kayda yazar).",
+  "plugin.commandHelp": "Auto House Lottery penceresini açar veya kapatır. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (mevcut hedefin BaseId değerini yazar).",
   "plugin.commandHelpAlias": "/autohouselottery için kısayol.",
   "plugin.configReset": "Ayarlarınız okunamadı, bu yüzden Auto House Lottery varsayılan ayarlarla başladı. Eski dosya {0} olarak saklandı.",
   "plugin.configResetUnsaved": "Ayarlarınız okunamadı, bu yüzden Auto House Lottery varsayılan ayarlarla başladı. Eski dosya saklanamadı; ayrıntılar kayıtta.",

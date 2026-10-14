@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.Commands.Model;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
@@ -47,32 +48,32 @@ internal static unsafe class HousingProbe
                 LogReadings(observers, housing);
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
-            case "scan":
+            case ProbeVerbs.Scan:
                 Start(() => new WardScanTask(observers.WardWindow, observers.WardPackets), task => ApplyScan(task, housing));
                 return;
-            case "lottery":
+            case ProbeVerbs.Lottery:
                 Start(() => new LotteryTimersPass(), task => ImportReading(task, housing));
                 return;
-            case "goto" when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
+            case ProbeVerbs.Goto when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: true, observers));
                 return;
-            case "approach" when tokens.Length == ApproachArgumentCount && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
+            case ProbeVerbs.Approach when tokens.Length == ApproachArgumentCount && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: false, observers));
                 return;
-            case "press" when tokens.Length == PressArgumentCount && OpensLotteryDialog(tokens[1]) && AutoAnswerGuard.Blocks:
+            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && OpensLotteryDialog(tokens[1]) && AutoAnswerGuard.Blocks:
                 Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {RunText.AutoAnswer()}");
                 return;
-            case "press" when tokens.Length == PressArgumentCount && UiIsOwned():
+            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && UiIsOwned():
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
                 return;
-            case "press" when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
+            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
-            case "stop" when Plugin.Instance.Controller.Busy:
+            case ProbeVerbs.Stop when Plugin.Instance.Controller.Busy:
                 RunLog.Warning($"{Prefix} stop refused; an entry run or a reconciliation owns the game. Use /ahl stop for the run.");
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
                 return;
-            case "stop":
+            case ProbeVerbs.Stop:
                 TaskStarter.StopCurrent();
                 if (HousingTravel.CurrentToken is { } token)
                 {
@@ -134,42 +135,42 @@ internal static unsafe class HousingProbe
 
     // Enter Lottery and View Lottery Results open the dialogs a plugin that answers dialogs on its own could commit.
     private static bool OpensLotteryDialog(string what)
-        => what.Equals("enter", StringComparison.OrdinalIgnoreCase) || what.Equals("results", StringComparison.OrdinalIgnoreCase);
+        => what.Equals(ProbeVerbs.PressEnter, StringComparison.OrdinalIgnoreCase) || what.Equals(ProbeVerbs.PressResults, StringComparison.OrdinalIgnoreCase);
 
     private static bool Press(string what)
     {
         DialogActionResult result;
         switch (what)
         {
-            case "enter":
+            case ProbeVerbs.PressEnter:
                 using (NativeActionGate.Allow(NativeAction.PressEnterLottery))
                 {
                     result = HousingDialogs.PressPlacardButton(HousingText.EnterLotteryButton);
                 }
 
                 break;
-            case "results":
+            case ProbeVerbs.PressResults:
                 using (NativeActionGate.Allow(NativeAction.PressViewResults))
                 {
                     result = HousingDialogs.PressPlacardButton(HousingText.ViewResultsButton);
                 }
 
                 break;
-            case "cancel":
+            case ProbeVerbs.PressCancel:
                 using (NativeActionGate.Allow(NativeAction.CancelEntry))
                 {
                     result = HousingDialogs.CancelEntry();
                 }
 
                 break;
-            case "no" when HousingDialogs.IdentifyResultDialog() is { Text: { } shown }:
+            case ProbeVerbs.PressNo when HousingDialogs.IdentifyResultDialog() is { Text: { } shown }:
                 using (NativeActionGate.Allow(NativeAction.DeclineResult))
                 {
                     result = HousingDialogs.DeclineResult(shown);
                 }
 
                 break;
-            case "no":
+            case ProbeVerbs.PressNo:
                 result = DialogActionResult.IdentityMismatch;
                 break;
             default:

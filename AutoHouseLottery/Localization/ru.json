@@ -179,7 +179,7 @@
   "settings.general.autoPauseHelp": "Приостанавливает выполнение, пока вы в подземелье, испытании, рейде или другом инстансе, и продолжает его, когда вы вернётесь.",
   "settings.general.pauseTyping": "Ждать, пока вы печатаете",
   "settings.general.pauseTypingHelp": "Пока текстовое поле игры в фокусе, например строка чата, выполнение не начинает новых перемещений, пока вы его не закроете. Уже начатое перемещение продолжается.",
-  "plugin.commandHelp": "Открывает или закрывает окно Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (вывести BaseId текущей цели) | probe (записать в журнал все данные о жилье в этом месте).",
+  "plugin.commandHelp": "Открывает или закрывает окно Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (вывести BaseId текущей цели).",
   "plugin.commandHelpAlias": "Псевдоним для /autohouselottery.",
   "plugin.configReset": "Не удалось прочитать ваши настройки, поэтому Auto House Lottery запущен с настройками по умолчанию. Старый файл сохранён как {0}.",
   "plugin.configResetUnsaved": "Не удалось прочитать ваши настройки, поэтому Auto House Lottery запущен с настройками по умолчанию. Старый файл сохранить не удалось; подробности в логе.",
