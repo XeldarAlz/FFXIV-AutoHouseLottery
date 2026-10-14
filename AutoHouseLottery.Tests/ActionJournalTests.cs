@@ -75,6 +75,21 @@ public sealed class ActionJournalTests : IDisposable
     }
 
     [Fact]
+    public void AWriteArrivingAfterUnloadIsRefusedAndLeavesTheFileAlone()
+    {
+        var journal = Create();
+        var intent = EntryIntent(Plot(12, 5));
+        journal.Prepare(intent);
+        var length = new FileInfo(path).Length;
+        journal.Dispose();
+
+        Assert.Equal(JournalWrite.Faulted, journal.RecordDispatch(intent.AttemptId, now));
+        Assert.Equal(JournalWrite.Faulted, journal.RequireReconciliation(intent.AttemptId, now));
+        Assert.Equal(length, new FileInfo(path).Length);
+        Assert.Equal(AttemptState.NeedsReconciliation, Assert.Single(Open().Journal!.Snapshot().Attempts).State);
+    }
+
+    [Fact]
     public void EntrySlotSurvivesAPlotOrBuyerChange()
     {
         var journal = Create();

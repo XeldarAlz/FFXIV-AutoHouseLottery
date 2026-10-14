@@ -16,4 +16,5 @@ internal enum EligibilityReason : ushort
     ProfileUnavailable = 1 << 9,
     PlotNeedsVerification = 1 << 10,
     GroupOnAnotherPlot = 1 << 11,
+    UnsupportedRegion = 1 << 12,
 }

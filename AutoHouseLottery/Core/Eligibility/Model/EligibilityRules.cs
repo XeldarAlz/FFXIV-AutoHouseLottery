@@ -6,7 +6,7 @@ internal static class EligibilityRules
 {
     public static EligibilityResult EvaluateCharacter(in CharacterProfile character, BuyerType buyer, CycleKey cycle, bool collectRefundFirst)
     {
-        var blockers = EligibilityReason.None;
+        var blockers = character.RegionUnsupported ? EligibilityReason.UnsupportedRegion : EligibilityReason.None;
         var unresolved = EligibilityReason.None;
         switch (character.Participation.StateIn(cycle))
         {

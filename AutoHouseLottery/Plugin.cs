@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core;
+using AutoHouseLottery.Core.Commands.Model;
 using AutoHouseLottery.Core.Debug;
 using AutoHouseLottery.Core.Find;
 using AutoHouseLottery.Core.Game;
@@ -28,9 +29,6 @@ namespace AutoHouseLottery;
 
 public sealed class Plugin : IDalamudPlugin
 {
-    private const string ProbeVerb = "probe";
-    private const string DevVerb = "dev";
-
     [PluginService]
     internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
 
@@ -114,10 +112,10 @@ public sealed class Plugin : IDalamudPlugin
 
             primaryCommand = new CommandInfo(OnCommand) { HelpMessage = Loc.T(L.Plugin.CommandHelp) };
             aliasCommand = new CommandInfo(OnCommand) { HelpMessage = Loc.T(L.Plugin.CommandHelpAlias) };
-            CommandManager.AddHandler(HouseLotteryConstants.PrimaryCommand, primaryCommand);
-            completed.Push(() => CommandManager.RemoveHandler(HouseLotteryConstants.PrimaryCommand));
-            CommandManager.AddHandler(HouseLotteryConstants.AliasCommand, aliasCommand);
-            completed.Push(() => CommandManager.RemoveHandler(HouseLotteryConstants.AliasCommand));
+            CommandManager.AddHandler(PluginCommands.Primary, primaryCommand);
+            completed.Push(() => CommandManager.RemoveHandler(PluginCommands.Primary));
+            CommandManager.AddHandler(PluginCommands.Alias, aliasCommand);
+            completed.Push(() => CommandManager.RemoveHandler(PluginCommands.Alias));
 
             PluginInterface.UiBuilder.Draw += OnDraw;
             completed.Push(() => PluginInterface.UiBuilder.Draw -= OnDraw);
@@ -163,8 +161,8 @@ public sealed class Plugin : IDalamudPlugin
         appWindow.Dispose();
         Fonts.Dispose();
 
-        CommandManager.RemoveHandler(HouseLotteryConstants.PrimaryCommand);
-        CommandManager.RemoveHandler(HouseLotteryConstants.AliasCommand);
+        CommandManager.RemoveHandler(PluginCommands.Primary);
+        CommandManager.RemoveHandler(PluginCommands.Alias);
 
         housingLog.Dispose();
         placardSales.Dispose();
@@ -207,74 +205,62 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
-        var trimmed = args.Trim();
-        if (trimmed.Equals("config", StringComparison.OrdinalIgnoreCase))
+        switch (PluginCommands.Parse(args, out var rest))
         {
-            ToggleConfigUi();
-        }
-        else if (trimmed.Equals("about", StringComparison.OrdinalIgnoreCase))
-        {
-            ToggleAboutUi();
-        }
-        else if (trimmed.Equals("deps", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("dependencies", StringComparison.OrdinalIgnoreCase))
-        {
-            ToggleDependenciesUi();
-        }
-        else if (trimmed.Equals("lottery", StringComparison.OrdinalIgnoreCase))
-        {
-            ToggleLotteryUi();
-        }
-        else if (trimmed.Equals("saved", StringComparison.OrdinalIgnoreCase))
-        {
-            ToggleSavedUi();
-        }
-        else if (trimmed.Equals("log", StringComparison.OrdinalIgnoreCase))
-        {
-            ToggleLogUi();
-        }
-        else if (trimmed.Equals("changelog", StringComparison.OrdinalIgnoreCase))
-        {
-            ToggleChangelogUi();
-        }
-        else if (trimmed.Equals("target", StringComparison.OrdinalIgnoreCase))
-        {
-            TargetDumper.Dump();
-        }
-        else if (trimmed.Equals("stop", StringComparison.OrdinalIgnoreCase))
-        {
-            Controller.Stop();
-            Controller.StopSettlement();
-        }
-        else if (trimmed.Equals("pause", StringComparison.OrdinalIgnoreCase))
-        {
-            Controller.Pause(PauseReason.Manual);
-        }
-        else if (trimmed.Equals("resume", StringComparison.OrdinalIgnoreCase))
-        {
-            Controller.Resume();
-        }
-        else if (StartsWithVerb(trimmed, ProbeVerb))
-        {
-            HousingProbe.Run(trimmed[ProbeVerb.Length..], Housing, HousingData);
-        }
-        else if (StartsWithVerb(trimmed, DevVerb))
-        {
-            DevCommands.Run(trimmed[DevVerb.Length..], Controller, HousingData);
-        }
-        else
-        {
-            ToggleMainUi();
+            case PluginCommand.Settings:
+                ToggleConfigUi();
+                break;
+            case PluginCommand.About:
+                ToggleAboutUi();
+                break;
+            case PluginCommand.Plugins:
+                ToggleDependenciesUi();
+                break;
+            case PluginCommand.MyLottery:
+                ToggleLotteryUi();
+                break;
+            case PluginCommand.Saved:
+                ToggleSavedUi();
+                break;
+            case PluginCommand.Console:
+                ToggleLogUi();
+                break;
+            case PluginCommand.Changelog:
+                ToggleChangelogUi();
+                break;
+            case PluginCommand.Target:
+                TargetDumper.Dump();
+                break;
+            case PluginCommand.Stop:
+                Controller.Stop();
+                Controller.StopSettlement();
+                break;
+            case PluginCommand.Pause:
+                Controller.Pause(PauseReason.Manual);
+                break;
+            case PluginCommand.Resume:
+                Controller.Resume();
+                break;
+            case PluginCommand.Probe:
+                HousingProbe.Run(rest, Housing, HousingData);
+                break;
+            case PluginCommand.Dev:
+                DevCommands.Run(rest, Controller, HousingData);
+                break;
+            case PluginCommand.ToggleWindow:
+                ToggleMainUi();
+                break;
+            default:
+                RunLog.Warning($"The command {command} {args} has no handler; the window is toggled instead.");
+                ToggleMainUi();
+                break;
         }
     }
-
-    private static bool StartsWithVerb(string arguments, string verb)
-        => arguments.StartsWith(verb, StringComparison.OrdinalIgnoreCase)
-        && (arguments.Length == verb.Length || char.IsWhiteSpace(arguments[verb.Length]));
 
     private void OnDraw()
     {
         var status = Controller.Status;
-        runStrip.IsOpen = !appWindow.IsOpen && (Controller.Busy || (status.RunId != Guid.Empty && status.Step == Core.Tasks.Model.EntryStep.NeedsReconciliation));
+        runStrip.IsOpen = (!appWindow.IsOpen || appWindow.Compact) && (Controller.Busy || (status.RunId != Guid.Empty && status.Step == Core.Tasks.Model.EntryStep.NeedsReconciliation));
         WindowSystem.Draw();
         Configuration.FlushPendingSave();
     }

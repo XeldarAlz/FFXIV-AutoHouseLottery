@@ -82,7 +82,7 @@ internal sealed class RunPanelText
         Inspection = Loc.T(L.Run.Inspection, status.Inspection, status.InspectionLimit);
         LiveDeposit = status.LiveDeposit is { } deposit ? Loc.T(L.Run.LiveDeposit, Loc.Gil(deposit)) : string.Empty;
         var step = status.Step == EntryStep.NeedsPlayer ? Loc.T(L.Run.NeedsPlayerTitle) : StepLine;
-        RunningLabel = Address.Length > 0 ? string.Concat(step, Separator, Address) : step;
+        RunningLabel = Address.Length > 0 ? string.Concat(Address, Separator, step) : step;
         Outcome = OutcomeOf(status);
     }
 

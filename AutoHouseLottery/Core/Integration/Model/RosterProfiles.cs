@@ -15,7 +15,10 @@ internal readonly record struct RosterFacts(
     bool? OwnsLandOnHomeWorld,
     long? Gil,
     DateTime? GilSeenUtc,
-    DateTime? SeenUtc);
+    DateTime? SeenUtc)
+{
+    public bool RegionUnsupported { get; init; }
+}
 
 // The journal as the planner reads it for characters that are not logged in, with the receipts nothing here can settle
 // (OutstandingRules) worked out on the framework thread, so a plan built on a task never reads the settings.
@@ -44,6 +47,7 @@ internal static class RosterProfiles
             ObservedGil = facts.Gil,
             GilObservedUtc = facts.GilSeenUtc,
             GilIsEstimate = true,
+            RegionUnsupported = facts.RegionUnsupported,
             FreeCompanyId = facts.FreeCompanyId,
             AccountGroup = facts.AccountGroup,
             AccountOwnsLandOnHomeWorld = facts.OwnsLandOnHomeWorld == true ? true : null,

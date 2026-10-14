@@ -299,6 +299,18 @@ public sealed class BatchPlanningTests
     }
 
     [Fact]
+    public void ACharacterOnAnUnsupportedRegionIsLeftOutWithThatReason()
+    {
+        var keys = Ward(2);
+        var korean = RosterProfiles.Offline(Facts(2) with { RegionUnsupported = true }, GameRegion.Global, Empty, VerifiedEntryPhase());
+
+        var preview = Plan(Policy(keys, Settings(1), Settings(2)), [Character(1), korean], Listed(keys));
+
+        Assert.Equal(1, preview.MaxNewEntries);
+        Assert.True(Assert.Single(preview.Exclusions).Reasons.HasFlag(EligibilityReason.UnsupportedRegion));
+    }
+
+    [Fact]
     public void ACharacterTheAccountKnowsOwnsLandIsLeftOutWithThatReason()
     {
         var keys = Ward(2);

@@ -13,13 +13,11 @@ dotnet test AutoHouseLottery.sln -c Release
 
 You need the .NET 10 SDK. The plugin requires Dalamud at runtime; CI pulls a Dalamud dev build automatically and that's enough to compile. When your Dalamud build is not where XIVLauncher puts it, pass its folder with `-p:DalamudLibPath=<folder>/`. See `.github/workflows/ci.yml` if you want to reproduce CI locally.
 
-`dotnet test AutoHouseLottery.Tests -c Release` runs the unit tests alone. They cover the gil arithmetic, the housing, eligibility, selection and journal rules, the settlement rules (result classification, refund amounts read from the result rows in four languages, the refund and claim gates, the scheduler's waits and travel budget, the net return and deadline notices), the batch rules, its checkpoint across a logout, the character switch rules and the refund queue's choice, the housing readers' parsing and matching rules (sheet-row dialog matching against the result rows in four languages, the button label and click permission rules, ward acknowledgement, the placard's sale and address rules, the lottery record and Timers text, arrival and travel ownership), check that all nine catalogs carry the same keys in the same order with the same placeholders and no em dashes, and check that the newest changelog entry matches the version in `Directory.Build.props`. The test project builds without Dalamud: it compiles the pure folders of the plugin through `<Compile Include>` links, so a new `Core/<Area>/Model/` folder is added to that list when it lands. `Core/Persistence/` is linked whole, so it stays free of Dalamud.
+`dotnet test AutoHouseLottery.Tests -c Release` runs the unit tests alone. They cover the gil arithmetic, the housing, eligibility, selection and journal rules (including crashes, logouts and unloads around a press, and the turn of a lottery period), the settlement rules (result classification, refund amounts read from the result rows in four languages, the refund and claim gates, the scheduler's waits and travel budget, the net return and deadline notices, the entries left to the game), the batch rules, its checkpoint across a logout, the character switch rules and grants and the refund queue's choice, the housing readers' parsing and matching rules (sheet-row dialog matching against the result rows in four languages, the button label and click permission rules, ward acknowledgement, the placard's sale and address rules, the lottery record and Timers text, arrival and travel ownership), the supported regions, the capability list and the aliases of the support report. They also check that all nine catalogs carry the same keys in the same order with the same placeholders and no em dashes, that the command help in every catalog and the README's two command sections match the command table, that the shipped manifest and `repo.json` agree and carry the version in `Directory.Build.props`, that the newest changelog entry matches that version, and that no project file references a path outside the repository. The test project builds without Dalamud: it compiles the pure folders of the plugin through `<Compile Include>` links, so a new `Core/<Area>/Model/` folder is added to that list when it lands. `Core/Persistence/` is linked whole, so it stays free of Dalamud.
 
 Load the built plugin via `/xlsettings` -> **Experimental** -> **Dev Plugin Locations**, pointing at `AutoHouseLottery/bin/Release/AutoHouseLottery.dll`.
 
 ## Project layout
-
-Folders marked *planned* arrive with later phases of the plugin.
 
 - `AutoHouseLottery/Core/Housing/Model/`: plot and lottery period identity (`PlotKey`, `CycleKey`, the lottery calendar estimate), plot observations with their own source times, their merge rules, and the coverage of what was actually read.
 - `AutoHouseLottery/Core/Providers/`: the Aetherphone housing service client, its disk cache and the refresh service, keeping fetch age apart from observation age. The response normalizer, the single intake into the plot store and the refresh cadence live under `Core/Providers/Model/`.
@@ -36,9 +34,10 @@ Folders marked *planned* arrive with later phases of the plugin.
 - `AutoHouseLottery/Core/Settlement/`: the result and refund scheduler, the settlement notices and their words; the result classification, the refund and claim rules and gates, the scheduler's due work and waits, the deadlines, the net return and the settlements recognised without a visit live under `Core/Settlement/Model/`.
 - `AutoHouseLottery/Core/Tasks/`: the run controller, the single owner of every game-changing action, the entry run that drives one character from preflight to the persisted receipt, the read-back of uncertain attempts, and the settlement driver that reads a plot's result and collects a refund or claims a house. The execution lease, the run's steps and transitions, the fallback, live check, real-entry gate, receipt and reconciliation rules live under `Core/Tasks/Model/`.
 - `AutoHouseLottery/Core/Persistence/`: the action journal and entry receipts, an append-only JSON lines file where each record is flushed to disk before any irreversible confirmation.
-- `AutoHouseLottery/Core/Ipc/`: the guarded IPC call helper and the Lifestream and vnavmesh adapters; later the plugin's own public API.
-- `AutoHouseLottery/Core/External/`: the helper plugins on the Plugins page and their one-click install.
-- `AutoHouseLottery/Core/Diagnostics/` (*planned*): the compatibility report and sanitized traces for bug reports.
+- `AutoHouseLottery/Core/Ipc/`: the guarded IPC call helper and the Lifestream and vnavmesh adapters.
+- `AutoHouseLottery/Core/External/`: the helper plugins on the Plugins page, their one-click install, and the check for plugins that answer dialogs.
+- `AutoHouseLottery/Core/Diagnostics/`: the Plugins page's Compatibility list and the support report behind Copy diagnostics; the capability rules and the aliases that keep names and content IDs out of a report live under `Core/Diagnostics/Model/`.
+- `AutoHouseLottery/Core/Commands/Model/`: the command table every chat command is dispatched from, and that the README and the command help are checked against.
 - `AutoHouseLottery/Core/Changelog/`: the changelog entries.
 - `AutoHouseLottery/Core/` itself, `Core/Shared/` and `Core/Debug/`: the run log behind the Console page, gil arithmetic, the `/ahl target` dump and the `/ahl probe` housing readings.
 - `AutoHouseLottery/Core/Localization/` and `AutoHouseLottery/Localization/`: the string table and the nine language catalogs.
@@ -46,6 +45,7 @@ Folders marked *planned* arrive with later phases of the plugin.
 - `AutoHouseLottery/`: plugin entry points, config, command wiring.
 - `AutoHouseLottery.Tests/`: unit tests for everything above that runs without the game.
 - `fixtures/`: sanitized, versioned observations of the game's housing windows and the housing service, used by the tests. `fixtures/housing-service/` holds real world responses of the housing service.
+- `docs/compatibility/`: the compatibility report for the supported game version: regions, districts and divisions, client languages, the sheet rows each interaction is matched by, and what is still to check in game.
 - `ECommons/`: submodule, shared Dalamud helpers. Don't patch this directly; upstream it.
 
 Keep logic small and direct. This plugin has one job.
@@ -57,8 +57,9 @@ Keep logic small and direct. This plugin has one job.
 3. Keep the diff focused. One concern per PR.
 4. Match the existing style. No heavy abstractions "for later."
 5. Every string a user sees goes through `Core/Localization/L*.cs` and all nine catalogs under `AutoHouseLottery/Localization/`, with the same keys in the same order. CI checks the keys and rejects em dashes.
-6. If your change affects what a user sees or types (commands, window layout, settings), update the README.
-7. If you used AI beyond autocomplete, say which level in the PR description. It is one line, and [AI-USAGE.md](AI-USAGE.md) explains the level names and why I ask.
+6. If your change affects what a user sees or types (commands, window layout, settings), update the README. A new or renamed command goes into `Core/Commands/Model/PluginCommands.cs`, the README's Commands or Testing and debug commands section, and, for a player command, the command help in all nine catalogs; the tests fail until all of them agree.
+7. Never turn on a validation flag (`EntryCapabilities.EntryConfirmValidated`, the three in `SettlementCapabilities`, `BatchCapabilities.BatchEntryValidated`, `SwitchCapabilities.CharacterSwitchValidated`, or a game version in `LotteryRecordAccess.ValidatedGameVersions`) without the in-game report for that step of the validation ladder. The same pull request updates the README's Validation status line, the matching changelog line and `docs/compatibility/`.
+8. If you used AI beyond autocomplete, say which level in the PR description. It is one line, and [AI-USAGE.md](AI-USAGE.md) explains the level names and why I ask.
 
 ## Good first issues
 

@@ -205,7 +205,10 @@ internal sealed class HousingContext : IDisposable
     {
         var accountGroup = AccountGroup(context.ContentId);
         var outstanding = OutstandingRules.ToSettlement(Outstanding(context.ContentId, position.Cycle).Kind);
-        return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position));
+        return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position)) with
+        {
+            RegionUnsupported = !WorldRegions.Supported(WorldRegionReader.Of(context.HomeWorldId)),
+        };
     }
 
     // What the last login of a known character showed. Framework thread only, since the settings are changed there.
@@ -213,7 +216,10 @@ internal sealed class HousingContext : IDisposable
         => configuration.Characters.TryGetValue(contentId, out var known) ? FactsOf(contentId, known) : null;
 
     public static RosterFacts FactsOf(ulong contentId, KnownCharacter known)
-        => new(contentId, known.Name, known.HomeWorldId, known.AccountGroup, known.FreeCompanyId, known.OwnsLand, known.Gil, known.GilSeenUtc, known.SeenUtc);
+        => new(contentId, known.Name, known.HomeWorldId, known.AccountGroup, known.FreeCompanyId, known.OwnsLand, known.Gil, known.GilSeenUtc, known.SeenUtc)
+        {
+            RegionUnsupported = !WorldRegions.Supported(WorldRegionReader.Of(known.HomeWorldId)),
+        };
 
     public OwnerFacts Owner(ulong contentId)
         => configuration.Characters.TryGetValue(contentId, out var known) ? new OwnerFacts(known.AccountGroup, known.FreeCompanyId) : default;

@@ -1,6 +1,7 @@
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Windows.Components;
+using AutoHouseLottery.Windows.Sections;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
@@ -13,8 +14,12 @@ internal sealed class PluginsPage
     private const float PadX = 16f;
     private const float DiscRadius = 17f;
     private const float InstallButtonHeight = 30f;
+    private const float SectionGap = 22f;
 
-    public void Draw()
+    private readonly CapabilitySection capabilities = new();
+    private CachedText missingText;
+
+    public void Draw(Plugin plugin)
     {
         var plugins = ExternalPlugins.All;
         var missing = 0;
@@ -26,7 +31,7 @@ internal sealed class PluginsPage
             }
         }
 
-        var status = missing == 0 ? Loc.T(L.Plugins.AllInstalled) : Loc.Plural(L.Plugins.Missing, missing);
+        var status = missing == 0 ? Loc.T(L.Plugins.AllInstalled) : missingText.Get(missing, static count => Loc.Plural(L.Plugins.Missing, (int)count));
         PageHeader.Draw(Loc.T(L.Plugins.Title), status, missing == 0 ? Styling.AccentMint : Styling.AccentRose);
 
         for (var index = 0; index < plugins.Count; index++)
@@ -44,11 +49,15 @@ internal sealed class PluginsPage
             TextDraw.Wrapped(footer, origin, width, Styling.TextMuted);
             ImGui.Dummy(new Vector2(width, TextDraw.MeasureWrapped(footer, width).Y));
         }
+
+        Styling.VSpace(SectionGap);
+        capabilities.Draw(plugin);
     }
 
     private static string Purpose(ExternalPlugin plugin) => plugin switch
     {
         ExternalPlugin.Lifestream => Loc.T(L.Plugins.PurposeLifestream),
+        ExternalPlugin.Vnavmesh   => Loc.T(L.Plugins.PurposeVnavmesh),
         _                         => ExternalPlugins.Catalog[plugin].Purpose,
     };
 

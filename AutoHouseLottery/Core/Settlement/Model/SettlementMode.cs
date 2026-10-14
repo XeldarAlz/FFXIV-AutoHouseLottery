@@ -11,4 +11,4 @@ internal enum SettlementOrigin : byte { Player, Scheduler, EntryRun, Command }
 // earlier cycle's entry attempt still in question when the result check is about one (ResultChecks).
 internal readonly record struct SettlementWork(Guid Id, SettlementMode Mode);
 
-internal enum SettlementRefusal : byte { None, Busy, NotLoggedIn, InContent, JournalUnavailable, AutoAnswerPlugin }
+internal enum SettlementRefusal : byte { None, Busy, NotLoggedIn, UnsupportedRegion, UnknownRegion, InContent, JournalUnavailable, AutoAnswerPlugin }

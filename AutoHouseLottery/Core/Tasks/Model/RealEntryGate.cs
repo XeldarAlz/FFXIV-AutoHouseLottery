@@ -7,6 +7,9 @@ internal static class EntryCapabilities
     // True only once a supervised real entry has confirmed the entry confirmation's contract (Addon rows 7046, 7047 and
     // 7048, the checkbox and the receipt) on the supported build. Until then ordinary use can only dry run.
     public const bool EntryConfirmValidated = false;
+
+    // A player's Enter asks for a dry run until the entry confirmation has been validated, and for a real entry after.
+    public static bool PlayerDryRun => !EntryConfirmValidated;
 }
 
 // A maintainer's permission for one real entry: one character, one plot, a deposit ceiling. It lives in memory only,

@@ -1,8 +1,12 @@
 namespace AutoHouseLottery.Core.Settlement.Model;
 
 // A character the refund queue could switch to. Listed: the player selected it in the character roster. DueCount: the
-// result checks and refunds the scheduler would do for it, from the journal alone.
-internal readonly record struct RefundCandidate(ulong ContentId, bool Listed, bool AutomaticRefunds, int DueCount);
+// result checks and refunds the scheduler would do for it, from the journal alone. RegionSupported: its home world is on
+// a region this plugin handles housing for.
+internal readonly record struct RefundCandidate(ulong ContentId, bool Listed, bool AutomaticRefunds, int DueCount)
+{
+    public bool RegionSupported { get; init; } = true;
+}
 
 internal static class RefundSwitchRules
 {
@@ -10,6 +14,7 @@ internal static class RefundSwitchRules
     // the game alone long enough, nothing else holds it, and no GM alert is still holding automatic work.
     public static bool SessionFree(in SchedulerFacts facts)
         => facts.LoggedIn
+        && facts.RegionSupported
         && facts.JournalWritable
         && !facts.AutoAnswerLoaded
         && !facts.HeldAfterAlert
@@ -36,6 +41,7 @@ internal static class RefundSwitchRules
             var candidate = candidates[index];
             if (candidate.ContentId != currentContentId
                 && candidate.Listed
+                && candidate.RegionSupported
                 && candidate.AutomaticRefunds
                 && candidate.DueCount > 0
                 && !visited.Contains(candidate.ContentId))

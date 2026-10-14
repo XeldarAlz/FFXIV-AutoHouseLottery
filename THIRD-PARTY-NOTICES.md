@@ -4,7 +4,7 @@ Auto House Lottery ships no third-party data. The few pieces adapted from other 
 
 The release zip also carries the compiled libraries the plugin builds against: the ECommons submodule and the NuGet packages pinned in `AutoHouseLottery/packages.lock.json` (the clib automation library and what it depends on). They ship as built and unmodified, each under its own license, and none of their source is copied into this repository. Besides those, the zip holds the plugin itself, its manifest, its icon, the nine language catalogs and the font below.
 
-Lifestream is a separate plugin you install yourself; none of its code ships with Auto House Lottery, which talks to it only through Dalamud's IPC. Housing listings are fetched at run time from the public Aetherphone housing service (`https://housing-api.yozoracho.dev/api/v1`); no listing data ships with the plugin. Game data such as world, district and zone names and the text of the housing dialogs is read from your game client at run time.
+Lifestream and vnavmesh are separate plugins you install yourself; none of their code ships with Auto House Lottery, which talks to them only through Dalamud's IPC. Housing listings are fetched at run time from the public Aetherphone housing service (`https://housing-api.yozoracho.dev/api/v1`); no listing data ships with the plugin. Game data such as world, district and zone names and the text of the housing dialogs is read from your game client at run time.
 
 ## Noto Sans
 
@@ -15,13 +15,13 @@ Lifestream is a separate plugin you install yourself; none of its code ships wit
 ## Aetherphone
 
 - Source: FFXIV-Aetherphone by XeldarAlz, the same author as this project, https://github.com/XeldarAlz/FFXIV-Aetherphone.
-- Used: the Lifestream travel bridge's housing address and the housing discovery code (the housing service client and its normalization, the cache and refresh service, the district maps and marker projection, saved plots and reminders). Each file is listed under [Ported from Aetherphone](#ported-from-aetherphone) with the commit it came from.
+- Used: the Lifestream travel bridge's housing address and the housing discovery code (the housing service client and its normalization, the cache and refresh service, the district maps and marker projection, saved plots and reminders). Each file is listed under [Ported from Aetherphone](#ported-from-aetherphone) with the commit it came from. The data center region rows that tell a Chinese world apart (`AutoHouseLottery/Core/Housing/Model/WorldRegion.cs`) follow its `Core/Game/GameData.cs`, as facts only.
 - License: GNU Affero General Public License v3.0, the license of this project.
 
 ## Auto GC Supply
 
-- Source: FFXIV-AutoGCSupply by XeldarAlz, the same author as this project, https://github.com/XeldarAlz/FFXIV-AutoGCSupply. The plugin's scaffold comes from it.
-- Used: the task, walking and navmesh helpers and the Timers window pass are adapted from it; each file is listed under [Ported from Auto GC Supply](#ported-from-auto-gc-supply).
+- Source: FFXIV-AutoGCSupply by XeldarAlz, the same author as this project, https://github.com/XeldarAlz/FFXIV-AutoGCSupply. The plugin's scaffold comes from it: the window shell and its components, the localization, the Console and its run log, the settings pages, the GM alert, the duty and input watchers, the helper plugins page with its one-click install, the changelog page, the issue templates and the workflows.
+- Used: beyond the scaffold, the task, walking and navmesh helpers and the Timers window pass are adapted from it; each file is listed under [Ported from Auto GC Supply](#ported-from-auto-gc-supply).
 - License: GNU Affero General Public License v3.0, the license of this project.
 
 ## Game interaction references

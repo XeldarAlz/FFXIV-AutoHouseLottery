@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.Commands.Model;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
@@ -44,38 +45,38 @@ internal static class DevCommands
         var verb = tokens.Length == 0 ? string.Empty : tokens[0].ToLowerInvariant();
         switch (verb)
         {
-            case "run" when tokens.Length is >= RunArgumentCount and <= RunWithOptionsArgumentCount:
+            case DevVerbs.Run when tokens.Length is >= RunArgumentCount and <= RunWithOptionsArgumentCount:
                 StartRun(tokens, controller, housing);
                 return;
-            case "allow-real-entry" when tokens.Length >= 1 + MinimumNameParts + GrantPlaceArgumentCount:
+            case DevVerbs.AllowRealEntry when tokens.Length >= 1 + MinimumNameParts + GrantPlaceArgumentCount:
                 Grant(tokens, controller);
                 return;
-            case "revoke-real-entry":
+            case DevVerbs.RevokeRealEntry:
                 controller.RevokeRealEntry();
                 Print(Loc.T(L.Dev.Revoked));
                 return;
-            case "settle" when tokens.Length >= SettleMinimumArgumentCount:
+            case DevVerbs.Settle when tokens.Length >= SettleMinimumArgumentCount:
                 Settle(tokens, controller, housing);
                 return;
-            case "allow-real-refund" when tokens.Length >= 1 + MinimumNameParts + SettlementGrantPlaceArgumentCount:
+            case DevVerbs.AllowRealRefund when tokens.Length >= 1 + MinimumNameParts + SettlementGrantPlaceArgumentCount:
                 GrantSettlement(tokens, ActionKind.Refund, controller);
                 return;
-            case "allow-real-claim" when tokens.Length >= 1 + MinimumNameParts + SettlementGrantPlaceArgumentCount:
+            case DevVerbs.AllowRealClaim when tokens.Length >= 1 + MinimumNameParts + SettlementGrantPlaceArgumentCount:
                 GrantSettlement(tokens, ActionKind.Claim, controller);
                 return;
-            case "revoke-real-settlement":
+            case DevVerbs.RevokeRealSettlement:
                 controller.RevokeRealSettlement();
                 Print(Loc.T(L.Dev.SettlementRevoked));
                 return;
-            case "allow-switching":
+            case DevVerbs.AllowSwitching:
                 controller.AllowBatchSwitching();
                 Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Dev.SwitchingWarning)}");
                 return;
-            case "allow-refund-switching":
+            case DevVerbs.AllowRefundSwitching:
                 controller.AllowRefundSwitching();
                 Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Dev.RefundSwitchingWarning)}");
                 return;
-            case "revoke-switching":
+            case DevVerbs.RevokeSwitching:
                 controller.RevokeSwitching();
                 Print(Loc.T(L.Dev.SwitchingRevoked));
                 return;

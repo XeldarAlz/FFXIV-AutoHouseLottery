@@ -22,13 +22,17 @@ internal static class RunPanel
     private const float GlassTint = 0.08f;
     private const int FixedLines = 3;
     private const int AlwaysShownDetailLines = 1;
+    private const float MinimumAddressWidth = 160f;
+    private const float MinimumAddressShare = 0.5f;
 
     private static bool detailsOpen;
 
     public static bool Visible(RunController controller)
         => controller.Busy || controller.Status.RunId != Guid.Empty || SettlementPanel.Visible(controller) || BatchPanel.Visible(controller);
 
-    public static void Draw(Plugin plugin)
+    // On the run's own page the dock below holds Pause and Stop, so the card leaves them out and keeps the page's room
+    // for the results.
+    public static void Draw(Plugin plugin, bool controlsInDock)
     {
         var controller = plugin.Controller;
         var status = controller.Status;
@@ -54,7 +58,7 @@ internal static class RunPanel
         }
         else if (controller.Running)
         {
-            DrawActive(controller, status);
+            DrawActive(controller, status, controlsInDock);
         }
         else if (status.RunId != Guid.Empty)
         {
@@ -64,7 +68,7 @@ internal static class RunPanel
         Styling.VSpace(SectionGap);
     }
 
-    private static void DrawActive(RunController controller, RunStatus status)
+    private static void DrawActive(RunController controller, RunStatus status, bool controlsInDock)
     {
         var scale = ImGuiHelpers.GlobalScale;
         var origin = ImGui.GetCursorScreenPos();
@@ -72,7 +76,7 @@ internal static class RunPanel
         var lineHeight = ImGui.GetTextLineHeight();
         var detailLines = detailsOpen ? DetailLineCount(status) : 0;
         var lines = FixedLines + detailLines;
-        var height = PadY * 2f * scale + (lineHeight + LineGap * scale) * lines + Layout.ActionPillHeight * scale;
+        var height = PadY * 2f * scale + (lineHeight + LineGap * scale) * lines + (controlsInDock ? 0f : Layout.ActionPillHeight * scale);
         var end = origin + new Vector2(width, height);
         var drawList = ImGui.GetWindowDrawList();
         var accent = controller.Paused ? Styling.AccentAmber : status.FinishingVerification ? Styling.AccentMint : Styling.AccentBlue;
@@ -83,12 +87,17 @@ internal static class RunPanel
         var y = origin.Y + PadY * scale;
         var text = RunPanelText.Shared.For(controller);
         var titleX = DrawModeBadge(drawList, status.EntryMode, x, y + lineHeight * 0.5f);
-        TextDraw.At(TextDraw.Truncate(text.Title, right - titleX), new Vector2(titleX, y), Styling.TextStrong);
+        var titleRight = right;
+        if (controlsInDock)
+        {
+            titleRight -= lineHeight + ButtonGap * scale;
+            DrawDetailsToggle(new Vector2(titleRight + ButtonGap * scale, y), lineHeight);
+        }
+
+        TextDraw.At(TextDraw.Truncate(text.Title, titleRight - titleX), new Vector2(titleX, y), Styling.TextStrong);
         y += lineHeight + LineGap * scale;
 
-        var stepWidth = TextDraw.Measure(text.StepLine).X;
-        TextDraw.At(TextDraw.Truncate(text.Address, right - x - stepWidth - ButtonGap * scale), new Vector2(x, y), Styling.TextSecondary);
-        TextDraw.Right(text.StepLine, right, y, status.FinishingVerification ? Styling.PulseColor(Styling.AccentMint, Styling.AccentMintSoft) : accent);
+        DrawAddressAndStep(text, status, accent, x, y, right);
         y += lineHeight + LineGap * scale;
 
         TextDraw.At(TextDraw.Truncate(text.Summary, right - x), new Vector2(x, y), Styling.TextDim);
@@ -108,9 +117,35 @@ internal static class RunPanel
             }
         }
 
-        DrawControls(controller, status, new Vector2(x, y), right);
+        if (!controlsInDock)
+        {
+            DrawControls(controller, status, new Vector2(x, y), right);
+        }
+
         ImGui.SetCursorScreenPos(origin);
         ImGui.Dummy(new Vector2(width, height));
+    }
+
+    // The address keeps a readable width; the step gives way first when both do not fit.
+    private static void DrawAddressAndStep(RunPanelText text, RunStatus status, Vector4 accent, float x, float y, float right)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var gap = ButtonGap * scale;
+        var available = right - x;
+        var addressRoom = MathF.Max(available - TextDraw.Measure(text.StepLine).X - gap, MathF.Min(MinimumAddressWidth * scale, available * MinimumAddressShare));
+        var address = TextDraw.Truncate(text.Address, addressRoom);
+        var step = TextDraw.Truncate(text.StepLine, MathF.Max(1f, available - TextDraw.Measure(address).X - gap));
+        TextDraw.At(address, new Vector2(x, y), Styling.TextSecondary);
+        TextDraw.Right(step, right, y, status.FinishingVerification ? Styling.PulseColor(Styling.AccentMint, Styling.AccentMintSoft) : accent);
+    }
+
+    private static void DrawDetailsToggle(Vector2 at, float size)
+    {
+        ImGui.SetCursorScreenPos(at);
+        if (IconButton.Draw(FontAwesomeIcon.InfoCircle, "##ahl_run_details_icon", size, Styling.AccentNebula, Loc.T(detailsOpen ? L.Run.HideDetails : L.Run.ShowDetails)))
+        {
+            detailsOpen = !detailsOpen;
+        }
     }
 
     private static void DrawControls(RunController controller, RunStatus status, Vector2 at, float right)
@@ -126,15 +161,25 @@ internal static class RunPanel
             controller.TogglePause();
         }
 
-        ImGui.SetCursorScreenPos(new Vector2(at.X + PillButton.Width(pauseLabel, FontAwesomeIcon.Pause) + ButtonGap * scale, at.Y));
-        if (PillButton.Draw("##ahl_run_stop", Loc.T(L.Common.StopRun), Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop, !verifying, Layout.ActionPillHeight,
+        var stopX = at.X + PillButton.Width(pauseLabel, FontAwesomeIcon.Pause) + ButtonGap * scale;
+        var stopLabel = Loc.T(L.Common.StopRun);
+        ImGui.SetCursorScreenPos(new Vector2(stopX, at.Y));
+        if (PillButton.Draw("##ahl_run_stop", stopLabel, Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop, !verifying, Layout.ActionPillHeight,
                 verifying ? Loc.T(L.Run.FinishingVerification) : null))
         {
             controller.Stop();
         }
 
+        // Details never covers Stop: when the row has no room left for it, the button is left out.
         var detailsLabel = Loc.T(detailsOpen ? L.Run.HideDetails : L.Run.ShowDetails);
-        ImGui.SetCursorScreenPos(new Vector2(right - PillButton.Width(detailsLabel, FontAwesomeIcon.InfoCircle), at.Y));
+        var detailsWidth = PillButton.Width(detailsLabel, FontAwesomeIcon.InfoCircle);
+        var detailsX = right - detailsWidth;
+        if (detailsX < stopX + PillButton.Width(stopLabel, FontAwesomeIcon.Stop) + ButtonGap * scale)
+        {
+            return;
+        }
+
+        ImGui.SetCursorScreenPos(new Vector2(detailsX, at.Y));
         if (PillButton.Draw("##ahl_run_details", detailsLabel, Styling.AccentNebula, PillButton.Emphasis.Ghost, FontAwesomeIcon.InfoCircle, true, Layout.ActionPillHeight))
         {
             detailsOpen = !detailsOpen;
@@ -146,22 +191,24 @@ internal static class RunPanel
         var travel = status.Failure is EntryFailure.TravelFailed or EntryFailure.DependencyBusy or EntryFailure.WrongDestination;
         var manual = travel || status.Failure is EntryFailure.TravelUnavailable or EntryFailure.PlacardNotFound or EntryFailure.PlacardNotOpened;
         var text = RunPanelText.Shared.For(controller);
-        var card = NoticeCard.Begin(FontAwesomeIcon.HandPaper, Loc.T(L.Run.NeedsPlayerTitle), text.Failure, text.Facts, Styling.AccentAmber, hasButtons: true);
-        if (travel && NoticeCard.Button(ref card, "##ahl_run_retry_travel", Loc.T(L.Run.RetryTravel), Styling.AccentMint, PillButton.Emphasis.Filled, FontAwesomeIcon.Route))
-        {
-            controller.Resume();
-        }
-        else if (!travel && NoticeCard.Button(ref card, "##ahl_run_resume", Loc.T(L.Common.Resume), Styling.AccentMint, PillButton.Emphasis.Filled, FontAwesomeIcon.Play))
+        var resumeLabel = Loc.T(travel ? L.Run.RetryTravel : L.Common.Resume);
+        var resumeIcon = travel ? FontAwesomeIcon.Route : FontAwesomeIcon.Play;
+        var manualLabel = Loc.T(L.Run.VisitManually);
+        var stopLabel = Loc.T(L.Common.StopRun);
+        Span<float> widths = [NoticeCard.Width(resumeLabel, resumeIcon), NoticeCard.Width(manualLabel, FontAwesomeIcon.Walking)];
+        var card = NoticeCard.Begin(FontAwesomeIcon.HandPaper, Loc.T(L.Run.NeedsPlayerTitle), text.Failure, text.Facts, Styling.AccentAmber, hasButtons: true,
+            manual ? widths : widths[..1], NoticeCard.Width(stopLabel, FontAwesomeIcon.Stop));
+        if (NoticeCard.Button(ref card, travel ? "##ahl_run_retry_travel" : "##ahl_run_resume", resumeLabel, Styling.AccentMint, PillButton.Emphasis.Filled, resumeIcon))
         {
             controller.Resume();
         }
 
-        if (manual && NoticeCard.Button(ref card, "##ahl_run_manual", Loc.T(L.Run.VisitManually), Styling.AccentBlue, PillButton.Emphasis.Tinted, FontAwesomeIcon.Walking))
+        if (manual && NoticeCard.Button(ref card, "##ahl_run_manual", manualLabel, Styling.AccentBlue, PillButton.Emphasis.Tinted, FontAwesomeIcon.Walking))
         {
             controller.VisitManually();
         }
 
-        if (NoticeCard.Button(ref card, "##ahl_run_stop_card", Loc.T(L.Common.StopRun), Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop))
+        if (NoticeCard.TrailingButton(card, "##ahl_run_stop_card", stopLabel, Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop))
         {
             controller.Stop();
         }

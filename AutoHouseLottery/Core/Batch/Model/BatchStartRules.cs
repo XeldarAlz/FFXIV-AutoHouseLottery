@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Selection.Model;
 using AutoHouseLottery.Core.Tasks.Model;
 
@@ -11,6 +12,7 @@ internal readonly record struct BatchStartFacts(
     bool OtherWorkBusy,
     bool UnfinishedBatch,
     bool LoggedIn,
+    WorldRegion HomeRegion,
     bool AutoAnswerLoaded,
     bool InContent,
     bool ShortlistPolicy,
@@ -47,6 +49,11 @@ internal static class BatchStartRules
         if (!facts.LoggedIn)
         {
             return StartRefusal.NotLoggedIn;
+        }
+
+        if (!WorldRegions.Supported(facts.HomeRegion))
+        {
+            return facts.HomeRegion == WorldRegion.Unknown ? StartRefusal.UnknownRegion : StartRefusal.UnsupportedRegion;
         }
 
         if (facts.AutoAnswerLoaded)

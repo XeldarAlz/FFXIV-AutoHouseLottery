@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core;
+using AutoHouseLottery.Core.Diagnostics;
 using AutoHouseLottery.Core.Localization;
 using Dalamud.Bindings.ImGui;
 
@@ -211,7 +212,7 @@ internal sealed partial class LogPage
             return;
         }
 
-        ImGui.SetClipboardText(RunLogReport.WithHeader(view.AsSpan(0, viewCount), builtFilter, bufferedCount));
+        ImGui.SetClipboardText(DiagnosticsReport.Anonymize(Plugin.Instance.Configuration, RunLogReport.WithHeader(view.AsSpan(0, viewCount), builtFilter, bufferedCount)));
         copiedAtMs = Environment.TickCount64;
         ShowNotice(Loc.Plural(L.Log.CopiedLines, viewCount));
     }
@@ -224,7 +225,7 @@ internal sealed partial class LogPage
         }
 
         var count = high - low + 1;
-        ImGui.SetClipboardText(RunLogReport.Plain(view.AsSpan(low, count)));
+        ImGui.SetClipboardText(DiagnosticsReport.Anonymize(Plugin.Instance.Configuration, RunLogReport.Plain(view.AsSpan(low, count))));
         ShowNotice(Loc.Plural(L.Log.CopiedLines, count));
     }
 }

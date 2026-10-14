@@ -20,7 +20,6 @@ public sealed class AppWindow : Window, IDisposable
     private const float CollapseMs = 280f;
     private const float GripSize = 12f;
     private const float GripInset = 4f;
-    private const float MinimumBodyHeight = 260f;
     private const ImGuiWindowFlags BaseFlags =
         ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoCollapse;
 
@@ -31,11 +30,7 @@ public sealed class AppWindow : Window, IDisposable
         MinimumSize = new Vector2(HeaderBar.MinimumWidth, Layout.HeaderHeight),
         MaximumSize = Unbounded,
     };
-    private static readonly WindowSizeConstraints ExpandedConstraints = new()
-    {
-        MinimumSize = new Vector2(HeaderBar.MinimumWidth, Layout.HeaderHeight + Layout.DockHeight + MinimumBodyHeight),
-        MaximumSize = Unbounded,
-    };
+    private static readonly Vector2 ExpandedMinimum = new(Layout.MinimumWindowWidth, Layout.MinimumWindowHeight);
 
     private readonly Plugin plugin;
     private readonly FindHomePage findHomePage;
@@ -67,7 +62,7 @@ public sealed class AppWindow : Window, IDisposable
         savedPage = new SavedPage(plugin, Show);
         Size = DefaultSize;
         SizeCondition = ImGuiCond.FirstUseEver;
-        SizeConstraints = ExpandedConstraints;
+        SizeConstraints = new WindowSizeConstraints { MinimumSize = ExpandedMinimum, MaximumSize = Unbounded };
         AllowPinning = false;
         AllowClickthrough = false;
     }
@@ -125,7 +120,7 @@ public sealed class AppWindow : Window, IDisposable
         var wasSizeDriven = sizeDriven;
         sizeDriven = compact || collapse > 0f;
         Flags = sizeDriven ? BaseFlags | ImGuiWindowFlags.NoResize : BaseFlags;
-        SizeConstraints = sizeDriven ? CompactConstraints : ExpandedConstraints;
+        SizeConstraints = sizeDriven ? CompactConstraints : ExpandedConstraints();
 
         if (sizeDriven)
         {
@@ -143,6 +138,18 @@ public sealed class AppWindow : Window, IDisposable
         }
 
         SizeCondition = ImGuiCond.FirstUseEver;
+    }
+
+    // Dalamud scales the constraints by the UI scale, so at a large scale the minimum is held to the screen's work area
+    // instead, and the dock with Pause and Stop never ends up below the screen.
+    private static WindowSizeConstraints ExpandedConstraints()
+    {
+        var workArea = ImGui.GetMainViewport().WorkSize / ImGuiHelpers.GlobalScale;
+        return new WindowSizeConstraints
+        {
+            MinimumSize = workArea.X > 0f && workArea.Y > 0f ? Vector2.Min(ExpandedMinimum, workArea) : ExpandedMinimum,
+            MaximumSize = Unbounded,
+        };
     }
 
     private void AdvanceCollapse()
@@ -229,9 +236,10 @@ public sealed class AppWindow : Window, IDisposable
     {
         var scale = ImGuiHelpers.GlobalScale;
         var drawList = ImGui.GetWindowDrawList();
-        var dockHeight = !plugin.Controller.Running ? 0f
-            : page == RunPage ? Layout.DockHeight * scale
-            : MiniPlayer.Height();
+        var controller = plugin.Controller;
+        var dockHeight = page == RunPage ? (controller.Running ? Layout.DockHeight * scale : 0f)
+            : controller.Running || controller.Settling ? MiniPlayer.Height()
+            : 0f;
         var railWidth = Layout.RailWidth * scale;
         var bodyTop = windowPos.Y + headerHeight;
         var bodyHeight = windowSize.Y - headerHeight - dockHeight;
@@ -291,7 +299,7 @@ public sealed class AppWindow : Window, IDisposable
         using var reveal = Motion.PushReveal(Motion.Reveal(pageShownTick, PageRevealMs), PageSlide);
         if (page is Page.FindHome or Page.MyLottery && RunPanel.Visible(plugin.Controller))
         {
-            RunPanel.Draw(plugin);
+            RunPanel.Draw(plugin, controlsInDock: page == RunPage && plugin.Controller.Running);
         }
 
         switch (page)
@@ -300,7 +308,7 @@ public sealed class AppWindow : Window, IDisposable
             case Page.MyLottery: myLotteryPage.Draw(plugin); break;
             case Page.Saved: savedPage.Draw(); break;
             case Page.Settings: settingsPage.Draw(plugin); break;
-            case Page.Plugins: pluginsPage.Draw(); break;
+            case Page.Plugins: pluginsPage.Draw(plugin); break;
             case Page.Log: logPage.Draw(); break;
             case Page.Changelog: changelogPage.Draw(plugin.Configuration, pageShownTick); break;
             case Page.About: aboutPage.Draw(pageShownTick); break;

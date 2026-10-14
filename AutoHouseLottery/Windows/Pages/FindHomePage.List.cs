@@ -26,6 +26,8 @@ internal sealed partial class FindHomePage
     private const float StatusMarkRadius = 5f;
     private const float NarrowObserved = 600f;
     private const float NarrowSize = 500f;
+    private const float MinimumAddressColumn = 170f;
+    private const float MinimumAddressFallback = 80f;
     private const string ListId = "##ahl_find_list";
 
     private readonly Dictionary<PlotKey, RowText> rowTexts = [];
@@ -33,7 +35,9 @@ internal sealed partial class FindHomePage
 
     private readonly record struct RowText(string Size, string Price, string Entries, string Phase, string Observed);
 
-    private readonly record struct ListColumns(float Address, float Size, float Price, float Entries, float Phase, float Observed, bool ShowSize, bool ShowObserved);
+    // At the smallest widths the entry count goes first, then the phase keeps only its status mark (the row's tooltip
+    // still names it), so the address column never drops below a readable width while there is room for it.
+    private readonly record struct ListColumns(float Address, float Size, float Price, float Entries, float Phase, float Observed, bool ShowSize, bool ShowObserved, bool ShowEntries, bool PhaseText);
 
     private void DrawList(FindView view, DateTime now)
     {
@@ -69,8 +73,22 @@ internal sealed partial class FindHomePage
     {
         var showObserved = width >= NarrowObserved * scale;
         var showSize = width >= NarrowSize * scale;
-        var fixedWidth = (CheckColumn + PriceColumn + EntriesColumn + PhaseColumn + (showSize ? SizeColumn : 0f) + (showObserved ? ObservedColumn : 0f)) * scale;
-        return new ListColumns(MathF.Max(80f * scale, width - fixedWidth), SizeColumn * scale, PriceColumn * scale, EntriesColumn * scale, PhaseColumn * scale, ObservedColumn * scale, showSize, showObserved);
+        var phase = PhaseColumn;
+        var fixedWidth = (CheckColumn + PriceColumn + EntriesColumn + phase + (showSize ? SizeColumn : 0f) + (showObserved ? ObservedColumn : 0f)) * scale;
+        var showEntries = width - fixedWidth >= MinimumAddressColumn * scale;
+        if (!showEntries)
+        {
+            fixedWidth -= EntriesColumn * scale;
+        }
+
+        var phaseText = width - fixedWidth >= MinimumAddressColumn * scale;
+        if (!phaseText)
+        {
+            fixedWidth -= (PhaseColumn - CheckColumn) * scale;
+            phase = CheckColumn;
+        }
+
+        return new ListColumns(MathF.Max(MinimumAddressFallback * scale, width - fixedWidth), SizeColumn * scale, PriceColumn * scale, EntriesColumn * scale, phase * scale, ObservedColumn * scale, showSize, showObserved, showEntries, phaseText);
     }
 
     private static void DrawListHeader(in ListColumns columns, float width)
@@ -91,9 +109,17 @@ internal sealed partial class FindHomePage
 
             TextDraw.SmallCaps(Loc.T(L.Find.ColumnPrice), new Vector2(x, y), Styling.TextMuted);
             x += columns.Price;
-            TextDraw.SmallCaps(Loc.T(L.Find.ColumnEntries), new Vector2(x, y), Styling.TextMuted);
-            x += columns.Entries;
-            TextDraw.SmallCaps(Loc.T(L.Find.ColumnPhase), new Vector2(x, y), Styling.TextMuted);
+            if (columns.ShowEntries)
+            {
+                TextDraw.SmallCaps(Loc.T(L.Find.ColumnEntries), new Vector2(x, y), Styling.TextMuted);
+                x += columns.Entries;
+            }
+
+            if (columns.PhaseText)
+            {
+                TextDraw.SmallCaps(Loc.T(L.Find.ColumnPhase), new Vector2(x, y), Styling.TextMuted);
+            }
+
             x += columns.Phase;
             if (columns.ShowObserved)
             {
@@ -154,11 +180,19 @@ internal sealed partial class FindHomePage
 
         TextDraw.At(text.Price, new Vector2(x, textY), row.Price is null ? Styling.TextMuted : Styling.TextSecondary);
         x += columns.Price;
-        TextDraw.At(text.Entries, new Vector2(x, textY), row.Entries is null ? Styling.TextMuted : Styling.TextSecondary);
-        x += columns.Entries;
+        if (columns.ShowEntries)
+        {
+            TextDraw.At(text.Entries, new Vector2(x, textY), row.Entries is null ? Styling.TextMuted : Styling.TextSecondary);
+            x += columns.Entries;
+        }
+
         var markRadius = StatusMarkRadius * scale;
         StatusMarks.Draw(drawList, new Vector2(x + markRadius, midY), markRadius, row.Status);
-        TextDraw.At(TextDraw.Truncate(text.Phase, columns.Phase - markRadius * 2f - CellPad * scale * 1.5f), new Vector2(x + markRadius * 2f + CellPad * scale * 0.75f, textY), StatusMarks.Color(row.Status));
+        if (columns.PhaseText)
+        {
+            TextDraw.At(TextDraw.Truncate(text.Phase, columns.Phase - markRadius * 2f - CellPad * scale * 1.5f), new Vector2(x + markRadius * 2f + CellPad * scale * 0.75f, textY), StatusMarks.Color(row.Status));
+        }
+
         x += columns.Phase;
         if (columns.ShowObserved)
         {

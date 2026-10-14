@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core.Batch.Model;
+using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Selection.Model;
 using AutoHouseLottery.Core.Tasks.Model;
 
@@ -11,6 +12,7 @@ public sealed class BatchStartRulesTests
         OtherWorkBusy: false,
         UnfinishedBatch: false,
         LoggedIn: true,
+        HomeRegion: WorldRegion.Europe,
         AutoAnswerLoaded: false,
         InContent: false,
         ShortlistPolicy: true,
@@ -59,6 +61,8 @@ public sealed class BatchStartRulesTests
         Assert.Equal(StartRefusal.AlreadyRunning, BatchStartRules.Check(ready with { Running = true }));
         Assert.Equal(StartRefusal.Busy, BatchStartRules.Check(ready with { OtherWorkBusy = true }));
         Assert.Equal(StartRefusal.NotLoggedIn, BatchStartRules.Check(ready with { LoggedIn = false }));
+        Assert.Equal(StartRefusal.UnsupportedRegion, BatchStartRules.Check(ready with { HomeRegion = WorldRegion.Korea }));
+        Assert.Equal(StartRefusal.UnknownRegion, BatchStartRules.Check(ready with { HomeRegion = WorldRegion.Unknown }));
         Assert.Equal(StartRefusal.AutoAnswerPlugin, BatchStartRules.Check(ready with { AutoAnswerLoaded = true }));
         Assert.Equal(StartRefusal.InContent, BatchStartRules.Check(ready with { InContent = true }));
         Assert.Equal(StartRefusal.WrongMode, BatchStartRules.Check(ready with { ShortlistPolicy = false }));

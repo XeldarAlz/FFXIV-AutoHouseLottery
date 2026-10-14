@@ -38,6 +38,7 @@ internal sealed partial class FindHomePage
     private string[] worldLabels = [];
     private CachedText refreshText;
     private CachedText ageText;
+    private CachedText upstreamText;
     private CachedText moreText;
     private Vector2 areasAnchor;
     private Vector2 moreAnchor;
@@ -320,7 +321,7 @@ internal sealed partial class FindHomePage
             TextDraw.At(text, new Vector2(textX, origin.Y + (height - TextDraw.LineHeight()) * 0.5f), color);
             if (status.LiveReceivedUtc != default && ImGui.IsMouseHoveringRect(new Vector2(textX, origin.Y), new Vector2(buttonX, origin.Y + height)))
             {
-                Tooltip.Show(FindText.LocalTime(status.LiveUpstreamUtc));
+                Tooltip.Show(upstreamText.Get(status.LiveUpstreamUtc.Ticks, static ticks => FindText.LocalTime(new DateTime(ticks, DateTimeKind.Utc))));
             }
 
             return textX;

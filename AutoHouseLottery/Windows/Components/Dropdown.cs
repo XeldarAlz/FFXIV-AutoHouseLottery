@@ -63,6 +63,8 @@ internal static class Dropdown
         public readonly string PopupId;
         public long OpenedTick;
         public string Filter = string.Empty;
+        public string? NoMatchesFor;
+        public string NoMatches = string.Empty;
         public int Highlight;
         public bool ScrollToHighlight;
     }
@@ -512,7 +514,13 @@ internal static class Dropdown
     {
         using (Fonts.PushCaption())
         {
-            var text = Loc.T(L.Common.NoMatches, state.Filter);
+            if (!ReferenceEquals(state.NoMatchesFor, state.Filter))
+            {
+                state.NoMatchesFor = state.Filter;
+                state.NoMatches = Loc.T(L.Common.NoMatches, state.Filter);
+            }
+
+            var text = state.NoMatches;
             var padX = RowPadX * scale;
             TextDraw.At(TextDraw.Truncate(text, width - padX * 2f), origin + new Vector2(padX, RowPadY * scale), Styling.TextMuted);
         }

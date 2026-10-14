@@ -38,6 +38,9 @@ internal sealed partial class RunController
 
     public bool BatchActive => batch is { Active: true };
 
+    // A maintainer's batch switching permission is open, for the Plugins page.
+    public bool BatchSwitchGranted => batchSwitchGrant is { } open && !open.Expired(DateTime.UtcNow);
+
     // For the batch that waits or runs, or for the next one when none does.
     public bool BatchSwitchingAllowed
         => SwitchGate.AllowsBatch(SwitchCapabilities.CharacterSwitchValidated, batchSwitchGrant, batch is { Phase: not BatchPhase.Finished } current ? current.BatchId : null, switchCapable, DateTime.UtcNow);
@@ -100,6 +103,12 @@ internal sealed partial class RunController
         if (!Svc.ClientState.IsLoggedIn || !Svc.PlayerState.IsLoaded)
         {
             return StartRefusal.NotLoggedIn;
+        }
+
+        var region = WorldRegionReader.Of(Svc.PlayerState.HomeWorld.RowId);
+        if (!WorldRegions.Supported(region))
+        {
+            return region == WorldRegion.Unknown ? StartRefusal.UnknownRegion : StartRefusal.UnsupportedRegion;
         }
 
         if (AutoAnswerGuard.Blocks)
@@ -206,6 +215,7 @@ internal sealed partial class RunController
             TaskStarter.Busy || lease.Owner is not null,
             batch is { Phase: not BatchPhase.Finished },
             context is not null,
+            context is null ? WorldRegion.Unknown : WorldRegionReader.Of(context.HomeWorldId),
             AutoAnswerGuard.Blocks,
             DutyWatcher.InContent(),
             policy.Shortlist is not null && policy.Exact is null,

@@ -73,6 +73,9 @@ internal sealed partial class RunController
 
     public RunStatus Status => session?.Status ?? finished;
 
+    // A maintainer's session permission for one real entry that has not been used yet.
+    public bool RealEntryAllowed => grant is { Used: false };
+
     public ReconcileReport LastReconcile { get; private set; }
 
     public StartRefusal StartExact(RunPolicy policy, bool dryRun = true) => Start(RunMode.Exact, policy, dryRun);
@@ -220,11 +223,13 @@ internal sealed partial class RunController
         StopRefundSwitch("a GM alert");
     }
 
-    // A logout ends the real-entry grant and any run. A batch or refund switch logs out by design and goes on; any other
-    // logout halts a batch that was between characters.
+    // A logout or a disconnect. The next login, even as the same character, counts as a new session: its entry attempt
+    // still in question is read back at once and the two-session rule of a placard without a result starts afresh. A
+    // batch or refund switch logs out by design and goes on; any other logout halts a batch that was between characters.
     public void Interrupt()
     {
         grant = null;
+        lastContentId = 0;
         End("logged out");
         EndSettlement("logged out");
         InterruptBatch("logged out");
@@ -341,6 +346,7 @@ internal sealed partial class RunController
             assignment is not null)
         {
             AutoAnswerLoaded = AutoAnswerGuard.Blocks,
+            HomeRegion = context is null ? WorldRegion.Unknown : WorldRegionReader.Of(context.HomeWorldId),
         };
         var refusal = StartRules.Check(facts);
         if (refusal == StartRefusal.None && (context is null || settings is null || assignment is null || preview is null))

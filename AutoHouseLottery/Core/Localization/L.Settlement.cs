@@ -17,6 +17,7 @@ internal static partial class L
         public static readonly LocString BlockNotIdle = new("settlement.block.notIdle", "Starts after 30 seconds without input from you.");
         public static readonly LocString BlockStarting = new("settlement.block.starting", "Starting.");
         public static readonly LocString BlockHeldAfterAlert = new("settlement.block.heldAfterAlert", "Held after a GM alert until you act in the game.");
+        public static readonly LocString BlockUnsupportedRegion = new("settlement.block.unsupportedRegion", "Off: housing on this character's home world is not supported.");
         public static readonly LocString SettledInGame = new("settlement.settledInGame", "Settled in game");
         public static readonly LocString SettledInGameHint = new("settlement.settledInGameHint", "Use this when you collected this entry's refund in game yourself. It is recorded as refunded for an amount not seen, and opens again if the game later says a refund still waits.");
         public static readonly LocString SettledInGameConfirm = new("settlement.settledInGameConfirm", "Yes, I collected it");
@@ -48,6 +49,7 @@ internal static partial class L
         public static readonly LocString StoppedTitle = new("settlement.stoppedTitle", "Visit stopped");
         public static readonly LocString NeedsPlayerTitle = new("settlement.needsPlayerTitle", "Waiting for you");
         public static readonly LocString OutcomeWon = new("settlement.outcome.won", "You won {0}. Claim it on My lottery before the results period ends.");
+        public static readonly LocString OutcomeWonClaimInGame = new("settlement.outcome.wonClaimInGame", "You won {0}. Claim it in game at the plot's placard before the results period ends.");
         public static readonly LocString OutcomeLost = new("settlement.outcome.lost", "{0} went to another entrant. A refund of {1} is due.");
         public static readonly LocString OutcomeForfeit = new("settlement.outcome.forfeit", "The win on {0} was not claimed in time. A refund of {1} is due after the 50% fee.");
         public static readonly LocString OutcomeExpired = new("settlement.outcome.expired", "The refund for {0} has expired.");
@@ -88,6 +90,7 @@ internal static partial class L
         public static readonly LocString NoticeResults = new("settlement.notice.results", "Results are out for {0} ({1}). Check the result on My lottery.");
         public static readonly LocString NoticeWon = new("settlement.notice.won", "{1} won {0}. Claim it on My lottery before {2}.");
         public static readonly LocString NoticeClaimDeadline = new("settlement.notice.claimDeadline", "{1} won {0}. Claim it before {2}.");
+        public static readonly LocString NoticeClaimInGame = new("settlement.notice.claimInGame", "{1} won {0}. Claim it in game at the plot's placard before {2}.");
         public static readonly LocString NoticeRefundDeadline = new("settlement.notice.refundDeadline", "The refund for {0} ({1}) can be collected until about {2}.");
         public static readonly LocPlural NoticeSummary = new("settlement.notice.summary", "{0} lottery notice", "{0} lottery notices");
         public static readonly LocString NoticeSummaryBody = new("settlement.notice.summaryBody", "My lottery shows what needs your attention.");

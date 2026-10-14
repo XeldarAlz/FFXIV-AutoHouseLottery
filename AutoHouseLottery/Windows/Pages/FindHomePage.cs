@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core.Find;
+using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
@@ -145,6 +146,12 @@ internal sealed partial class FindHomePage
         if (world == 0)
         {
             Message(FontAwesomeIcon.Globe, Loc.T(L.Find.NoWorld));
+            return;
+        }
+
+        if (!Discovery.WorldSupported)
+        {
+            Message(FontAwesomeIcon.Ban, Loc.T(WorldRegionReader.Of(world) == WorldRegion.Unknown ? L.RunStart.UnknownRegion : L.Find.UnsupportedRegion));
             return;
         }
 

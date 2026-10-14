@@ -73,6 +73,7 @@ internal static partial class L
         public static readonly LocString Footer = new("plugins.footer",
             "Install adds the plugin's source repository to Dalamud and queues an install. If one-click install fails (URL drift, network), right-click a plugin name to copy its repo URL and add it manually via /xlsettings -> Experimental -> Custom Plugin Repositories.");
         public static readonly LocString PurposeLifestream = new("plugins.purpose.lifestream", "Travels to a plot's world, ward and plot for entries, result checks and refunds.");
+        public static readonly LocString PurposeVnavmesh = new("plugins.purpose.vnavmesh", "Walks the last metres to a plot's placard. Without it, you walk up to the placard when the plugin asks.");
     }
 
     internal static class Log
@@ -134,10 +135,18 @@ internal static partial class L
 
         public static readonly LocString[] Release1000 =
         [
-            new("changelog.r1000.1", "A new window with three pages, Find a home, My lottery and Saved, that fill in as the housing features arrive"),
-            new("changelog.r1000.2", "The Plugins page lists Lifestream, the helper that travels to a plot, with a one-click install"),
-            new("changelog.r1000.3", "Settings for the window, the language and the GM alert, and a Console page that copies a ready-made bug report"),
-            new("changelog.r1000.4", "Nine languages, picked from your Dalamud and game client settings on first launch"),
+            new("changelog.r1000.1", "Find a home: the plots reported vacant on the district map and in a list, filtered by district, ward, division, size, price, buyer type and lottery phase, with the age of every report"),
+            new("changelog.r1000.2", "A shortlist you fill plot by plot or with Add all matching, and a run preview with the maximum deposit, your gil reserve and anything that would stop the run"),
+            new("changelog.r1000.3", "Enter on a plot travels there with Lifestream, reads its placard and enters that plot only; Enter best match checks up to five shortlisted plots and enters at most one"),
+            new("changelog.r1000.4", "Entering the lottery is dry run only until validated in game: Enter goes as far as the lottery confirmation and closes it, so no deposit is paid"),
+            new("changelog.r1000.5", "Collecting refunds is dry run only until validated in game: a result check reads the refund and closes it, so you collect it in game"),
+            new("changelog.r1000.6", "Claiming a house is dry run only until validated in game: a win is read and closed, so you claim it in game"),
+            new("changelog.r1000.7", "An entry whose placard no longer offers a result stays pending on My lottery until that case is validated in game, and never holds up your next entry"),
+            new("changelog.r1000.8", "My lottery lists your entries and their results with one action each, keeps their receipts, and records a refund you collected yourself with Settled in game"),
+            new("changelog.r1000.9", "Automatic refunds, on by default, check your results while you are idle, outside combat, duties and cutscenes, within a 10,000 gil travel budget per session and your gil reserve"),
+            new("changelog.r1000.10", "Every press is written down before it is made, an entry, refund or claim whose outcome is unclear is read back and never repeated, and housing dialogs are recognized by the game's own data in your client's language"),
+            new("changelog.r1000.11", "Saved searches and plot lists with notices, a run panel with Pause and Stop that follows you across pages, a GM alert, and a Compatibility list on the Plugins page with Copy diagnostics"),
+            new("changelog.r1000.12", "Nine languages for the windows; Japanese, North American, European and Oceanian worlds, while Chinese and Korean worlds are not supported"),
         ];
     }
 
@@ -245,7 +254,7 @@ internal static partial class L
 
     internal static class Plugin
     {
-        public static readonly LocString CommandHelp = new("plugin.commandHelp", "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (dump the current target's BaseId) | probe (log every housing reading for this spot).");
+        public static readonly LocString CommandHelp = new("plugin.commandHelp", "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (dump the current target's BaseId).");
         public static readonly LocString CommandHelpAlias = new("plugin.commandHelpAlias", "Alias for /autohouselottery.");
         public static readonly LocString ConfigReset = new("plugin.configReset", "Your settings could not be read, so Auto House Lottery started with default settings. The old file is kept as {0}.");
         public static readonly LocString ConfigResetUnsaved = new("plugin.configResetUnsaved", "Your settings could not be read, so Auto House Lottery started with default settings. The old file could not be kept; the log has the details.");

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using AutoHouseLottery.Core.Game;
+using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Integration.Model;
 using AutoHouseLottery.Core.Settlement.Model;
@@ -29,6 +30,8 @@ internal sealed partial class RunController
 
     public bool RefundSwitching => refundSwitchToken != 0;
 
+    public bool RefundSwitchGranted => refundSwitchGrant is { } open && !open.Expired(DateTime.UtcNow);
+
     public bool RefundSwitchingAllowed
         => SwitchGate.AllowsRefundQueue(SwitchCapabilities.CharacterSwitchValidated, refundSwitchGrant, switchCapable, DateTime.UtcNow);
 
@@ -55,10 +58,14 @@ internal sealed partial class RunController
         var currentHasWork = scheduler.Block is not (SchedulerBlock.NothingDue or SchedulerBlock.RefundsOff or SchedulerBlock.BelowReserve or SchedulerBlock.TravelBudgetSpent);
         var position = housing.CurrentPosition(nowUtc);
         refundCandidates.Clear();
-        foreach (var (contentId, _) in configuration.Characters)
+        foreach (var (contentId, known) in configuration.Characters)
         {
             var listed = configuration.ChoiceFor(contentId).Selected;
-            refundCandidates.Add(new RefundCandidate(contentId, listed, configuration.AutomaticRefunds(contentId), listed && contentId != current ? scheduler.DueCountFor(contentId, position) : 0));
+            var supported = WorldRegions.Supported(WorldRegionReader.Of(known.HomeWorldId));
+            refundCandidates.Add(new RefundCandidate(contentId, listed, configuration.AutomaticRefunds(contentId), listed && supported && contentId != current ? scheduler.DueCountFor(contentId, position) : 0)
+            {
+                RegionSupported = supported,
+            });
         }
 
         if (RefundSwitchRules.Choose(true, true, current, currentHasWork, CollectionsMarshal.AsSpan(refundCandidates), refundSwitchVisited) is not { } target

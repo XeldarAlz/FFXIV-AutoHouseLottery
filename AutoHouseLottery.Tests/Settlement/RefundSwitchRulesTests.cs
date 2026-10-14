@@ -51,6 +51,14 @@ public sealed class RefundSwitchRulesTests
     }
 
     [Fact]
+    public void ACharacterOnAnUnsupportedRegionIsNeverChosen()
+    {
+        RefundCandidate[] elsewhere = [new(Listed, true, true, 3) { RegionSupported = false }];
+
+        Assert.Null(RefundSwitchRules.Choose(true, true, Current, false, elsewhere, none));
+    }
+
+    [Fact]
     public void EachCharacterIsSwitchedToOnceASession()
     {
         Assert.Null(RefundSwitchRules.Choose(true, true, Current, false, candidates, new HashSet<ulong> { Listed }));
@@ -59,7 +67,7 @@ public sealed class RefundSwitchRulesTests
     [Fact]
     public void TheSessionIsLeftOnlyOnTheSchedulersOwnTerms()
     {
-        var free = new SchedulerFacts(true, true, false, true, false, false, false, false, false, false, false, false, SchedulerRules.IdleMsRequired, 0, null, 0);
+        var free = new SchedulerFacts(true, true, true, false, true, false, false, false, false, false, false, false, false, SchedulerRules.IdleMsRequired, 0, null, 0);
 
         Assert.True(RefundSwitchRules.SessionFree(free));
         Assert.False(RefundSwitchRules.SessionFree(free with { IdleMs = SchedulerRules.IdleMsRequired - 1 }));
@@ -68,5 +76,6 @@ public sealed class RefundSwitchRulesTests
         Assert.False(RefundSwitchRules.SessionFree(free with { InCombat = true }));
         Assert.False(RefundSwitchRules.SessionFree(free with { Busy = true }));
         Assert.False(RefundSwitchRules.SessionFree(free with { JournalWritable = false }));
+        Assert.False(RefundSwitchRules.SessionFree(free with { RegionSupported = false }));
     }
 }
