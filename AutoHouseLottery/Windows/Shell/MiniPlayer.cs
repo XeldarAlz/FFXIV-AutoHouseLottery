@@ -17,6 +17,8 @@ internal static class MiniPlayer
     private const float ButtonSize = 34f;
     private const float ButtonGap = 8f;
     private const float BarWidth = 160f;
+    private const float MinimumBarWidth = 48f;
+    private const float BarShare = 0.3f;
     private const float BarHeight = 8f;
     private const float BadgeGap = 8f;
 
@@ -52,19 +54,6 @@ internal static class MiniPlayer
         var dotColor = controller.Paused ? info.Accent : Styling.PulseColor(info.Accent, info.AccentSoft, Styling.PulseMedium);
         Paint.Dot(drawList, new Vector2(origin.X + padX + 4f * scale, midY), 4f * scale, dotColor);
 
-        var barWidth = BarWidth * scale;
-        var barRight = end.X - padX - buttonsWidth - 16f * scale;
-        var barX = barRight - barWidth;
-        var barOrigin = new Vector2(barX, midY - BarHeight * scale * 0.5f);
-        if (controller.Paused)
-        {
-            Paint.Bar(drawList, barOrigin, barWidth, BarHeight * scale, 0f, info.Accent);
-        }
-        else
-        {
-            Paint.IndeterminateBar(drawList, barOrigin, barWidth, BarHeight * scale, info.Accent);
-        }
-
         var textX = origin.X + padX + 22f * scale;
         var status = controller.Status;
         if (status.RunId != Guid.Empty)
@@ -73,12 +62,36 @@ internal static class MiniPlayer
             textX += Badge.DrawLeft(drawList, Loc.T(dryRun ? L.Run.DryRunBadge : L.Run.RealEntryBadge), dryRun ? Styling.AccentBlue : Styling.AccentRose, textX, midY) + BadgeGap * scale;
         }
 
-        var label = TextDraw.Truncate(Label(controller, status, info.Kind), barX - 16f * scale - textX);
+        // The label carries the address, so on a narrow strip the bar gives way first.
+        var barRight = end.X - padX - buttonsWidth - 16f * scale;
+        var barWidth = MathF.Min(BarWidth * scale, (barRight - textX) * BarShare);
+        var labelRight = barRight;
+        if (barWidth >= MinimumBarWidth * scale)
+        {
+            var barX = barRight - barWidth;
+            var barOrigin = new Vector2(barX, midY - BarHeight * scale * 0.5f);
+            if (controller.Paused)
+            {
+                Paint.Bar(drawList, barOrigin, barWidth, BarHeight * scale, 0f, info.Accent);
+            }
+            else
+            {
+                Paint.IndeterminateBar(drawList, barOrigin, barWidth, BarHeight * scale, info.Accent);
+            }
+
+            labelRight = barX - 16f * scale;
+        }
+
+        var label = TextDraw.Truncate(Label(controller, status, info.Kind), labelRight - textX);
         TextDraw.At(label, new Vector2(textX, midY - ImGui.GetTextLineHeight() * 0.5f), Styling.TextStrong);
 
         if (controller.Running)
         {
             DrawButtons(controller, end, midY);
+        }
+        else if (controller.Settling)
+        {
+            DrawSettlementStop(controller, end, midY);
         }
 
         ImGui.SetCursorScreenPos(origin);
@@ -104,6 +117,19 @@ internal static class MiniPlayer
         }
 
         return controller.Running ? RunPanelText.Shared.For(controller).RunningLabel : ReadyState.ShortLabel(kind);
+    }
+
+    // A result visit can be stopped before it accepts anything; once it may have pressed Yes it finishes verifying first.
+    private static void DrawSettlementStop(RunController controller, Vector2 end, float midY)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var buttonSize = ButtonSize * scale;
+        var verifying = controller.Settlement.FinishingVerification;
+        ImGui.SetCursorScreenPos(new Vector2(end.X - PadX * scale - buttonSize, midY - buttonSize * 0.5f));
+        if (IconButton.Draw(FontAwesomeIcon.Stop, "##ahl_mini_stop_visit", buttonSize, Styling.AccentRose, verifying ? Loc.T(L.Run.FinishingVerification) : Loc.T(L.Common.StopRun), enabled: !verifying))
+        {
+            controller.StopSettlement();
+        }
     }
 
     private static void DrawButtons(RunController controller, Vector2 end, float midY)

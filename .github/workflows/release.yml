@@ -71,6 +71,21 @@ jobs:
       - name: Build (Release)
         run: dotnet build AutoHouseLottery.sln --configuration Release
 
+      - name: Verify the plugin zip
+        shell: pwsh
+        run: |
+          $zip = 'AutoHouseLottery/bin/Release/AutoHouseLottery/latest.zip'
+          if (-not (Test-Path $zip)) { throw "Plugin zip not found at $zip" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          $entries = $archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') }
+          $archive.Dispose()
+          $required = @('AutoHouseLottery.dll', 'AutoHouseLottery.json', 'Images/Icon.png', 'Fonts/NotoSans-Medium-Latin.ttf', 'Fonts/OFL-NotoSans.txt')
+          foreach ($code in 'en', 'de', 'es', 'fr', 'ja', 'pt', 'ru', 'tr', 'zh') { $required += "Localization/$code.json" }
+          $missing = @($required | Where-Object { $entries -notcontains $_ })
+          if ($missing.Count -gt 0) { throw "latest.zip is missing: $($missing -join ', ')" }
+          Write-Host "latest.zip holds the plugin, its manifest, its icon, the nine language catalogs and the font."
+
       - name: Stage latest.zip
         shell: pwsh
         run: |

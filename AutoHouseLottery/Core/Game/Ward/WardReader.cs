@@ -24,6 +24,10 @@ internal static unsafe class WardReader
         return new WardWindowHeader(true, valid, shownWardIndex, lastUpdateSequence);
     }
 
+    // The last verdict on the window's layout this session: Read once a full list matched it, LayoutMismatch once one did
+    // not, null until a ward list has been read. The Plugins page reports it.
+    public static WardReadStatus? LastLayoutVerdict { get; private set; }
+
     public static WardReadStatus ReadDisplayed(long updateSequence, out WardReading? reading)
     {
         reading = null;
@@ -34,6 +38,7 @@ internal static unsafe class WardReader
 
         if (!HeaderFits(addon, out var shownWardIndex))
         {
+            LastLayoutVerdict = WardReadStatus.LayoutMismatch;
             return WardReadStatus.LayoutMismatch;
         }
 
@@ -44,9 +49,16 @@ internal static unsafe class WardReader
             var rowStatus = ReadRow(values, rowIndex, out rows[rowIndex]);
             if (rowStatus != WardReadStatus.Read)
             {
+                if (rowStatus == WardReadStatus.LayoutMismatch)
+                {
+                    LastLayoutVerdict = rowStatus;
+                }
+
                 return rowStatus;
             }
         }
+
+        LastLayoutVerdict = WardReadStatus.Read;
 
         reading = new WardReading(
             shownWardIndex,

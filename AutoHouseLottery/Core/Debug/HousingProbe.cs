@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.Commands.Model;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
@@ -47,32 +48,32 @@ internal static unsafe class HousingProbe
                 LogReadings(observers, housing);
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
-            case "scan":
+            case ProbeVerbs.Scan:
                 Start(() => new WardScanTask(observers.WardWindow, observers.WardPackets), task => ApplyScan(task, housing));
                 return;
-            case "lottery":
+            case ProbeVerbs.Lottery:
                 Start(() => new LotteryTimersPass(), task => ImportReading(task, housing));
                 return;
-            case "goto" when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
+            case ProbeVerbs.Goto when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: true, observers));
                 return;
-            case "approach" when tokens.Length == ApproachArgumentCount && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
+            case ProbeVerbs.Approach when tokens.Length == ApproachArgumentCount && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: false, observers));
                 return;
-            case "press" when tokens.Length == PressArgumentCount && OpensLotteryDialog(tokens[1]) && AutoAnswerGuard.Blocks:
+            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && OpensLotteryDialog(tokens[1]) && AutoAnswerGuard.Blocks:
                 Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {RunText.AutoAnswer()}");
                 return;
-            case "press" when tokens.Length == PressArgumentCount && UiIsOwned():
+            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && UiIsOwned():
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
                 return;
-            case "press" when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
+            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
-            case "stop" when Plugin.Instance.Controller.Busy:
+            case ProbeVerbs.Stop when Plugin.Instance.Controller.Busy:
                 RunLog.Warning($"{Prefix} stop refused; an entry run or a reconciliation owns the game. Use /ahl stop for the run.");
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
                 return;
-            case "stop":
+            case ProbeVerbs.Stop:
                 TaskStarter.StopCurrent();
                 if (HousingTravel.CurrentToken is { } token)
                 {
@@ -134,42 +135,42 @@ internal static unsafe class HousingProbe
 
     // Enter Lottery and View Lottery Results open the dialogs a plugin that answers dialogs on its own could commit.
     private static bool OpensLotteryDialog(string what)
-        => what.Equals("enter", StringComparison.OrdinalIgnoreCase) || what.Equals("results", StringComparison.OrdinalIgnoreCase);
+        => what.Equals(ProbeVerbs.PressEnter, StringComparison.OrdinalIgnoreCase) || what.Equals(ProbeVerbs.PressResults, StringComparison.OrdinalIgnoreCase);
 
     private static bool Press(string what)
     {
         DialogActionResult result;
         switch (what)
         {
-            case "enter":
+            case ProbeVerbs.PressEnter:
                 using (NativeActionGate.Allow(NativeAction.PressEnterLottery))
                 {
                     result = HousingDialogs.PressPlacardButton(HousingText.EnterLotteryButton);
                 }
 
                 break;
-            case "results":
+            case ProbeVerbs.PressResults:
                 using (NativeActionGate.Allow(NativeAction.PressViewResults))
                 {
                     result = HousingDialogs.PressPlacardButton(HousingText.ViewResultsButton);
                 }
 
                 break;
-            case "cancel":
+            case ProbeVerbs.PressCancel:
                 using (NativeActionGate.Allow(NativeAction.CancelEntry))
                 {
                     result = HousingDialogs.CancelEntry();
                 }
 
                 break;
-            case "no" when HousingDialogs.IdentifyResultDialog() is { Text: { } shown }:
+            case ProbeVerbs.PressNo when HousingDialogs.IdentifyResultDialog() is { Text: { } shown }:
                 using (NativeActionGate.Allow(NativeAction.DeclineResult))
                 {
                     result = HousingDialogs.DeclineResult(shown);
                 }
 
                 break;
-            case "no":
+            case ProbeVerbs.PressNo:
                 result = DialogActionResult.IdentityMismatch;
                 break;
             default:
@@ -210,7 +211,7 @@ internal static unsafe class HousingProbe
         var location = context.Location;
         RunLog.Info($"{Prefix} location: territory {location.TerritoryTypeId}, ward {ShowOneBased(location.WardIndex)}, plot {ShowOneBased(location.PlotIndex)}, "
                   + $"division {Show(location.Division)}, inside {location.Inside}.");
-        RunLog.Info($"{Prefix} owned estates: personal {Describe(context.PersonalEstate)}, free company {Describe(context.FreeCompanyEstate)}, apartment {Describe(context.ApartmentRoom)}.");
+        RunLog.Info($"{Prefix} owned estates: personal {Held(context.PersonalEstate)}, free company {Held(context.FreeCompanyEstate)}, apartment {Held(context.ApartmentRoom)}.");
     }
 
     private static void LogLottery()
@@ -339,7 +340,7 @@ internal static unsafe class HousingProbe
     {
         if (HousingDialogs.IdentifyEntryConfirmation() is { } confirmation)
         {
-            RunLog.Info($"{Prefix} {confirmation.AddonName}: matches {Show(confirmation.Text)}, shows '{confirmation.ShownText}'.");
+            RunLog.Info($"{Prefix} {confirmation.AddonName}: matches {Show(confirmation.Text)}{ShownIfKnown(confirmation)}.");
             if (AddonReads.TryGetReady(HousingDialogs.EntryConfirmationAddon, out var addon))
             {
                 RunLog.Info($"{Prefix} {HousingDialogs.EntryConfirmationAddon} values: {AddonReads.Describe(addon, DescribedDialogValues)}.");
@@ -354,7 +355,7 @@ internal static unsafe class HousingProbe
 
         if (HousingDialogs.IdentifyResultDialog() is { } result)
         {
-            RunLog.Info($"{Prefix} {result.AddonName}: matches {Show(result.Text)}, shows '{result.ShownText}'.");
+            RunLog.Info($"{Prefix} {result.AddonName}: matches {Show(result.Text)}{ShownIfKnown(result)}.");
             if (AddonReads.TryGetReady(HousingDialogs.ResultAddon, out var addon))
             {
                 LogButtons(HousingDialogs.ResultAddon, LabelledButtons.Collect(addon, dialogLabels));
@@ -443,8 +444,11 @@ internal static unsafe class HousingProbe
     private static string Describe(PlotAddress? address)
         => address is not { } plot ? "none" : $"territory {plot.TerritoryTypeId}, ward {plot.WardIndex + ResidentialDistricts.OneBased}, plot {plot.PlotIndex + ResidentialDistricts.OneBased}";
 
-    private static string Describe(EstateAddress? estate)
-        => estate is not { } address ? "none" : $"territory {address.TerritoryTypeId}, ward {address.WardIndex + ResidentialDistricts.OneBased}, plot {address.PlotIndex + ResidentialDistricts.OneBased}{(address.Apartment ? " (apartment)" : string.Empty)}";
+    // Whether an estate is held, never where: anyone can read an estate's owner at its placard.
+    private static string Held(EstateAddress? estate) => estate is null ? "none" : "held";
+
+    // The text of a window that matches a housing row; a window that matches none may be anyone's, so it is not copied.
+    private static string ShownIfKnown(in DialogIdentity dialog) => dialog.Text is null ? ", text not copied" : $", shows '{dialog.ShownText}'";
 
     private static string Tail(ulong value)
     {

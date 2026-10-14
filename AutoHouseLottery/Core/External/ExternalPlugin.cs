@@ -5,6 +5,7 @@ namespace AutoHouseLottery.Core.External;
 public enum ExternalPlugin
 {
     Lifestream,
+    Vnavmesh,
 }
 
 public sealed record ExternalPluginInfo(
@@ -22,8 +23,9 @@ public static class ExternalPlugins
 {
     private const long RefreshIntervalMs = 1_000;
 
-    private static readonly ExternalPlugin[] all = [ExternalPlugin.Lifestream];
+    private static readonly ExternalPlugin[] all = [ExternalPlugin.Lifestream, ExternalPlugin.Vnavmesh];
     private static readonly bool[] loaded = new bool[all.Length];
+    private static readonly Version?[] versions = new Version?[all.Length];
     private static long refreshedAtMs = long.MinValue;
 
     public static readonly IReadOnlyDictionary<ExternalPlugin, ExternalPluginInfo> Catalog
@@ -35,6 +37,12 @@ public static class ExternalPlugins
             RepoUrl: "https://love.puni.sh/ment.json",
             Purpose: "Travels to a plot's world, ward and plot for entries, result checks and refunds.",
             Required: true),
+        [ExternalPlugin.Vnavmesh] = new(
+            InternalName: "vnavmesh",
+            DisplayName: "vnavmesh",
+            RepoUrl: "https://puni.sh/api/repository/veyn",
+            Purpose: "Walks the last metres to a plot's placard. Without it, you walk up to the placard when the plugin asks.",
+            Required: false),
     };
 
     public static IReadOnlyList<ExternalPlugin> All => all;
@@ -43,6 +51,13 @@ public static class ExternalPlugins
     {
         Refresh();
         return loaded[(int)plugin];
+    }
+
+    // The loaded version, null while the plugin is not loaded.
+    public static Version? LoadedVersion(ExternalPlugin plugin)
+    {
+        Refresh();
+        return versions[(int)plugin];
     }
 
     private static void Refresh()
@@ -55,6 +70,7 @@ public static class ExternalPlugins
 
         refreshedAtMs = now;
         Array.Clear(loaded);
+        Array.Clear(versions);
         foreach (var installed in Svc.PluginInterface.InstalledPlugins)
         {
             if (!installed.IsLoaded)
@@ -67,6 +83,7 @@ public static class ExternalPlugins
                 if (Matches(Catalog[all[index]], installed.InternalName))
                 {
                     loaded[(int)all[index]] = true;
+                    versions[(int)all[index]] = installed.Version;
                 }
             }
         }

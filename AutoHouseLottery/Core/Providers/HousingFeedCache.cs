@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 using System.Threading;
 using AutoHouseLottery.Core.Persistence;
@@ -13,7 +12,6 @@ namespace AutoHouseLottery.Core.Providers;
 internal sealed class HousingFeedCache
 {
     private const uint WorldListId = 0;
-    private const string WorldListFile = "worlds.json";
 
     private readonly string directory;
     private readonly Lock gate = new();
@@ -23,15 +21,49 @@ internal sealed class HousingFeedCache
         this.directory = directory;
     }
 
-    public FeedFetch? ReadWorld(uint worldId, DateTime nowUtc) => Read(WorldFile(worldId), worldId, FeedCacheRules.MaximumAge, nowUtc);
+    public FeedFetch? ReadWorld(uint worldId, DateTime nowUtc) => Read(FeedCacheRules.WorldFileName(worldId), worldId, FeedCacheRules.MaximumAge, nowUtc);
 
-    public void WriteWorld(uint worldId, byte[] body, in FeedReceipt receipt) => Write(WorldFile(worldId), FeedCacheRules.Envelope(worldId, body, receipt));
+    public void WriteWorld(uint worldId, byte[] body, in FeedReceipt receipt) => Write(FeedCacheRules.WorldFileName(worldId), FeedCacheRules.Envelope(worldId, body, receipt));
 
-    public byte[]? ReadWorldList(DateTime nowUtc) => Read(WorldListFile, WorldListId, FeedCacheRules.WorldListMaximumAge, nowUtc)?.Body;
+    public byte[]? ReadWorldList(DateTime nowUtc) => Read(FeedCacheRules.WorldListFileName, WorldListId, FeedCacheRules.WorldListMaximumAge, nowUtc)?.Body;
 
-    public void WriteWorldList(byte[] body, in FeedReceipt receipt) => Write(WorldListFile, FeedCacheRules.Envelope(WorldListId, body, receipt));
+    public void WriteWorldList(byte[] body, in FeedReceipt receipt) => Write(FeedCacheRules.WorldListFileName, FeedCacheRules.Envelope(WorldListId, body, receipt));
 
-    private static string WorldFile(uint worldId) => string.Concat("world-", worldId.ToString(CultureInfo.InvariantCulture), ".json");
+    // Saved listings past the age at which they could still be replayed are deleted, so the folder never grows with
+    // every world ever browsed. Run once at load, off the framework thread.
+    public void Prune(DateTime nowUtc)
+    {
+        var removed = 0;
+        try
+        {
+            lock (gate)
+            {
+                if (!Directory.Exists(directory))
+                {
+                    return;
+                }
+
+                var files = Directory.GetFiles(directory);
+                for (var index = 0; index < files.Length; index++)
+                {
+                    if (FeedCacheRules.Expired(Path.GetFileName(files[index]), File.GetLastWriteTimeUtc(files[index]), nowUtc))
+                    {
+                        File.Delete(files[index]);
+                        removed++;
+                    }
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            RunLog.Warning(exception, "Old saved housing listings could not all be removed; they are tried again at the next load");
+        }
+
+        if (removed > 0)
+        {
+            RunLog.Info($"Removed {removed} saved housing listing file(s) past their age ({FeedCacheRules.MaximumAgeDays} days for a world, {FeedCacheRules.WorldListMaximumAgeDays} for the list of worlds).");
+        }
+    }
 
     private FeedFetch? Read(string fileName, uint worldId, TimeSpan maximumAge, DateTime nowUtc)
     {

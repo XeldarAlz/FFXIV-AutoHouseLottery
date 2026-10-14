@@ -36,6 +36,15 @@ public sealed class StartRulesTests
     }
 
     [Fact]
+    public void HomeWorldOutsideTheGlobalRegionsRefusesEveryRun()
+    {
+        Assert.Equal(StartRefusal.UnsupportedRegion, StartRules.Check(Facts() with { HomeRegion = WorldRegion.China }));
+        Assert.Equal(StartRefusal.UnsupportedRegion, StartRules.Check(Facts() with { HomeRegion = WorldRegion.Korea }));
+        Assert.Equal(StartRefusal.UnknownRegion, StartRules.Check(Facts() with { HomeRegion = WorldRegion.Unknown }));
+        Assert.Equal(StartRefusal.NotLoggedIn, StartRules.Check(Facts() with { HomeRegion = WorldRegion.China, LoggedIn = false }));
+    }
+
+    [Fact]
     public void UnwritableJournalRefusesTheStart()
     {
         Assert.Equal(StartRefusal.JournalUnavailable, StartRules.Check(Facts() with { JournalWritable = false }));
@@ -84,5 +93,8 @@ public sealed class StartRulesTests
         false,
         EntrySlotState.Unknown,
         RunBlocker.None,
-        true);
+        true)
+    {
+        HomeRegion = WorldRegion.Europe,
+    };
 }

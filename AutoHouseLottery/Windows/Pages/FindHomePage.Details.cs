@@ -17,6 +17,8 @@ namespace AutoHouseLottery.Windows.Pages;
 internal sealed partial class FindHomePage
 {
     private const float FieldGap = 4f;
+    // A field's value keeps at most this share of the row; its label gets the rest.
+    private const float FieldValueShare = 0.6f;
     private const string ListPopup = "##ahl_find_save_to_list";
 
     private readonly DetailsText detailsText = new();
@@ -88,9 +90,9 @@ internal sealed partial class FindHomePage
     {
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
-        TextDraw.At(field.Label, origin, Styling.TextDim);
-        var valueWidth = MathF.Min(TextDraw.Measure(field.Value).X, width * 0.6f);
-        TextDraw.At(TextDraw.Truncate(field.Value, width * 0.6f), new Vector2(origin.X + width - valueWidth, origin.Y), Styling.TextStrong);
+        var valueWidth = MathF.Min(TextDraw.Measure(field.Value).X, width * FieldValueShare);
+        TextDraw.At(TextDraw.Truncate(field.Label, width - valueWidth - FieldGap * ImGuiHelpers.GlobalScale), origin, Styling.TextDim);
+        TextDraw.At(TextDraw.Truncate(field.Value, width * FieldValueShare), new Vector2(origin.X + width - valueWidth, origin.Y), Styling.TextStrong);
         var height = TextDraw.LineHeight();
         if (field.Age is { } age)
         {
@@ -121,14 +123,14 @@ internal sealed partial class FindHomePage
         }
 
         DrawSaveToListPopup(key);
-        ImGui.SameLine();
+        SameLineIfRoom(ImGui.GetFrameHeight());
         if (IconButton.Draw(FontAwesomeIcon.Copy, "##ahl_find_detail_copy", ImGui.GetFrameHeight(), Styling.TextSecondary, Loc.T(L.Find.CopyAddress)))
         {
             ImGui.SetClipboardText(PlotLabels.AddressOnWorld(Discovery.Names, key));
             notice.Show(Loc.T(L.Find.Copied), Styling.AccentMint);
         }
 
-        ImGui.SameLine();
+        SameLineIfRoom(ImGui.GetFrameHeight());
         var district = key.DistrictId;
         var preferred = State.IsPreferred(district);
         if (IconButton.Draw(FontAwesomeIcon.Heart, "##ahl_find_detail_prefer", ImGui.GetFrameHeight(), preferred ? Styling.AccentRose : Styling.TextMuted, Loc.T(L.Find.PreferDistrict)))
@@ -136,18 +138,10 @@ internal sealed partial class FindHomePage
             State.TogglePreferred(district);
         }
 
-        Styling.VSpace(6f);
-        if (detailsText.EnterTitle is { } enterTitle)
-        {
-            DrawEnterAction(enterTitle, RunMode.Exact, detailsText.EnterPolicy, detailsText.EnterMissing, exactCheck);
-            return;
-        }
-
-        UnavailableAction(FontAwesomeIcon.Search, Loc.T(L.Find.InspectPlot), Styling.AccentBlue, Loc.T(L.Find.InspectLater));
     }
 
-    // Enter always asks for a dry run, which no grant can turn real, from the frozen policy; while the controller would
-    // refuse it, the button is locked and its reason is shown under it.
+    // Enter asks for a dry run until entries are validated in game, and a requested dry run no grant can turn real; it
+    // starts from the frozen policy. While the controller would refuse it, the button is locked and its reason is shown.
     private void DrawEnterAction(string title, RunMode mode, RunPolicy? policy, string? missing, StartCheck check)
     {
         var controller = plugin.Controller;
@@ -155,7 +149,8 @@ internal sealed partial class FindHomePage
         var enabled = policy is not null && reason.Length == 0;
         if (HeroButton.Draw(FontAwesomeIcon.Ticket, title, BuyerLabel(State.Filter.Buyer), Styling.AccentGlow, enabled) && policy is not null && enabled)
         {
-            var refusal = mode == RunMode.Exact ? controller.StartExact(policy) : controller.StartBestMatch(policy);
+            var dryRun = EntryCapabilities.PlayerDryRun;
+            var refusal = mode == RunMode.Exact ? controller.StartExact(policy, dryRun) : controller.StartBestMatch(policy, dryRun);
             check.Invalidate();
             if (refusal != StartRefusal.None)
             {
@@ -167,7 +162,7 @@ internal sealed partial class FindHomePage
         ImGui.PushTextWrapPos();
         using (ImRaii.PushColor(ImGuiCol.Text, enabled ? Styling.TextDim : Styling.TextMuted))
         {
-            ImGui.TextUnformatted(enabled ? Loc.T(L.Run.DryRunHint) : reason);
+            ImGui.TextUnformatted(enabled ? Loc.T(EntryCapabilities.PlayerDryRun ? L.Run.DryRunHint : L.Run.RealEntryHint) : reason);
         }
 
         ImGui.PopTextWrapPos();
@@ -179,20 +174,6 @@ internal sealed partial class FindHomePage
         BuyerType.FreeCompany => Loc.T(L.Find.BuyerFreeCompany),
         _ => null,
     };
-
-    // Visiting arrives with a later update; its button is shown, locked, with the reason under it.
-    private static void UnavailableAction(FontAwesomeIcon icon, string title, Vector4 accent, string reason)
-    {
-        HeroButton.Draw(icon, title, null, accent, false);
-        Styling.VSpace(4f);
-        ImGui.PushTextWrapPos();
-        using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextMuted))
-        {
-            ImGui.TextUnformatted(reason);
-        }
-
-        ImGui.PopTextWrapPos();
-    }
 
     private void DrawSaveToListPopup(PlotKey key)
     {

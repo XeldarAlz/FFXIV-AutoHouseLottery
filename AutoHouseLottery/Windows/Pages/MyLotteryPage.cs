@@ -15,13 +15,14 @@ using AutoHouseLottery.Windows.Shell;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using ECommons.DalamudServices;
 using System.Numerics;
 
 namespace AutoHouseLottery.Windows.Pages;
 
 // Action needed, Active entries and History (UX section 10), per character, from the journal and the entries imported
-// from Timers. Every row has one primary action; the ones that arrive with the results update are shown but disabled.
+// from Timers. Every row has one primary action, disabled with its reason while it cannot run.
 internal sealed class MyLotteryPage
 {
     private const float RowHeight = 64f;
@@ -60,6 +61,7 @@ internal sealed class MyLotteryPage
     private ulong statusCharacter;
     private LanguageInfo? statusLanguage;
     private string statusText = string.Empty;
+    private CachedText historyText;
 
     public void Draw(Plugin plugin)
     {
@@ -88,7 +90,8 @@ internal sealed class MyLotteryPage
         }
 
         Styling.VSpace(SectionGap);
-        if (PillButton.Draw("##ahl_lottery_history", Loc.T(L.Lottery.History, history), Styling.AccentNebula, PillButton.Emphasis.Ghost,
+        var historyLabel = historyText.Get(history, static count => Loc.T(L.Lottery.History, (int)count));
+        if (PillButton.Draw("##ahl_lottery_history", historyLabel, Styling.AccentNebula, PillButton.Emphasis.Ghost,
                 historyOpen ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronRight))
         {
             historyOpen = !historyOpen;
@@ -176,7 +179,8 @@ internal sealed class MyLotteryPage
         var width = ImGui.GetContentRegionAvail().X;
         var expanded = expandedReceipt == row.Id;
         var lineHeight = ImGui.GetTextLineHeight();
-        var height = RowHeight * scale + (expanded ? lineHeight + RowGap * scale : 0f);
+        var rowHeight = MathF.Max(RowHeight * scale, RowPadY * 2f * scale + lineHeight * 2f + RowGap * scale * 0.5f);
+        var height = rowHeight + (expanded ? lineHeight + RowGap * scale : 0f);
         var end = origin + new Vector2(width, height);
         var accent = StateColor(row.State);
         Paint.Glass(ImGui.GetWindowDrawList(), origin, end, Styling.CardRounding * scale, accent, RowTint);
@@ -197,11 +201,11 @@ internal sealed class MyLotteryPage
 
         TextDraw.At(TextDraw.Truncate(view.Title, textRight - x), new Vector2(x, top), Styling.TextStrong);
         TextDraw.At(TextDraw.Truncate(view.Facts, textRight - x), new Vector2(x, top + lineHeight + RowGap * scale * 0.5f), Styling.TextDim);
-        var midY = origin.Y + RowHeight * scale * 0.5f;
+        var midY = origin.Y + rowHeight * 0.5f;
         TextDraw.At(view.State, new Vector2(right - actionWidth - secondaryWidth - StateGap * scale - stateWidth, midY - lineHeight * 0.5f), accent);
         if (view.SettledInGame)
         {
-            DrawSettledInGame(plugin, row, confirming, right - actionWidth - secondaryWidth, midY - Layout.ActionPillHeight * scale * 0.5f);
+            DrawSettledInGame(plugin, row, view.Id, confirming, right - actionWidth - secondaryWidth, midY - Layout.ActionPillHeight * scale * 0.5f);
         }
 
         ImGui.SetCursorScreenPos(new Vector2(right - actionWidth, midY - Layout.ActionPillHeight * scale * 0.5f));
@@ -212,7 +216,7 @@ internal sealed class MyLotteryPage
 
         if (expanded)
         {
-            TextDraw.At(TextDraw.Truncate(view.Receipt, right - x), new Vector2(x, origin.Y + RowHeight * scale), Styling.TextMuted);
+            TextDraw.At(TextDraw.Truncate(view.Receipt, right - x), new Vector2(x, origin.Y + rowHeight), Styling.TextMuted);
         }
 
         ImGui.SetCursorScreenPos(origin);
@@ -221,14 +225,15 @@ internal sealed class MyLotteryPage
 
     // "Settled in game", then a confirmation in its place: the player's word that the refund or the result was settled by
     // hand. It records the entry as refunded for an amount not seen and never touches the game.
-    private void DrawSettledInGame(Plugin plugin, LotteryRow row, bool confirming, float x, float y)
+    private void DrawSettledInGame(Plugin plugin, LotteryRow row, string rowId, bool confirming, float x, float y)
     {
         var scale = ImGuiHelpers.GlobalScale;
+        using var scope = ImRaii.PushId(rowId);
         ImGui.SetCursorScreenPos(new Vector2(x, y));
         var writable = plugin.HousingData.JournalWritable && !plugin.Controller.Busy;
         if (!confirming)
         {
-            if (PillButton.Draw($"##ahl_lottery_settled_{row.Id:N}", Loc.T(L.Settlement.SettledInGame), Styling.AccentNebula, PillButton.Emphasis.Ghost, FontAwesomeIcon.HandHoldingUsd,
+            if (PillButton.Draw("##ahl_lottery_settled", Loc.T(L.Settlement.SettledInGame), Styling.AccentNebula, PillButton.Emphasis.Ghost, FontAwesomeIcon.HandHoldingUsd,
                     writable, Layout.ActionPillHeight, Loc.T(L.Settlement.SettledInGameHint)))
             {
                 confirmingSettled = row.Id;
@@ -238,7 +243,7 @@ internal sealed class MyLotteryPage
         }
 
         var confirmLabel = Loc.T(L.Settlement.SettledInGameConfirm);
-        if (PillButton.Draw($"##ahl_lottery_settled_yes_{row.Id:N}", confirmLabel, Styling.AccentAmber, PillButton.Emphasis.Tinted, FontAwesomeIcon.Check, writable, Layout.ActionPillHeight,
+        if (PillButton.Draw("##ahl_lottery_settled_yes", confirmLabel, Styling.AccentAmber, PillButton.Emphasis.Tinted, FontAwesomeIcon.Check, writable, Layout.ActionPillHeight,
                 Loc.T(L.Settlement.SettledInGameHint)))
         {
             confirmingSettled = Guid.Empty;
@@ -246,7 +251,7 @@ internal sealed class MyLotteryPage
         }
 
         ImGui.SetCursorScreenPos(new Vector2(x + PillButton.Width(confirmLabel, FontAwesomeIcon.Check) + StateGap * scale, y));
-        if (PillButton.Draw($"##ahl_lottery_settled_no_{row.Id:N}", Loc.T(L.Settlement.SettledInGameCancel), Styling.AccentNebula, PillButton.Emphasis.Ghost, null, true, Layout.ActionPillHeight))
+        if (PillButton.Draw("##ahl_lottery_settled_no", Loc.T(L.Settlement.SettledInGameCancel), Styling.AccentNebula, PillButton.Emphasis.Ghost, null, true, Layout.ActionPillHeight))
         {
             confirmingSettled = Guid.Empty;
         }
@@ -292,7 +297,7 @@ internal sealed class MyLotteryPage
         {
         LotteryAction.ViewPlot => (Loc.T(L.Lottery.ViewPlot), true, null),
         LotteryAction.CheckResult => SettleAction(plugin, view, Loc.T(L.Lottery.CheckResult)),
-        LotteryAction.ClaimHouse => SettleAction(plugin, view, Loc.T(L.Lottery.ClaimHouse)),
+        LotteryAction.ClaimHouse => SettleAction(plugin, view, Loc.T(ClaimValidated ? L.Lottery.ClaimHouse : L.Lottery.CheckResult)),
         LotteryAction.CollectRefund => SettleAction(plugin, view, Loc.T(L.Lottery.CollectRefund)),
         LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending => SettleAction(plugin, view, Loc.T(L.Lottery.VerifyOutcome)),
         LotteryAction.VerifyOutcome => (Loc.T(L.Lottery.VerifyOutcome), !plugin.Controller.Busy && row.ContentId == Svc.PlayerState.ContentId,
@@ -329,7 +334,7 @@ internal sealed class MyLotteryPage
             _ => SettlementMode.Inspect,
         };
         var dryRun = SettlementGate.PlayerDryRun(mode) && mode != SettlementMode.Inspect ? Loc.T(L.Settlement.DryRunHint) : null;
-        if (mode != SettlementMode.Claim || context is null || SettlementLookups.Receipt(snapshot, row.Id) is not { } receipt)
+        if (mode != SettlementMode.Claim || !ClaimValidated || context is null || SettlementLookups.Receipt(snapshot, row.Id) is not { } receipt)
         {
             return dryRun;
         }
@@ -437,12 +442,21 @@ internal sealed class MyLotteryPage
         return row.AddressText ?? Loc.T(L.Lottery.PlotNotNamed);
     }
 
+    // Until claiming is validated in game, Claim house only reads a win, so the row says first, where nothing truncates
+    // it, that the house is claimed in game at its placard.
+    private static bool ClaimValidated => SettlementGate.Validated(ActionKind.Claim);
+
     private static string Facts(LotteryRow row, AbsenceSighting? sighting)
     {
         var number = row.EntryNumber is { } entryNumber ? Loc.T(L.Lottery.Number, entryNumber) : Loc.T(L.Lottery.NumberUnknown);
         var deposit = row.Deposit is { } amount ? Loc.T(L.Lottery.Deposit, Loc.Gil(amount)) : Loc.T(L.Lottery.DepositUnknown);
         var facts = string.Concat(number, Separator, deposit);
-        if (row.Section != LotterySection.History)
+        if (row.State == LotteryRowState.Won && !ClaimValidated)
+        {
+            var deadline = row.DeadlineUtc is { } until ? until.ToLocalTime().ToString(DateFormat, Loc.Culture) : Loc.T(L.Lottery.DeadlineUnknown);
+            facts = string.Concat(Loc.T(L.Lottery.ClaimInGame, deadline), Separator, facts);
+        }
+        else if (row.Section != LotterySection.History)
         {
             facts = string.Concat(facts, Separator, Deadline(row));
         }
@@ -481,7 +495,7 @@ internal sealed class MyLotteryPage
     {
         LotteryRowState.Entered => L.Lottery.StateEntered,
         LotteryRowState.ResultsAvailable => L.Lottery.StateResultsAvailable,
-        LotteryRowState.Won => L.Lottery.StateWon,
+        LotteryRowState.Won => ClaimValidated ? L.Lottery.StateWon : L.Lottery.StateWonClaimInGame,
         LotteryRowState.RefundDue => L.Lottery.StateRefundDue,
         LotteryRowState.SettlementPending => L.Lottery.StateSettlementPending,
         LotteryRowState.Uncertain => L.Lottery.StateUncertain,

@@ -10,6 +10,7 @@ internal static class HeroButton
     private const float Rounding = 14f;
     private const float PadX = 20f;
     private const float SublabelGap = 16f;
+    private const float MinimumSublabelWidth = 40f;
 
     public static bool Draw(FontAwesomeIcon icon, string title, string? sublabel, Vector4 accent, bool enabled, string? disabledReason = null, float width = 0f)
     {
@@ -60,18 +61,30 @@ internal static class HeroButton
         var iconSize = TextDraw.IconSize(glyph);
         TextDraw.Icon(glyph, new Vector2(min.X + padX, midY - iconSize.Y * 0.5f), textColor);
         var titleX = min.X + padX + iconSize.X + 12f * scale;
-        float titleWidth;
+        var titleRoom = MathF.Max(1f, max.X - padX - titleX);
+        float headlineWidth;
         using (Fonts.PushHeadline())
         {
-            var titleSize = TextDraw.Measure(title);
+            headlineWidth = TextDraw.Measure(title).X;
+        }
+
+        // A narrow drawer keeps the whole title, which carries the deposit: the sublabel gives way first, then the larger
+        // font, and only then is the title shortened.
+        var headline = headlineWidth <= titleRoom;
+        float titleWidth;
+        using (headline ? Fonts.PushHeadline() : Fonts.PushBody())
+        {
+            var shown = headline ? title : TextDraw.Truncate(title, titleRoom);
+            var titleSize = TextDraw.Measure(shown);
             titleWidth = titleSize.X;
-            TextDraw.At(title, new Vector2(titleX, midY - titleSize.Y * 0.5f), textColor);
+            TextDraw.At(shown, new Vector2(titleX, midY - titleSize.Y * 0.5f), textColor);
         }
 
         var sub = enabled ? sublabel : disabledReason ?? sublabel;
-        if (!string.IsNullOrEmpty(sub))
+        var subRoom = max.X - padX - (titleX + titleWidth + SublabelGap * scale);
+        if (!string.IsNullOrEmpty(sub) && subRoom >= MinimumSublabelWidth * scale)
         {
-            sub = TextDraw.Truncate(sub, max.X - padX - (titleX + titleWidth + SublabelGap * scale));
+            sub = TextDraw.Truncate(sub, subRoom);
             var subSize = TextDraw.Measure(sub);
             TextDraw.At(sub, new Vector2(max.X - padX - subSize.X, midY - subSize.Y * 0.5f),
                 enabled ? Styling.WithAlpha(textColor, 0.8f) : Styling.TextDim);

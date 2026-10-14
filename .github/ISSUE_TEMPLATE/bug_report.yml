@@ -169,7 +169,8 @@ body:
       description: |
         **If you can provide any of these, it turns guesswork into a fix.**
 
-        - **Plugin console**: open `/ahl log`, press *Copy log* and paste the result into the console field below. It already includes the plugin version, Dalamud version and zone.
+        - **Plugin diagnostics**: open `/ahl deps`, press *Copy diagnostics* under Compatibility and paste the result into the console field below. It holds the plugin, Dalamud and game versions, your client language, what works on your game build and the last 200 Console lines, with character names and IDs replaced.
+        - **Plugin console**: open `/ahl log`, press *Copy log* and paste the result into the console field below. It already includes the plugin version, Dalamud version and zone, with character names and IDs replaced.
         - **Dalamud log**: open `/xllog`, click the *Open log folder* button at the bottom-right, attach `dalamud.log`. Filter by `[AHL]` if you want to trim it down; when travel went wrong, keep Lifestream's lines too.
         - **The plot's placard and any dialog that opened** as screenshots, if the plugin read a plot wrong, entered the wrong one, or stopped on a dialog.
         - **Screenshots / short clip** if the issue is visual (the map, a marker, the shortlist, a frozen card, etc.)
@@ -180,7 +181,7 @@ body:
     attributes:
       label: Console output (optional)
       description: |
-        Paste what *Copy log* on the plugin's Console page (`/ahl log`) put on your clipboard. Short snippets (chat-log tail, Dalamud error text) also belong here; attach full `dalamud.log` files under **Attachments** above.
+        Paste what *Copy diagnostics* on the Plugins page (`/ahl deps`) or *Copy log* on the Console page (`/ahl log`) put on your clipboard. Short snippets (chat-log tail, Dalamud error text) also belong here; attach full `dalamud.log` files under **Attachments** above.
       render: text
 
   - type: textarea

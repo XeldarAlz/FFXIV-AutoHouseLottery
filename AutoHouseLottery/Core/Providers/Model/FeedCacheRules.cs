@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -10,8 +11,38 @@ internal static class FeedCacheRules
     public const int MaximumAgeDays = 7;
     public const int WorldListMaximumAgeDays = 30;
 
+    public const string WorldListFileName = "worlds.json";
+
+    private const string WorldFilePrefix = "world-";
+    private const string FileExtension = ".json";
+
     public static readonly TimeSpan MaximumAge = TimeSpan.FromDays(MaximumAgeDays);
     public static readonly TimeSpan WorldListMaximumAge = TimeSpan.FromDays(WorldListMaximumAgeDays);
+
+    public static string WorldFileName(uint worldId) => string.Concat(WorldFilePrefix, worldId.ToString(CultureInfo.InvariantCulture), FileExtension);
+
+    // A saved file goes once it is older than its kind may be replayed: a world's listings after 7 days, the list of
+    // worlds after 30. A file that is no saved listing is never touched.
+    public static bool Expired(string fileName, DateTime writtenUtc, DateTime nowUtc)
+    {
+        if (string.Equals(fileName, WorldListFileName, StringComparison.Ordinal))
+        {
+            return nowUtc - writtenUtc > WorldListMaximumAge;
+        }
+
+        return IsWorldFile(fileName) && nowUtc - writtenUtc > MaximumAge;
+    }
+
+    private static bool IsWorldFile(string fileName)
+    {
+        if (!fileName.StartsWith(WorldFilePrefix, StringComparison.Ordinal) || !fileName.EndsWith(FileExtension, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var number = fileName.AsSpan(WorldFilePrefix.Length, fileName.Length - WorldFilePrefix.Length - FileExtension.Length);
+        return uint.TryParse(number, NumberStyles.None, CultureInfo.InvariantCulture, out _);
+    }
 
     public static bool TryAccept(ReadOnlySpan<byte> json, uint worldId, TimeSpan maximumAge, DateTime nowUtc, out FeedFetch fetch)
     {

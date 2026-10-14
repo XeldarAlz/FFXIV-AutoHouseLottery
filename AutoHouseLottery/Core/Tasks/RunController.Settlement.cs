@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using AutoHouseLottery.Core.External;
+using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
@@ -38,11 +39,19 @@ internal sealed partial class RunController
 
     public SchedulerBlock SchedulerBlock => scheduler.Block;
 
+    // A maintainer's session permission for one real refund or one real claim that has not been used yet.
+    public bool RealRefundAllowed => refundGrant is { Used: false };
+
+    public bool RealClaimAllowed => claimGrant is { Used: false };
+
     public SettlementRefusal StartSettlement(Guid id, SettlementMode mode, SettlementOrigin origin, bool dryRun)
     {
         var context = CharacterContextReader.Read();
+        var region = context is null ? WorldRegion.Unknown : WorldRegionReader.Of(context.HomeWorldId);
         var refusal = Busy || TaskStarter.Busy ? SettlementRefusal.Busy
             : context is null ? SettlementRefusal.NotLoggedIn
+            : region == WorldRegion.Unknown ? SettlementRefusal.UnknownRegion
+            : !WorldRegions.Supported(region) ? SettlementRefusal.UnsupportedRegion
             : DutyWatcher.InContent() ? SettlementRefusal.InContent
             : !housing.JournalWritable ? SettlementRefusal.JournalUnavailable
             : AutoAnswerGuard.Blocks ? SettlementRefusal.AutoAnswerPlugin

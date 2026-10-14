@@ -24,7 +24,13 @@ internal sealed partial class FindHomePage
     private const float NameFieldWidth = 220f;
     private const int NameLength = 48;
     private const int ConfirmWindowMs = 3_000;
+    private const float FooterShare = 0.5f;
+    // The scrolling part keeps at least this much; the pinned Enter and its reason get the rest they need.
+    private const float MinimumDrawerBody = 72f;
+    private const float FooterHintGap = 4f;
+    private const int EstimatedHintLines = 2;
     private const string DrawerId = "##ahl_find_drawer";
+    private const string FooterId = "##ahl_find_drawer_footer";
     private const string DetailsId = "##ahl_find_details";
     private const string ShortlistRowsId = "##ahl_find_shortlist_rows";
     private const string SavePopup = "##ahl_find_save";
@@ -32,31 +38,85 @@ internal sealed partial class FindHomePage
     private readonly GilField.Buffer reserveBuffer = new();
     private string saveName = string.Empty;
     private long clearArmedUntil;
+    private float footerHeight;
     private CachedText countsText;
     private CachedText removeUnavailableText;
     private readonly DrawerText drawerText = new();
 
+    // The drawer scrolls, but its Enter button and the line under it stay pinned to its bottom, so the deposit, the
+    // button and the reason it is locked are visible at the smallest window size and largest UI scale. The pinned part's
+    // height is measured on one frame and used on the next.
     private void DrawDrawer(FindView view, Vector2 size, DateTime now)
     {
         var scale = ImGuiHelpers.GlobalScale;
         var origin = ImGui.GetCursorScreenPos();
         Paint.Glass(ImGui.GetWindowDrawList(), origin, origin + size, Styling.PanelRounding * scale, Styling.AccentNebula, 0.04f);
+        var footer = details is not null || State.Shortlist.Count > 0
+            ? MathF.Min(footerHeight > 0f ? footerHeight : EstimatedFooterHeight(scale), MathF.Max(size.Y * FooterShare, size.Y - MinimumDrawerBody * scale))
+            : 0f;
+        var bodySize = new Vector2(size.X, MathF.Max(1f, size.Y - footer));
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(DrawerPad, DrawerPad) * scale))
-        using (var child = ImRaii.Child(details is null ? DrawerId : DetailsId, size, false, ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.AlwaysUseWindowPadding))
         {
-            if (!child)
+            using (var child = ImRaii.Child(details is null ? DrawerId : DetailsId, bodySize, false, ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.AlwaysUseWindowPadding))
+            {
+                if (child)
+                {
+                    if (details is { } key)
+                    {
+                        DrawDetails(view, key, now);
+                    }
+                    else
+                    {
+                        DrawShortlist(view);
+                    }
+                }
+            }
+
+            if (footer <= 0f)
             {
                 return;
             }
 
-            if (details is { } key)
+            var footerOrigin = origin + new Vector2(0f, bodySize.Y);
+            Paint.Hairline(ImGui.GetWindowDrawList(), footerOrigin + new Vector2(DrawerPad * scale, 0f), footerOrigin + new Vector2(size.X - DrawerPad * scale, 0f));
+            ImGui.SetCursorScreenPos(footerOrigin);
+            using (var bottom = ImRaii.Child(FooterId, new Vector2(size.X, footer), false, ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.AlwaysUseWindowPadding | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
             {
-                DrawDetails(view, key, now);
-                return;
+                if (bottom)
+                {
+                    DrawDrawerFooter(view);
+                    footerHeight = ImGui.GetCursorPosY() - ImGui.GetStyle().ItemSpacing.Y + DrawerPad * scale;
+                }
             }
-
-            DrawShortlist(view);
         }
+    }
+
+    private static float EstimatedFooterHeight(float scale)
+        => (Layout.HeroButtonHeight + DrawerPad * 2f + FooterHintGap) * scale + ImGui.GetTextLineHeightWithSpacing() * EstimatedHintLines;
+
+    // Enter for the plot in the details, or Enter best match for the shortlist, with the line that says what it will do.
+    private void DrawDrawerFooter(FindView view)
+    {
+        if (details is not null)
+        {
+            if (detailsText.EnterTitle is { } enterTitle)
+            {
+                DrawEnterAction(enterTitle, RunMode.Exact, detailsText.EnterPolicy, detailsText.EnterMissing, exactCheck);
+                return;
+            }
+
+            ImGui.PushTextWrapPos();
+            using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextMuted))
+            {
+                ImGui.TextUnformatted(Loc.T(L.Find.EnterWhenOpen));
+            }
+
+            ImGui.PopTextWrapPos();
+            return;
+        }
+
+        var current = PlannedFromCurrentSelection(view);
+        DrawEnterAction(Loc.T(L.Find.EnterBestMatch), RunMode.BestMatch, current ? view.PreviewPolicy : null, current ? BestMatchMissing(view) : null, bestMatchCheck);
     }
 
     private void DrawShortlist(FindView view)
@@ -88,9 +148,6 @@ internal sealed partial class FindHomePage
         DrawBestMatch(view);
         Styling.VSpace(10f);
         DrawPreview(view);
-        Styling.VSpace(10f);
-        var current = PlannedFromCurrentSelection(view);
-        DrawEnterAction(Loc.T(L.Find.EnterBestMatch), RunMode.BestMatch, current ? view.PreviewPolicy : null, current ? BestMatchMissing(view) : null, bestMatchCheck);
     }
 
     // The view is rebuilt on a task, so for a moment after a change to the shortlist, the filters or the reserve the
@@ -118,9 +175,10 @@ internal sealed partial class FindHomePage
             State.RemoveUnavailable();
         }
 
-        ImGui.SameLine();
         var armed = Environment.TickCount64 < clearArmedUntil;
-        if (PillButton.Draw("##ahl_find_clear", Loc.T(armed ? L.Find.ConfirmClear : L.Find.Clear), Styling.AccentRose, armed ? PillButton.Emphasis.Tinted : PillButton.Emphasis.Ghost, FontAwesomeIcon.Trash))
+        var clearLabel = Loc.T(armed ? L.Find.ConfirmClear : L.Find.Clear);
+        SameLineIfRoom(PillButton.Width(clearLabel, FontAwesomeIcon.Trash));
+        if (PillButton.Draw("##ahl_find_clear", clearLabel, Styling.AccentRose, armed ? PillButton.Emphasis.Tinted : PillButton.Emphasis.Ghost, FontAwesomeIcon.Trash))
         {
             if (armed)
             {
@@ -133,9 +191,10 @@ internal sealed partial class FindHomePage
             }
         }
 
-        ImGui.SameLine();
+        var saveLabel = Loc.T(L.Find.Save);
+        SameLineIfRoom(PillButton.Width(saveLabel, FontAwesomeIcon.Bookmark));
         var anchor = ImGui.GetCursorScreenPos();
-        if (PillButton.Draw("##ahl_find_save_open", Loc.T(L.Find.Save), Styling.AccentGlow, PillButton.Emphasis.Tinted, FontAwesomeIcon.Bookmark))
+        if (PillButton.Draw("##ahl_find_save_open", saveLabel, Styling.AccentGlow, PillButton.Emphasis.Tinted, FontAwesomeIcon.Bookmark))
         {
             saveName = Loc.T(L.Find.DefaultName, Discovery.Names.World(Discovery.World), DateTime.Now.ToString("d", Loc.Culture));
             ImGui.SetNextWindowPos(anchor + new Vector2(0f, ImGui.GetFrameHeight() + 6f * ImGuiHelpers.GlobalScale));
@@ -143,6 +202,16 @@ internal sealed partial class FindHomePage
         }
 
         DrawSavePopup();
+    }
+
+    // A narrow drawer wraps its buttons instead of pushing the last ones past its edge.
+    private static void SameLineIfRoom(float width)
+    {
+        ImGui.SameLine();
+        if (ImGui.GetContentRegionAvail().X < width)
+        {
+            ImGui.NewLine();
+        }
     }
 
     private void DrawSavePopup()
@@ -382,9 +451,9 @@ internal sealed partial class FindHomePage
     {
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
-        TextDraw.At(label, origin, Styling.TextDim);
-        var valueWidth = TextDraw.Measure(value).X;
-        TextDraw.At(TextDraw.Truncate(value, width * 0.6f), new Vector2(origin.X + width - MathF.Min(valueWidth, width * 0.6f), origin.Y), color ?? Styling.TextStrong);
+        var valueWidth = MathF.Min(TextDraw.Measure(value).X, width * FieldValueShare);
+        TextDraw.At(TextDraw.Truncate(label, width - valueWidth - FieldGap * ImGuiHelpers.GlobalScale), origin, Styling.TextDim);
+        TextDraw.At(TextDraw.Truncate(value, width * FieldValueShare), new Vector2(origin.X + width - valueWidth, origin.Y), color ?? Styling.TextStrong);
         ImGui.Dummy(new Vector2(width, TextDraw.LineHeight()));
     }
 

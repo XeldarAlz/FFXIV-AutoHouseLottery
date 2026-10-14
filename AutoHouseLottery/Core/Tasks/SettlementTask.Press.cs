@@ -66,7 +66,7 @@ internal sealed partial class SettlementTask
             ? ClaimRefusal.NotTheEntrant
             : ClaimRules.Check(new ClaimFacts(context.ContentId, entry, SettlementLookups.Settlement(snapshot, entry.ReceiptId)!.Value.State, context.FreeCompanyId is not null,
                 context.PersonalEstate, context.FreeCompanyEstate, ClaimRules.GroupClaimOpen(snapshot, entry)));
-        Diag($"{Label}: claiming {plot} as {entry.Buyer} would {effect}{(effect == ClaimEffect.Relocate ? $" the estate now at {DescribeEstate(context)}" : string.Empty)}; {refusal}.");
+        Diag($"{Label}: claiming {plot} as {entry.Buyer} would {effect}{(effect == ClaimEffect.Relocate ? " the estate held now" : string.Empty)} ({DescribeEstate(context)}); {refusal}.");
         if (refusal != ClaimRefusal.None)
         {
             await CloseResult(HousingDialogs.ReadResultDialog());
@@ -333,14 +333,15 @@ internal sealed partial class SettlementTask
 
         if (HousingDialogs.IdentifyResultDialog() is { } other)
         {
-            Warn($"{Label}: a Yes/No window that is no lottery result is open ('{other.ShownText}'); it is left alone.");
+            Warn($"{Label}: a Yes/No window that is no lottery result is open ({(other.Text is { } known ? known.ToString() : "no known row")}); it is left alone.");
         }
 
         return true;
     }
 
+    // Whether the character holds an estate, never where: anyone can read an estate's owner at its placard.
     private static string DescribeEstate(CharacterContext? context)
         => context is null
             ? "no character"
-            : $"personal estate {context.PersonalEstate?.ToString() ?? "none"}, free company estate {context.FreeCompanyEstate?.ToString() ?? "none"}";
+            : $"personal estate {(context.PersonalEstate is null ? "none" : "held")}, free company estate {(context.FreeCompanyEstate is null ? "none" : "held")}";
 }

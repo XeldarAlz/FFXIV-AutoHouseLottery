@@ -69,8 +69,11 @@ internal static class ManualSettlement
                 continue;
             }
 
+            // A crash or a logout right after Yes can leave the receipt anywhere on its refund path, short of the
+            // reconciliation state the visit would have written.
             var open = SettlementLookups.OpenAttempt(snapshot, receipt.ReceiptId);
-            var refundInQuestion = open is { Kind: ActionKind.Refund, State: AttemptState.NeedsReconciliation } && settlement.State == SettlementState.NeedsReconciliation;
+            var refundInQuestion = open is { Kind: ActionKind.Refund, State: AttemptState.NeedsReconciliation }
+                && (settlement.State == SettlementState.NeedsReconciliation || SettlementStates.OnRefundPath(settlement.State));
             if ((open is null && SettlementStates.RefundOwed(settlement.State)) || refundInQuestion)
             {
                 fixes.Add(new SettlementFix(receipt.ReceiptId, SettlementState.Refunded, open?.AttemptId));
@@ -79,6 +82,35 @@ internal static class ManualSettlement
 
         return fixes.ToImmutable();
     }
+
+    // The plugin's own refund or claim was confirmed, but the receipt never reached Refunded or Claimed because the plugin
+    // stopped between the two writes (a crash, a logout, an unload). Only the states such a stop leaves behind are
+    // repaired: a refund's RefundPending or NeedsReconciliation, a claim's ClaimPending or NeedsReconciliation. A receipt in
+    // any other state got there afterwards, such as one a LogMessage 6100 refusal reopened, and is left to be read again.
+    public static ImmutableArray<SettlementFix> FromOwnConfirmations(in JournalSnapshot snapshot, ulong contentId)
+    {
+        var fixes = ImmutableArray.CreateBuilder<SettlementFix>();
+        var attempts = snapshot.Attempts;
+        for (var index = 0; index < attempts.Length; index++)
+        {
+            var attempt = attempts[index];
+            if (attempt is not { State: AttemptState.Confirmed, Kind: ActionKind.Refund or ActionKind.Claim, ReceiptId: { } receiptId }
+                || attempt.CharacterContentId != contentId
+                || SettlementLookups.Settlement(snapshot, receiptId) is not { } settlement
+                || !LeftBehindByPress(attempt.Kind, settlement.State))
+            {
+                continue;
+            }
+
+            fixes.Add(new SettlementFix(receiptId, attempt.Kind == ActionKind.Refund ? SettlementState.Refunded : SettlementState.Claimed, null));
+        }
+
+        return fixes.ToImmutable();
+    }
+
+    private static bool LeftBehindByPress(ActionKind kind, SettlementState state) => kind == ActionKind.Refund
+        ? state is SettlementState.RefundPending or SettlementState.NeedsReconciliation
+        : state is SettlementState.ClaimPending or SettlementState.NeedsReconciliation;
 
     // The player's word that a refund owed, or a result never read, was settled in game by hand. Only for an entry of
     // this plugin whose results are out and that has no refund or claim of the plugin still in question; never for an

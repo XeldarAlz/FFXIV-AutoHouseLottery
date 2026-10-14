@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core.Localization;
+using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Settlement.Model;
 using AutoHouseLottery.Core.Tasks;
 
@@ -27,7 +28,7 @@ internal static class SettlementText
 
     public static string Outcome(SettlementStatus status, string address) => status.Outcome switch
     {
-        InspectionOutcome.WonUnclaimed => Loc.T(L.Settlement.OutcomeWon, address),
+        InspectionOutcome.WonUnclaimed => Loc.T(SettlementGate.Validated(ActionKind.Claim) ? L.Settlement.OutcomeWon : L.Settlement.OutcomeWonClaimInGame, address),
         InspectionOutcome.LostRefundDue => Loc.T(L.Settlement.OutcomeLost, address, Loc.Gil(status.OfferedRefund ?? 0)),
         InspectionOutcome.ForfeitRefundDue => Loc.T(L.Settlement.OutcomeForfeit, address, Loc.Gil(status.OfferedRefund ?? 0)),
         InspectionOutcome.Expired => Loc.T(L.Settlement.OutcomeExpired, address),
@@ -76,6 +77,8 @@ internal static class SettlementText
     public static string Refusal(SettlementRefusal refusal) => refusal == SettlementRefusal.AutoAnswerPlugin ? RunText.AutoAnswer() : Loc.T(refusal switch
     {
         SettlementRefusal.NotLoggedIn => L.RunStart.NotLoggedIn,
+        SettlementRefusal.UnsupportedRegion => L.RunStart.UnsupportedRegion,
+        SettlementRefusal.UnknownRegion => L.RunStart.UnknownRegion,
         SettlementRefusal.InContent => L.RunStart.InContent,
         SettlementRefusal.JournalUnavailable => L.RunStart.JournalUnavailable,
         _ => L.RunStart.Busy,
@@ -96,6 +99,7 @@ internal static class SettlementText
         SchedulerBlock.BelowReserve => L.Settlement.FailureReserve,
         SchedulerBlock.TravelBudgetSpent => L.Settlement.FailureTravelBudget,
         SchedulerBlock.HeldAfterAlert => L.Settlement.BlockHeldAfterAlert,
+        SchedulerBlock.UnsupportedRegion => L.Settlement.BlockUnsupportedRegion,
         SchedulerBlock.None => L.Settlement.BlockStarting,
         _ => L.RunStart.NotLoggedIn,
     });

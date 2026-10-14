@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Threading.Tasks;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
@@ -101,6 +102,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
         var next = queue.Next(due, nowMs);
         var facts = new SchedulerFacts(
             LoggedIn: true,
+            RegionSupported: WorldRegionReader.Supported(context.HomeWorldId),
             AutomaticRefunds: configuration.AutomaticRefunds(context.ContentId),
             WorkDue: next is not null,
             JournalWritable: housing.JournalWritable,
@@ -147,7 +149,9 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     private bool Parked(Guid id) => !SettlementCapabilities.AbsenceSettlementValidated && configuration.AbsenceSighting(id) is { Strong: true };
 
     // A win the character's estate list now holds was claimed, by this plugin's press or in game; it is recorded as
-    // claimed without a visit. Checked again only when the journal's settlements change.
+    // claimed without a visit. A refund or claim of this plugin that was confirmed while its receipt was left behind (the
+    // plugin stopped between the two writes) is settled the same way. Checked again only when the journal's settlements
+    // change, and only while nothing drives the game, so a visit between its two writes is never raced.
     private void ReconcileEstates(CharacterContext context)
     {
         var settlements = housing.JournalSnapshot.Settlements;
@@ -159,14 +163,49 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
         estateCheckedFor = settlements;
         estateChecked = estates;
-        var fixes = ManualSettlement.FromEstates(housing.JournalSnapshot, context.ContentId, context.PersonalEstate, context.FreeCompanyEstate);
-        if (fixes.IsEmpty)
+        var claimed = ManualSettlement.FromEstates(housing.JournalSnapshot, context.ContentId, context.PersonalEstate, context.FreeCompanyEstate);
+        var confirmed = ManualSettlement.FromOwnConfirmations(housing.JournalSnapshot, context.ContentId);
+        if (claimed.IsEmpty && confirmed.IsEmpty)
         {
             return;
         }
 
         fixing = true;
-        _ = housing.ApplySettlementFixes(fixes, "the estate list holds the entered plot").ContinueWith(_ => fixing = false);
+        _ = ApplyFixes(claimed, confirmed).ContinueWith(_ => fixing = false);
+    }
+
+    // A receipt both lists name is settled once, by the estate list.
+    private async Task ApplyFixes(ImmutableArray<SettlementFix> claimed, ImmutableArray<SettlementFix> confirmed)
+    {
+        await housing.ApplySettlementFixes(claimed, "the estate list holds the entered plot");
+        await housing.ApplySettlementFixes(Without(confirmed, claimed), "the plugin's own press was confirmed before the plugin stopped");
+    }
+
+    private static ImmutableArray<SettlementFix> Without(ImmutableArray<SettlementFix> fixes, ImmutableArray<SettlementFix> already)
+    {
+        var kept = ImmutableArray.CreateBuilder<SettlementFix>(fixes.Length);
+        for (var index = 0; index < fixes.Length; index++)
+        {
+            if (!Names(already, fixes[index].ReceiptId))
+            {
+                kept.Add(fixes[index]);
+            }
+        }
+
+        return kept.ToImmutable();
+    }
+
+    private static bool Names(ImmutableArray<SettlementFix> fixes, Guid receiptId)
+    {
+        for (var index = 0; index < fixes.Length; index++)
+        {
+            if (fixes[index].ReceiptId == receiptId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private readonly record struct Estates(ulong? Personal, ulong? FreeCompany);

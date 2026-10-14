@@ -45,6 +45,7 @@ internal sealed class HousingFeedService : IDisposable
         this.cache = cache;
         scheduleFile = new QueuedFile(schedulePath, "lottery calendar", static (exception, message) => RunLog.Warning(exception, message));
         schedulesLoading = Task.Run(() => LoadSchedules(schedulePath));
+        _ = Task.Run(() => cache.Prune(DateTime.UtcNow));
     }
 
     public DiscoverySnapshot Snapshot => snapshot;

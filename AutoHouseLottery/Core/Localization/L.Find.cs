@@ -82,10 +82,11 @@ internal static partial class L
         public static readonly LocString SavedCopyBanner = new("findHome.savedCopyBanner", "Showing saved listings from {0}. Refresh or inspect in game.");
 
         public static readonly LocString NoWorld = new("findHome.noWorld", "Log in, or choose a world, to see its listings.");
+        public static readonly LocString UnsupportedRegion = new("findHome.unsupportedRegion", "Housing on this world is not supported. Auto House Lottery covers the Japanese, North American, European and Oceanian worlds; Chinese and Korean worlds have their own housing services.");
         public static readonly LocString Loading = new("findHome.loading", "Loading the listings for {0}…");
         public static readonly LocString Failed = new("findHome.failed", "The housing listings could not be loaded. Refresh, or inspect plots in game.");
         public static readonly LocString NoMatches = new("findHome.noMatches", "No reported plots match these filters. Clear filters or change areas.");
-        public static readonly LocString NoCoverage = new("findHome.noCoverage", "This area has no recent coverage. Browse in game or scan it.");
+        public static readonly LocString NoCoverage = new("findHome.noCoverage", "No recent report covers this area. Look around in game, or refresh later.");
         public static readonly LocString NoArea = new("findHome.noArea", "Choose at least one district, ward and division under Areas.");
         public static readonly LocString ClearFilters = new("findHome.clearFilters", "Clear filters");
 
@@ -191,8 +192,7 @@ internal static partial class L
         public static readonly LocString CopyAddress = new("findHome.copyAddress", "Copy address");
         public static readonly LocString Copied = new("findHome.copied", "Address copied");
         public static readonly LocString NewList = new("findHome.newList", "New list");
-        public static readonly LocString InspectPlot = new("findHome.inspectPlot", "Inspect plot");
-        public static readonly LocString InspectLater = new("findHome.inspectLater", "Visiting arrives with the travel update");
+        public static readonly LocString EnterWhenOpen = new("findHome.enterWhenOpen", "Enter shows here while this plot's lottery takes entries.");
         public static readonly LocString FieldSize = new("findHome.fieldSize", "Size");
         public static readonly LocString FieldDeposit = new("findHome.fieldDeposit", "Deposit");
         public static readonly LocString FieldBuyers = new("findHome.fieldBuyers", "Allowed buyers");

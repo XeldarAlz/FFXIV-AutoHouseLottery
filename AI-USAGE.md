@@ -23,7 +23,7 @@ That is the honest label and it is deliberately not the lowest one that could be
 
 Claude Code is the tool, used as a senior harness rather than as an autocomplete:
 
-- **Planned by the human.** Each phase of the plugin (the housing listings and the map, the shortlist, the placard and lottery readers, the entry, refund and claim drivers, the windows) and each round of fixes starts as a written plan: what to build, the rules it has to keep, and how it will be checked.
+- **Planned by the human.** Each phase of the plugin (the foundation and the entry records, the housing listings, the map and the shortlist, the placard, ward and lottery readers with travel, the entry driver, the result, refund and claim drivers, and the release hardening with the compatibility checks) and each round of fixes starts as a written plan: what to build, the rules it has to keep, and how it will be checked.
 - **Parallel implementers.** Claude Code agent pipelines carry the plan out, with several implementer agents working at once, each on its own branch, writing the code and its unit tests.
 - **Independent reviewers.** Separate reviewer agents read each diff back without having written it, against the plan, CONTRIBUTING.md and .editorconfig as the rulebook, and their findings go back to an implementer before anything merges.
 - **Autonomous execution inside human gates.** The pipeline runs unattended once started. It does not decide what to start, and it does not decide what ships.
@@ -32,7 +32,7 @@ The human gates, in order, none of them skippable:
 
 1. **The plan comes first.** What to build, and the constraints it has to respect, are written before any agent runs.
 2. **The diff is read.** Output is reviewed before it lands, not after users find the problem.
-3. **It is tested in the game before release.** On a real client, a dry run of the full entry flow that stops at the lottery confirmation and presses Cancel, plus one supervised real entry before Confirm is enabled, and one real refund before automatic refunds are enabled. A clean `dotnet build` and a green `dotnet test` do not replace it.
+3. **It is tested in the game before release.** On a real client, a dry run of the full entry flow that stops at the lottery confirmation and presses Cancel, and one supervised real press for each action before its validation flag is turned on: an entry before Enter submits, a refund before refunds are collected, a claim before Claim house accepts, and supervised visits before a placard without a result settles an entry. Until its flag is on, an action ships as dry run only, and the README and the Plugins page say so. A clean `dotnet build` and a green `dotnet test` do not replace any of it.
 4. **Ownership transfers.** Every merged line is the maintainer's to defend, explain, and fix. "The AI did it" is not an answer to why something is written the way it is.
 5. **Feedback is taken on its merits.** AI-assisted work invites sharper review, from users and from any reviewer, and that scrutiny is earned rather than unfair. The answer to a review comment is a fix or a reason, never a defense of the tooling.
 
