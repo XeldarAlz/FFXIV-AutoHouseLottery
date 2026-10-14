@@ -1,5 +1,6 @@
 using AutoHouseLottery.Core;
 using AutoHouseLottery.Core.Debug;
+using AutoHouseLottery.Core.Find;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Dialogs;
 using AutoHouseLottery.Core.Game.Placard;
@@ -39,6 +40,7 @@ public sealed class Plugin : IDalamudPlugin
     internal WindowSystem WindowSystem { get; } = new("AutoHouseLottery");
     internal RunController Controller { get; }
     internal HousingObservers Housing { get; }
+    internal Discovery Discovery { get; }
 
     private readonly DutyWatcher dutyWatcher;
     private readonly GmAlertWatcher gmAlertWatcher;
@@ -89,6 +91,8 @@ public sealed class Plugin : IDalamudPlugin
             Housing = new HousingObservers(wardWindow, wardPackets, placardWindow, placardSales, SignboardAgentLayout.Resolve(placardSales.SignatureFound), housingLog);
 
             InitializeLocalization();
+            Discovery = new Discovery(Configuration, PluginInterface.GetPluginConfigDirectory(), PluginVersion, () => appWindow?.IsOpen == true);
+            completed.Push(Discovery.Dispose);
             Fonts.Initialize(PluginInterface.UiBuilder, PluginDirectory);
             completed.Push(Fonts.Dispose);
             appWindow = new AppWindow(this);
@@ -128,6 +132,8 @@ public sealed class Plugin : IDalamudPlugin
 
     private static string PluginDirectory => PluginInterface.AssemblyLocation.DirectoryName ?? string.Empty;
 
+    private static string PluginVersion => typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "0";
+
     public void Dispose()
     {
         TaskStarter.StopCurrent();
@@ -155,6 +161,7 @@ public sealed class Plugin : IDalamudPlugin
         wardWindow.Dispose();
         dutyWatcher.Dispose();
         gmAlertWatcher.Dispose();
+        Discovery.Dispose();
 
         CLibMain.Dispose();
         ECommonsMain.Dispose();

@@ -37,9 +37,9 @@ public sealed class AppWindow : Window, IDisposable
     };
 
     private readonly Plugin plugin;
-    private readonly FindHomePage findHomePage = new();
+    private readonly FindHomePage findHomePage;
     private readonly MyLotteryPage myLotteryPage = new();
-    private readonly SavedPage savedPage = new();
+    private readonly SavedPage savedPage;
     private readonly SettingsPage settingsPage = new();
     private readonly PluginsPage pluginsPage = new();
     private readonly LogPage logPage = new();
@@ -62,6 +62,8 @@ public sealed class AppWindow : Window, IDisposable
     public AppWindow(Plugin plugin) : base("Auto House Lottery###AutoHouseLotteryMain", BaseFlags)
     {
         this.plugin = plugin;
+        findHomePage = new FindHomePage(plugin);
+        savedPage = new SavedPage(plugin, Show);
         Size = DefaultSize;
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = ExpandedConstraints;
