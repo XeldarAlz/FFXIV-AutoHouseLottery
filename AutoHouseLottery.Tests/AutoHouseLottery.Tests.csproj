@@ -26,6 +26,7 @@
     <Compile Include="..\AutoHouseLottery\Core\Saved\Model\**\*.cs" Link="Saved\Model\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Settlement\Model\**\*.cs" Link="Settlement\Model\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Storage\**\*.cs" Link="Storage\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Batch\Model\**\*.cs" Link="Batch\Model\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

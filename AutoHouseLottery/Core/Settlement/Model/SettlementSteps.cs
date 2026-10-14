@@ -67,6 +67,7 @@ internal enum SettlementFailure : byte
     BuyerUnknown,
     ClaimEffectUnknown,
     GroupClaimOpen,
+    GroupAlreadyClaimed,
     AlreadyOwned,
     DepositUnknown,
     AutoAnswerPlugin,
@@ -103,6 +104,7 @@ internal static class SettlementSteps
         ClaimRefusal.BuyerUnknown => SettlementFailure.BuyerUnknown,
         ClaimRefusal.EffectUnknown => SettlementFailure.ClaimEffectUnknown,
         ClaimRefusal.GroupClaimOpen => SettlementFailure.GroupClaimOpen,
+        ClaimRefusal.GroupAlreadyClaimed => SettlementFailure.GroupAlreadyClaimed,
         ClaimRefusal.AlreadyOwned => SettlementFailure.AlreadyOwned,
         _ => SettlementFailure.None,
     };
