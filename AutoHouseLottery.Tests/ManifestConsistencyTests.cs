@@ -11,6 +11,7 @@ public sealed partial class ManifestConsistencyTests
     private const string ManifestPath = "AutoHouseLottery/AutoHouseLottery.json";
     private const string RepositoryListingPath = "repo.json";
     private const string BuildPropertiesPath = "Directory.Build.props";
+    private const string ReadmePath = "README.md";
     private const int VersionParts = 4;
 
     private static readonly string[] sharedTextFields = ["Name", "InternalName", "Punchline", "Description", "RepoUrl", "IconUrl"];
@@ -67,6 +68,15 @@ public sealed partial class ManifestConsistencyTests
     {
         using var listing = ReadListingEntry();
         Assert.Equal(BuildVersion(), listing.RootElement[0].GetProperty(field).GetString());
+    }
+
+    [Fact]
+    public void ReadmeCarriesThePunchlineAndTheDescriptionVerbatim()
+    {
+        using var manifest = ReadManifest();
+        var readme = File.ReadAllText(Path.Combine(RepositoryFiles.Root, ReadmePath));
+        Assert.Contains(manifest.RootElement.GetProperty("Punchline").GetString()!, readme, StringComparison.Ordinal);
+        Assert.Contains(manifest.RootElement.GetProperty("Description").GetString()!, readme, StringComparison.Ordinal);
     }
 
     [Fact]
