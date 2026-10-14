@@ -6,6 +6,7 @@ using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Selection.Model;
 using AutoHouseLottery.Core.Shared;
 using AutoHouseLottery.Core.Tasks.Model;
+using AutoHouseLottery.Core.Travel.Model;
 
 namespace AutoHouseLottery.Core.Batch.Model;
 
@@ -308,6 +309,11 @@ internal static class BatchRules
     private static bool HoldsPlot(BatchMember member)
         => member.State is BatchMemberState.Entered or BatchMemberState.DryRun
         || (member.State == BatchMemberState.NotEntered && member.Failure == EntryFailure.AlreadyEntered);
+
+    // A switch that did not start because something else is using the game, or Lifestream is busy, is only blocked: the
+    // batch keeps its switching grant for a Continue. Anything else that kept it from starting is a failed switch.
+    public static BatchHalt SwitchNotStarted(SwitchStartResult result)
+        => result is SwitchStartResult.OtherWork or SwitchStartResult.DependencyBusy or SwitchStartResult.AlreadySwitching ? BatchHalt.SwitchBlocked : BatchHalt.SwitchFailed;
 
     // A maintainer's batch switching grant serves one batch: it ends when that batch is finished or dropped, or when a
     // switch of it failed.

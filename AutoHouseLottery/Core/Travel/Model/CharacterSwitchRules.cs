@@ -13,13 +13,19 @@ internal static class SwitchCapabilities
 internal enum SwitchScope : byte { Batch, RefundQueue }
 
 // A maintainer's permission to switch characters, kept in memory only. Switching logs out by design, so it outlives a
-// logout. A batch grant serves the next batch started and that batch only (BatchId, bound when it starts); a refund grant
-// serves the refund queue. Each ends after two hours, when revoked, or at unload.
+// logout. A batch grant serves one batch only (BatchId): the batch not finished yet when it is issued, or else the next one
+// started or switching; a refund grant serves the refund queue. Each ends after two hours, when revoked, or at unload.
 internal sealed record SwitchGrant(SwitchScope Scope, DateTime IssuedUtc)
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromHours(2);
 
     public Guid? BatchId { get; init; }
+
+    // Issued, or issued again, while a batch is not finished: it serves that batch from the start, so it ends with it.
+    public static SwitchGrant ForBatch(Guid? unfinishedBatch, DateTime nowUtc) => new(SwitchScope.Batch, nowUtc) { BatchId = unfinishedBatch };
+
+    // An unbound grant now serves this batch; a bound one keeps its own.
+    public SwitchGrant BoundTo(Guid batchId) => BatchId is null ? this with { BatchId = batchId } : this;
 
     public bool Expired(DateTime nowUtc) => nowUtc - IssuedUtc >= Lifetime;
 }

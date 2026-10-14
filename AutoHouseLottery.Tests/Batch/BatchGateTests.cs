@@ -62,6 +62,40 @@ public sealed class BatchGateTests
     }
 
     [Fact]
+    public void AGrantIssuedWhileABatchIsUnfinishedServesThatBatchAndNoOther()
+    {
+        var unfinished = SwitchGrant.ForBatch(batchId, issued);
+        var reissued = SwitchGrant.ForBatch(batchId, issued + TimeSpan.FromMinutes(5));
+        var forTheNext = SwitchGrant.ForBatch(null, issued);
+
+        Assert.Equal(batchId, unfinished.BatchId);
+        Assert.Equal(batchId, reissued.BatchId);
+        Assert.True(SwitchGate.AllowsBatch(false, unfinished, batchId, true, issued));
+        Assert.False(SwitchGate.AllowsBatch(false, unfinished, Guid.NewGuid(), true, issued));
+        Assert.False(SwitchGate.AllowsBatch(false, unfinished, null, true, issued));
+        Assert.Equal(batchId, unfinished.BoundTo(Guid.NewGuid()).BatchId);
+        Assert.Null(forTheNext.BatchId);
+        Assert.Equal(batchId, forTheNext.BoundTo(batchId).BatchId);
+    }
+
+    [Theory]
+    [InlineData((byte)SwitchStartResult.OtherWork, (byte)BatchHalt.SwitchBlocked)]
+    [InlineData((byte)SwitchStartResult.DependencyBusy, (byte)BatchHalt.SwitchBlocked)]
+    [InlineData((byte)SwitchStartResult.AlreadySwitching, (byte)BatchHalt.SwitchBlocked)]
+    [InlineData((byte)SwitchStartResult.NotInstalled, (byte)BatchHalt.SwitchFailed)]
+    [InlineData((byte)SwitchStartResult.AlreadyThatCharacter, (byte)BatchHalt.SwitchFailed)]
+    [InlineData((byte)SwitchStartResult.InvalidWorld, (byte)BatchHalt.SwitchFailed)]
+    [InlineData((byte)SwitchStartResult.Refused, (byte)BatchHalt.SwitchFailed)]
+    public void ASwitchThatCouldNotStartForBusyHelpersIsOnlyBlockedAndKeepsTheGrant(byte result, byte halt)
+    {
+        var running = BatchRulesTests.Batch(out _);
+        var expected = (BatchHalt)halt;
+
+        Assert.Equal(expected, BatchRules.SwitchNotStarted((SwitchStartResult)result));
+        Assert.Equal(expected == BatchHalt.SwitchFailed, BatchRules.EndsSwitchGrant(BatchRules.Halt(running, expected, issued)));
+    }
+
+    [Fact]
     public void EachGrantCoversOnlyItsOwnScope()
     {
         var batchGrant = new SwitchGrant(SwitchScope.Batch, issued);

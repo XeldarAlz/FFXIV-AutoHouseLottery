@@ -19,9 +19,10 @@ namespace AutoHouseLottery.Core.Debug;
 // character; it is a dry run unless the word "real" is given and a grant covers that plot. "allow-real-entry" grants one
 // real entry for one named character, plot and deposit ceiling for this session only; nothing about it is saved.
 // "settle" visits one entry's plot to read its result and, with the word "real" and an "allow-real-refund" or
-// "allow-real-claim" grant for that plot, accepts it once. Until switching is validated in game, "allow-switching" lets the
-// next batch switch characters through Lifestream and "allow-refund-switching" lets the refund queue do so, each for two
-// hours at most; "revoke-switching" withdraws both and stops a switch either started.
+// "allow-real-claim" grant for that plot, accepts it once. Until switching is validated in game, "allow-switching" lets one
+// batch (the one not finished yet, or else the next one started) switch characters through Lifestream and
+// "allow-refund-switching" lets the refund queue do so, each for two hours at most; "revoke-switching" withdraws both and
+// stops a switch either started.
 internal static class DevCommands
 {
     private const int RunArgumentCount = 5;

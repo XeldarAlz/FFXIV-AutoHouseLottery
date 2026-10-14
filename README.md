@@ -35,7 +35,7 @@ A press that spends gil or takes a house is enabled only after it has been valid
 - **Claiming a house**: dry run only until validated. A win is read and closed; claim it in game.
 - **Placards without a result**: dry run only until validated. An entry whose placard no longer offers a result stays pending on My lottery instead of being recorded as settled.
 - **Entering for several characters**: dry run only until validated, on its own after single entries. Enter for N characters takes every character as far as its lottery confirmation and closes it; a one-plot real-entry permission never makes a batch real.
-- **Switching characters**: off until validated. Each character is processed at its own login. A maintainer's `/ahl dev allow-switching` or `allow-refund-switching` permission lets the next batch, or the refund queue, switch characters for at most two hours.
+- **Switching characters**: off until validated. Each character is processed at its own login. A maintainer's `/ahl dev allow-switching` or `allow-refund-switching` permission lets one batch (the one not finished yet, or else the next one started), or the refund queue, switch characters for at most two hours.
 
 The Plugins page (`/ahl deps`) shows the same lines under Compatibility, next to the state of everything else the plugin depends on.
 
@@ -94,7 +94,7 @@ Tick characters on the Characters list in the shortlist drawer and the drawer pl
 
 ### Character switching
 
-The plugin can switch characters itself through Lifestream's character change, but this is **off until it has been validated in game**. While it is off, a batch processes only the logged-in character and every other character waits for its own login, and each character's results and refunds are handled at its own login. For the validation, `/ahl dev allow-switching` lets the next batch started (or continued) switch, until that batch finishes, is discarded or fails a switch, or for two hours at most; `/ahl dev allow-refund-switching` lets the refund queue switch for two hours; `/ahl dev revoke-switching` withdraws both and stops a switch either one started.
+The plugin can switch characters itself through Lifestream's character change, but this is **off until it has been validated in game**. While it is off, a batch processes only the logged-in character and every other character waits for its own login, and each character's results and refunds are handled at its own login. For the validation, `/ahl dev allow-switching` lets one batch switch, the one not finished yet or else the next one started, until that batch finishes, is discarded or fails a switch, or for two hours at most; `/ahl dev allow-refund-switching` lets the refund queue switch for two hours; `/ahl dev revoke-switching` withdraws both and stops a switch either one started.
 
 With switching allowed, a batch saves its progress to disk, asks Lifestream to log in the next character, and does nothing for it until the game shows exactly that character (content ID and home world) and Lifestream has finished; its gil, Free Company and estates are then read again and its run reads its lottery record before anything else. No switch starts during a duty, match or world visit queue, while vnavmesh is moving you, or while AutoRetainer's multi-mode is on. The switch has a five-minute deadline; a failed login, another character chosen at the character screen, a cancel, or a plugin reload on the title screen stops the batch, and a stopped or reloaded batch continues only from your Continue.
 
@@ -157,7 +157,7 @@ None of these is needed to use the plugin. `probe` reads what the game shows and
 | `/autohouselottery dev allow-real-refund <character name> <district> <ward> <plot>` | Allow the logged-in character to accept the refund of its unsettled entry on that plot once, through `dev settle ... real` or an automatic refund. It lives only in this session and ends at logout, at unload, or after the one press |
 | `/autohouselottery dev allow-real-claim <character name> <district> <ward> <plot>` | Allow the logged-in character to claim its winning entry's plot once, through `dev settle ... claim real`. It lives only in this session and ends at logout, at unload, or after the one press |
 | `/autohouselottery dev revoke-real-settlement` | Withdraw the real refund and claim permissions |
-| `/autohouselottery dev allow-switching` | Let the next batch started or continued switch characters through Lifestream, until it finishes, is discarded or fails a switch, or for two hours at most. Its entries stay dry runs |
+| `/autohouselottery dev allow-switching` | Let one batch switch characters through Lifestream, the one not finished yet or else the next one started, until it finishes, is discarded or fails a switch, or for two hours at most. Its entries stay dry runs |
 | `/autohouselottery dev allow-refund-switching` | Let the refund queue switch to the ticked characters through Lifestream, with Switch characters to collect refunds on, for two hours |
 | `/autohouselottery dev revoke-switching` | Withdraw both switching permissions and stop a switch either one started |
 

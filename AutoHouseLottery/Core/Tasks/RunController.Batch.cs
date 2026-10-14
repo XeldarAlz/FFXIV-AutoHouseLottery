@@ -178,12 +178,14 @@ internal sealed partial class RunController
         SaveBatch();
     }
 
-    // A maintainer's permission to switch characters for the next batch started (or continued) and that batch only.
+    // A maintainer's permission to switch characters for one batch: the one not finished yet, bound to it at once, or else
+    // the next one started.
     public SwitchGrant AllowBatchSwitching()
     {
-        batchSwitchGrant = new SwitchGrant(SwitchScope.Batch, DateTime.UtcNow);
-        RunLog.Warning("CHARACTER SWITCHING ALLOWED for the next batch only: it may log out and log in its own characters through Lifestream. "
-                     + "It ends when that batch finishes, is discarded or fails a switch, or after two hours. Batch entries stay dry runs.");
+        var unfinished = batch is { Phase: not BatchPhase.Finished } current ? current.BatchId : (Guid?)null;
+        batchSwitchGrant = SwitchGrant.ForBatch(unfinished, DateTime.UtcNow);
+        RunLog.Warning($"CHARACTER SWITCHING ALLOWED for {(unfinished is { } served ? $"batch {served}, which has not finished," : "the next batch")} only: it may log out and log in its own characters "
+                     + "through Lifestream. It ends when that batch finishes, is discarded or fails a switch, or after two hours. Batch entries stay dry runs.");
         return batchSwitchGrant;
     }
 
@@ -432,6 +434,7 @@ internal sealed partial class RunController
         }
 
         var member = running.Members[index];
+        BindBatchGrant(running.BatchId);
         batch = BatchRules.BeginSwitch(running, member.ContentId, now);
         switchMember = index;
         switchCheckpoint = batchFile.Save(batch);
@@ -455,7 +458,7 @@ internal sealed partial class RunController
         var start = CharacterSwitch.Begin(member.ContentId, member.Name, member.HomeWorldId, worldName);
         if (start.Result != SwitchStartResult.Started)
         {
-            HaltBatch(start.Result == SwitchStartResult.OtherWork ? BatchHalt.SwitchBlocked : BatchHalt.SwitchFailed, $"the switch to {member.Name} did not start ({start.Result})");
+            HaltBatch(BatchRules.SwitchNotStarted(start.Result), $"the switch to {member.Name} did not start ({start.Result})");
             return;
         }
 
@@ -578,7 +581,7 @@ internal sealed partial class RunController
     {
         if (batchSwitchGrant is { BatchId: null } unbound)
         {
-            batchSwitchGrant = unbound with { BatchId = batchId };
+            batchSwitchGrant = unbound.BoundTo(batchId);
             RunLog.Warning($"The batch switching permission now serves batch {batchId} only.");
         }
     }

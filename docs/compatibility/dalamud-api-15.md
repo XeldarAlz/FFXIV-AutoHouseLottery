@@ -100,6 +100,6 @@ These are read or pressed exactly as the community sources describe them, behind
 | Placards without a result | `SettlementCapabilities.AbsenceSettlementValidated` | false: dry run only until validated |
 | Direct lottery record read | `LotteryRecordAccess.ValidatedGameVersions` | empty: the Timers window is read instead |
 | Entering for several characters (1.1) | `BatchCapabilities.BatchEntryValidated`, together with `EntryCapabilities.EntryConfirmValidated` | false: every batch is a dry run; a one-plot real-entry permission never makes a batch real |
-| Switching characters (1.1) | `SwitchCapabilities.CharacterSwitchValidated` | false: each character is processed at its own login; `/ahl dev allow-switching` (the next batch, until it ends or for two hours) and `/ahl dev allow-refund-switching` (the refund queue, two hours) allow it for the validation |
+| Switching characters (1.1) | `SwitchCapabilities.CharacterSwitchValidated` | false: each character is processed at its own login; `/ahl dev allow-switching` (one batch, the one not finished yet or else the next one started, until it ends or for two hours) and `/ahl dev allow-refund-switching` (the refund queue, two hours) allow it for the validation |
 
 A flag is set only after the matching step of the in-game validation ladder (VALIDATION_PLAN section 10) has passed on the game version above, with its report attached here.
