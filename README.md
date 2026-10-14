@@ -18,7 +18,7 @@
 
 ## Status
 
-**In development, not released.** The window, its settings, the Console and the changelog are in place, and the Find a home, My lottery and Saved pages show empty states until the features below land. There is nothing to install yet, and this README describes what the plugin is being built to do. A full README comes with the release.
+**In development, not released.** The window, its settings, the Console and the changelog are in place. Find a home already shows the reported plots on the district map and in a list, with the shortlist, the best match and a run preview, and Saved keeps searches, plot lists and their notices; entering a lottery and My lottery arrive with the next updates. There is nothing to install yet, and this README describes what the plugin is being built to do. A full README comes with the release.
 
 ## What it will do
 

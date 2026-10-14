@@ -1,9 +1,9 @@
 using System.Collections.Frozen;
 using System.Globalization;
 using System.Threading.Tasks;
+using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Housing.Model;
 using Dalamud.Plugin.Services;
-using Lumina.Excel.Sheets;
 
 namespace AutoHouseLottery.Core.Maps;
 
@@ -47,13 +47,12 @@ internal sealed class GameNames
             }
 
             var districtNames = new Dictionary<uint, string>();
-            var territories = data.GetExcelSheet<TerritoryType>();
             for (var index = 0; index < HousingDistricts.All.Length; index++)
             {
                 var districtId = HousingDistricts.All[index].TerritoryId;
-                if (territories.GetRowOrDefault(districtId) is { } territory && territory.PlaceName.ValueNullable is { } place)
+                if (DistrictNames.Of(districtId) is { } name)
                 {
-                    districtNames[districtId] = place.Name.ExtractText();
+                    districtNames[districtId] = name;
                 }
             }
 
