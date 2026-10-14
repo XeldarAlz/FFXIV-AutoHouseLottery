@@ -76,6 +76,7 @@ internal static partial class L
         public static readonly LocString CharacterIneligible = new("runFailure.characterIneligible", "This character cannot enter this lottery.");
         public static readonly LocString AlreadyEntered = new("runFailure.alreadyEntered", "This character already has an entry this lottery period.");
         public static readonly LocString CollectRefundFirst = new("runFailure.collectRefundFirst", "Collect refund first. The game refuses a new entry until an earlier refund is collected.");
+        public static readonly LocString RefundDryRun = new("runFailure.refundDryRun", "A dry run cannot collect the earlier refund, so the entry stops here. The refund is still due.");
         public static readonly LocString CheckEarlierResult = new("runFailure.checkEarlierResult", "Check your earlier entry's result first. Its deposit is still held.");
         public static readonly LocString UnclaimedWin = new("runFailure.unclaimedWin", "You won an earlier lottery. Claim that plot or give it up before entering again.");
         public static readonly LocString CycleChanged = new("runFailure.cycleChanged", "A new lottery period began during the run.");
@@ -108,6 +109,7 @@ internal static partial class L
         public static readonly LocString EntryPeriodClosed = new("runStart.entryPeriodClosed", "The lottery is not taking entries right now.");
         public static readonly LocString NoAssignment = new("runStart.noAssignment", "No plot in this plan can be entered by this character.");
         public static readonly LocString MultipleWins = new("runStart.multipleWins", "Confirm first that only one win can be claimed.");
+        public static readonly LocString AutoAnswer = new("runStart.autoAnswer", "Turn off {0} first: it could answer the lottery dialogs.");
     }
 
     internal static class Reconcile

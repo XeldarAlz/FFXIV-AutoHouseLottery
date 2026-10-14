@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Persistence.Model;
+using AutoHouseLottery.Core.Shared;
 
 namespace AutoHouseLottery.Core.Persistence;
 
@@ -243,7 +244,7 @@ internal sealed class ActionJournal : IDisposable
         }
     }
 
-    public JournalWrite AdvanceSettlement(Guid receiptId, SettlementState next, long? amount, DateTime nowUtc)
+    public JournalWrite AdvanceSettlement(Guid receiptId, SettlementState next, long? amount, DateTime nowUtc, bool byAbsence = false)
     {
         lock (gate)
         {
@@ -262,10 +263,12 @@ internal sealed class ActionJournal : IDisposable
                 return amount is { } given && given != RecordedAmount(current) ? JournalWrite.AmountMismatch : JournalWrite.AlreadyRecorded;
             }
 
-            if (!current.TryAdvance(next, amount, nowUtc, out var advanced))
+            if (!current.TryAdvance(next, amount, nowUtc, out var advanced) || (byAbsence && next is not (SettlementState.Refunded or SettlementState.Expired)))
             {
                 return JournalWrite.IllegalTransition;
             }
+
+            advanced = advanced with { SettledByAbsence = byAbsence };
 
             if (!TryAppend(JournalCodec.Encode(advanced)))
             {
@@ -276,6 +279,146 @@ internal sealed class ActionJournal : IDisposable
             Publish();
             var differs = next == SettlementState.Refunded && amount is { } received && received != advanced.ExpectedRefund;
             return differs ? JournalWrite.WrittenAmountDiffers : JournalWrite.Written;
+        }
+    }
+
+    // The refund deadline a result dialog named, kept with the settlement for its notice and its expiry.
+    public JournalWrite RecordRefundDeadline(Guid receiptId, DateTime deadlineUtc, DateTime nowUtc)
+    {
+        lock (gate)
+        {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
+            if (!settlements.TryGetValue(receiptId, out var current))
+            {
+                return JournalWrite.UnknownRecord;
+            }
+
+            if (current.RefundDeadlineUtc == deadlineUtc)
+            {
+                return JournalWrite.AlreadyRecorded;
+            }
+
+            var updated = current with { RefundDeadlineUtc = deadlineUtc, UpdatedUtc = nowUtc };
+            if (!TryAppend(JournalCodec.Encode(updated)))
+            {
+                return JournalWrite.WriteFailed;
+            }
+
+            settlements[receiptId] = updated;
+            Publish();
+            return JournalWrite.Written;
+        }
+    }
+
+    // A settlement recorded from a placard that no longer offered a result goes back to an open outcome when the game
+    // shows the deposit or the plot is still waiting after all. Nothing else that is settled ever reopens.
+    public JournalWrite ReopenAbsence(Guid receiptId, DateTime nowUtc)
+    {
+        lock (gate)
+        {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
+            if (!settlements.TryGetValue(receiptId, out var current))
+            {
+                return JournalWrite.UnknownRecord;
+            }
+
+            if (!current.IsSettled || !current.SettledByAbsence)
+            {
+                return JournalWrite.IllegalTransition;
+            }
+
+            var reopened = current with { State = SettlementState.OutcomeUnknown, ReceivedRefund = null, SettledByAbsence = false, UpdatedUtc = nowUtc };
+            if (!TryAppend(JournalCodec.Encode(reopened)))
+            {
+                return JournalWrite.WriteFailed;
+            }
+
+            settlements[receiptId] = reopened;
+            Publish();
+            return JournalWrite.Written;
+        }
+    }
+
+    // Gil spent travelling for a settlement, kept on the settlement apart from the refund so the net return can be told.
+    public JournalWrite AddTravel(Guid receiptId, long spent, DateTime nowUtc)
+    {
+        lock (gate)
+        {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
+            if (spent <= 0)
+            {
+                return JournalWrite.Invalid;
+            }
+
+            if (!settlements.TryGetValue(receiptId, out var current))
+            {
+                return JournalWrite.UnknownRecord;
+            }
+
+            if (!Gil.TryAdd(current.TravelSpent, spent, out var total))
+            {
+                return JournalWrite.Invalid;
+            }
+
+            var updated = current with { TravelSpent = total, UpdatedUtc = nowUtc };
+            if (!TryAppend(JournalCodec.Encode(updated)))
+            {
+                return JournalWrite.WriteFailed;
+            }
+
+            settlements[receiptId] = updated;
+            Publish();
+            return JournalWrite.Written;
+        }
+    }
+
+    // The plot of an entry imported from the Timers text, once a result read at that plot has proved it. Only an imported
+    // receipt that names no plot yet can be given one, and only a plot on its own home world and region.
+    public JournalWrite ResolvePlot(Guid receiptId, PlotKey plot)
+    {
+        lock (gate)
+        {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
+            if (!receipts.TryGetValue(receiptId, out var receipt))
+            {
+                return JournalWrite.UnknownRecord;
+            }
+
+            if (receipt.Plot is { } known)
+            {
+                return known == plot ? JournalWrite.AlreadyRecorded : JournalWrite.IllegalTransition;
+            }
+
+            if (!receipt.Imported || !plot.IsValid || plot.WorldId != receipt.HomeWorldId || plot.Region != receipt.Cycle.Region)
+            {
+                return JournalWrite.Invalid;
+            }
+
+            var resolved = receipt with { Plot = plot };
+            if (!TryAppend(JournalCodec.Encode(resolved)))
+            {
+                return JournalWrite.WriteFailed;
+            }
+
+            receipts[receiptId] = resolved;
+            Publish();
+            return JournalWrite.Written;
         }
     }
 
@@ -584,6 +727,7 @@ internal sealed class ActionJournal : IDisposable
     {
         return settlements.TryGetValue(receipt.ReceiptId, out var settlement)
             && settlement.IsSettled
+            && !settlement.SettledByAbsence
             && settlement.UpdatedUtc < pruneSettledBeforeUtc
             && receipt.Cycle.Region == currentCycle.Region
             && currentCycle.IsLaterThan(receipt.Cycle)

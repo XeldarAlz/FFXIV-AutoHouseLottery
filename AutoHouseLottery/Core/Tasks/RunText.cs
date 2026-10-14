@@ -24,7 +24,7 @@ internal static class RunText
         return stage == RunStage.GettingReady ? Stage(stage) : Loc.T(L.Run.StepOf, (int)stage, EntrySteps.StageCount, Stage(stage));
     }
 
-    public static string Refusal(StartRefusal refusal) => Loc.T(refusal switch
+    public static string Refusal(StartRefusal refusal) => refusal == StartRefusal.AutoAnswerPlugin ? AutoAnswer() : Loc.T(refusal switch
     {
         StartRefusal.AlreadyRunning => L.RunStart.AlreadyRunning,
         StartRefusal.Busy => L.RunStart.Busy,
@@ -71,6 +71,7 @@ internal static class RunText
             EntryFailure.CharacterIneligible => L.RunFailure.CharacterIneligible,
             EntryFailure.AlreadyEntered => L.RunFailure.AlreadyEntered,
             EntryFailure.CollectRefundFirst => L.RunFailure.CollectRefundFirst,
+            EntryFailure.RefundDryRun => L.RunFailure.RefundDryRun,
             EntryFailure.CheckEarlierResult => L.RunFailure.CheckEarlierResult,
             EntryFailure.UnclaimedWin => L.RunFailure.UnclaimedWin,
             EntryFailure.CycleChanged => L.RunFailure.CycleChanged,
@@ -80,6 +81,9 @@ internal static class RunText
             EntryFailure.SubmissionUncertain => L.RunFailure.SubmissionUncertain,
             _ => L.RunFailure.Rejected,
         });
+
+    // The reason anything that opens a lottery dialog is held while a plugin that answers dialogs is loaded.
+    public static string AutoAnswer() => Loc.T(L.RunStart.AutoAnswer, External.AutoAnswerGuard.LoadedName() ?? Model.AutoAnswerPlugins.InternalNames[0]);
 
     public static string Reconcile(in ReconcileReport report) => report.Outcome switch
     {

@@ -462,6 +462,143 @@ public sealed class ActionJournalTests : IDisposable
         Assert.False(File.Exists(path + ".tmp"));
     }
 
+    [Fact]
+    public void ARefundIsCollectedOnceAndForTheOfferedAmountAtMost()
+    {
+        var journal = Create();
+        var forfeit = ConfirmedEntry(journal, Plot(12, 5));
+        Walk(journal, forfeit.ReceiptId, SettlementState.ResultsPending, SettlementState.InspectingResult, SettlementState.WonUnclaimed);
+        Assert.Equal(JournalWrite.Written, journal.AdvanceSettlement(forfeit.ReceiptId, SettlementState.ForfeitRefundDue, Deposit / 2, now));
+
+        Assert.Equal(JournalWrite.AmountMismatch, journal.Prepare(SettlementIntent(ActionKind.Refund, forfeit)));
+        var refund = SettlementIntent(ActionKind.Refund, forfeit) with { Amount = Deposit / 2 };
+        Assert.Equal(JournalWrite.Written, journal.Prepare(refund));
+        Assert.Equal(JournalWrite.Written, journal.AdvanceSettlement(forfeit.ReceiptId, SettlementState.RefundPending, null, now));
+        Assert.Equal(JournalWrite.Written, journal.RecordDispatch(refund.AttemptId, now));
+        Assert.Equal(JournalWrite.Written, journal.Confirm(refund.AttemptId, null, now));
+        Assert.Equal(JournalWrite.Written, journal.AdvanceSettlement(forfeit.ReceiptId, SettlementState.Refunded, Deposit / 2, now));
+
+        Assert.Equal(JournalWrite.IllegalTransition, journal.Prepare(SettlementIntent(ActionKind.Refund, forfeit) with { Amount = Deposit / 2 }));
+        Assert.Equal(JournalWrite.IllegalTransition, journal.AdvanceSettlement(forfeit.ReceiptId, SettlementState.RefundPending, null, now));
+    }
+
+    [Fact]
+    public void ARejectedRefundPressFreesTheRefundForALaterVisit()
+    {
+        var journal = Create();
+        var lost = ConfirmedEntry(journal, Plot(12, 5));
+        Walk(journal, lost.ReceiptId, SettlementState.ResultsPending, SettlementState.InspectingResult, SettlementState.LostRefundDue);
+        var refund = SettlementIntent(ActionKind.Refund, lost);
+        journal.Prepare(refund);
+        journal.AdvanceSettlement(lost.ReceiptId, SettlementState.RefundPending, null, now);
+
+        Assert.Equal(JournalWrite.Written, journal.Reject(refund.AttemptId, now));
+        Assert.Equal(JournalWrite.Written, journal.AdvanceSettlement(lost.ReceiptId, SettlementState.LostRefundDue, null, now));
+        Assert.True(journal.TryGetSettlement(lost.ReceiptId, out var settlement));
+        Assert.Equal(Deposit, settlement.ExpectedRefund);
+        Assert.Equal(JournalWrite.Written, journal.Prepare(SettlementIntent(ActionKind.Refund, lost)));
+    }
+
+    [Fact]
+    public void TravelSpentForASettlementAddsUpAndSurvivesARestart()
+    {
+        var journal = Create();
+        var receipt = ConfirmedEntry(journal, Plot(12, 5));
+
+        Assert.Equal(JournalWrite.Written, journal.AddTravel(receipt.ReceiptId, 600, now));
+        Assert.Equal(JournalWrite.Written, journal.AddTravel(receipt.ReceiptId, 400, now));
+        Assert.Equal(JournalWrite.Invalid, journal.AddTravel(receipt.ReceiptId, 0, now));
+        Assert.Equal(JournalWrite.Invalid, journal.AddTravel(receipt.ReceiptId, long.MaxValue, now));
+        Assert.Equal(JournalWrite.UnknownRecord, journal.AddTravel(Guid.NewGuid(), 100, now));
+
+        var reopened = Reopen(journal).Journal!;
+        Assert.True(reopened.TryGetSettlement(receipt.ReceiptId, out var settlement));
+        Assert.Equal(1_000, settlement.TravelSpent);
+        Assert.Equal(SettlementState.Entered, settlement.State);
+    }
+
+    [Fact]
+    public void OnlyAnImportedReceiptWithoutAPlotCanBeGivenOne()
+    {
+        var journal = Create();
+        var imported = new EntryReceipt
+        {
+            ReceiptId = Guid.NewGuid(),
+            CharacterContentId = ContentId,
+            HomeWorldId = HomeWorld,
+            Cycle = FirstCycle,
+            Plot = null,
+            Buyer = BuyerType.Unknown,
+            Evidence = ReceiptEvidence.ImportedFromGame,
+            AddressText = "Plot 35, 12 Ward, Mist",
+        };
+        Assert.Equal(JournalWrite.Written, journal.ImportReceipt(imported, now));
+        var own = ConfirmedEntry(journal, Plot(3, 3), ContentId + 1);
+
+        Assert.Equal(JournalWrite.Invalid, journal.ResolvePlot(imported.ReceiptId, Plot(12, 35, OtherWorld)));
+        Assert.Equal(JournalWrite.Written, journal.ResolvePlot(imported.ReceiptId, Plot(12, 35)));
+        Assert.Equal(JournalWrite.AlreadyRecorded, journal.ResolvePlot(imported.ReceiptId, Plot(12, 35)));
+        Assert.Equal(JournalWrite.IllegalTransition, journal.ResolvePlot(imported.ReceiptId, Plot(12, 36)));
+        Assert.Equal(JournalWrite.IllegalTransition, journal.ResolvePlot(own.ReceiptId, Plot(3, 4)));
+
+        var reopened = Reopen(journal).Journal!.Snapshot();
+        Assert.Equal(Plot(12, 35), Assert.Single(reopened.Receipts, receipt => receipt.ReceiptId == imported.ReceiptId).Plot);
+        Assert.Empty(reopened.OrphanedReceipts);
+    }
+
+    [Fact]
+    public void OnlyASettlementByAbsenceCanBeReopenedAndItSurvivesARestart()
+    {
+        var journal = Create();
+        var byAbsence = ConfirmedEntry(journal, Plot(12, 5));
+        var byResult = ConfirmedEntry(journal, Plot(12, 6), ContentId + 1);
+        journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.ResultsPending, null, now);
+        journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.InspectingResult, null, now);
+        Assert.Equal(JournalWrite.IllegalTransition, journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.WonUnclaimed, null, now, byAbsence: true));
+        Assert.Equal(JournalWrite.Written, journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.Refunded, null, now, byAbsence: true));
+        Walk(journal, byResult.ReceiptId, SettlementState.ResultsPending, SettlementState.InspectingResult, SettlementState.LostRefundDue, SettlementState.RefundPending, SettlementState.Refunded);
+
+        var reopened = Reopen(journal).Journal!;
+        Assert.True(reopened.TryGetSettlement(byAbsence.ReceiptId, out var absent));
+        Assert.True(absent.SettledByAbsence);
+        Assert.Equal(JournalWrite.IllegalTransition, reopened.ReopenAbsence(byResult.ReceiptId, now));
+        Assert.Equal(JournalWrite.Written, reopened.ReopenAbsence(byAbsence.ReceiptId, now));
+        Assert.True(reopened.TryGetSettlement(byAbsence.ReceiptId, out var open));
+        Assert.Equal(SettlementState.OutcomeUnknown, open.State);
+        Assert.False(open.SettledByAbsence);
+        Assert.Equal(JournalWrite.IllegalTransition, reopened.ReopenAbsence(byAbsence.ReceiptId, now));
+    }
+
+    [Fact]
+    public void ASettlementByAbsenceIsNeverPrunedSoItCanStillBeReopened()
+    {
+        var journal = Create();
+        var receipt = ConfirmedEntry(journal, Plot(12, 5));
+        journal.AdvanceSettlement(receipt.ReceiptId, SettlementState.ResultsPending, null, now);
+        journal.AdvanceSettlement(receipt.ReceiptId, SettlementState.InspectingResult, null, now);
+        journal.AdvanceSettlement(receipt.ReceiptId, SettlementState.Expired, null, now, byAbsence: true);
+
+        Assert.Equal(JournalWrite.Written, journal.Compact(now.AddDays(400), SecondCycle, out var pruned));
+
+        Assert.Equal(0, pruned);
+        Assert.Single(journal.Snapshot().Receipts);
+    }
+
+    [Fact]
+    public void TheRefundDeadlineADialogNamedSurvivesARestart()
+    {
+        var journal = Create();
+        var receipt = ConfirmedEntry(journal, Plot(12, 5));
+        var deadline = now.AddDays(90);
+
+        Assert.Equal(JournalWrite.Written, journal.RecordRefundDeadline(receipt.ReceiptId, deadline, now));
+        Assert.Equal(JournalWrite.AlreadyRecorded, journal.RecordRefundDeadline(receipt.ReceiptId, deadline, now));
+        Assert.Equal(JournalWrite.UnknownRecord, journal.RecordRefundDeadline(Guid.NewGuid(), deadline, now));
+
+        Assert.True(Reopen(journal).Journal!.TryGetSettlement(receipt.ReceiptId, out var settlement));
+        Assert.Equal(deadline, settlement.RefundDeadlineUtc);
+    }
+
     private ActionJournal Create()
     {
         var created = Open();

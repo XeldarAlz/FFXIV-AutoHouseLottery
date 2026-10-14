@@ -19,6 +19,7 @@ internal enum StartRefusal : byte
     EntryPeriodClosed,
     NoAssignment,
     MultipleWinsNeedConfirmation,
+    AutoAnswerPlugin,
 }
 
 // Facts the controller reads before it takes the lease. Blockers are the preview's, for the logged-in character.
@@ -34,7 +35,11 @@ internal readonly record struct StartFacts(
     bool PendingAttempt,
     EntrySlotState Slot,
     RunBlocker Blockers,
-    bool CharacterAssigned);
+    bool CharacterAssigned)
+{
+    // A plugin that answers dialogs on its own is loaded (AutoAnswerPlugins).
+    public bool AutoAnswerLoaded { get; init; }
+}
 
 internal static class StartRules
 {
@@ -55,6 +60,11 @@ internal static class StartRules
         if (!facts.LoggedIn)
         {
             return StartRefusal.NotLoggedIn;
+        }
+
+        if (facts.AutoAnswerLoaded)
+        {
+            return StartRefusal.AutoAnswerPlugin;
         }
 
         if (facts.InContent)

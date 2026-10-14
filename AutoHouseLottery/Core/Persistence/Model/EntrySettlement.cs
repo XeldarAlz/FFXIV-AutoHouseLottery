@@ -8,6 +8,16 @@ internal readonly record struct EntrySettlement(
     long? ReceivedRefund,
     DateTime UpdatedUtc)
 {
+    // Gil spent travelling to the entered plot to read its result, collect its refund or claim it.
+    public long TravelSpent { get; init; }
+
+    // The refund deadline the result dialog itself named, when it could be read.
+    public DateTime? RefundDeadlineUtc { get; init; }
+
+    // Settled because the placard no longer offered a result, not because a result was read. Such a settlement can be
+    // reopened when the game later says a refund or a plot is still waiting (LogMessage 6100).
+    public bool SettledByAbsence { get; init; }
+
     public bool IsSettled => SettlementTransitions.IsSettled(State);
 
     public static EntrySettlement Entered(Guid receiptId, DateTime nowUtc)

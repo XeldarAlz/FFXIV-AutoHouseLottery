@@ -38,7 +38,7 @@ internal static class ReadyState
                 : new Info(Kind.Running, Styling.AccentBlue, Styling.AccentBlueSoft);
         }
 
-        if (controller.Reconciling)
+        if (controller.Reconciling || controller.Settling)
         {
             return new Info(Kind.Running, Styling.AccentBlue, Styling.AccentBlueSoft);
         }

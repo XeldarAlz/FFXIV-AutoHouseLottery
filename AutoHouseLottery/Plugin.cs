@@ -243,6 +243,7 @@ public sealed class Plugin : IDalamudPlugin
         else if (trimmed.Equals("stop", StringComparison.OrdinalIgnoreCase))
         {
             Controller.Stop();
+            Controller.StopSettlement();
         }
         else if (trimmed.Equals("pause", StringComparison.OrdinalIgnoreCase))
         {

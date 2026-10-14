@@ -12,6 +12,7 @@ internal enum NativeAction : byte
     AcceptResult = 16,
     DeclineResult = 32,
     TickEntryCheckbox = 64,
+    CloseResult = 128,
 }
 
 internal enum DialogActionResult : byte

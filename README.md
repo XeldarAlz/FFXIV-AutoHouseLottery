@@ -18,7 +18,7 @@
 
 ## Status
 
-**In development, not released.** The window, its settings, the Console and the changelog are in place. Find a home already shows the reported plots on the district map and in a list, with the shortlist, the best match and a run preview, and Saved keeps searches, plot lists and their notices; Enter on a plot or on the best match runs the entry as a dry run that goes as far as the lottery confirmation and closes it, and My lottery lists your entries; real entries, results, refunds and claims arrive with the next updates. There is nothing to install yet, and this README describes what the plugin is being built to do. A full README comes with the release.
+**In development, not released.** The window, its settings, the Console and the changelog are in place. Find a home already shows the reported plots on the district map and in a list, with the shortlist, the best match and a run preview, and Saved keeps searches, plot lists and their notices; Enter on a plot or on the best match runs the entry as a dry run that goes as far as the lottery confirmation and closes it, and My lottery lists your entries and checks their results; collecting a refund or claiming a house reads the result and closes it as a dry run until each has been validated on a real result. There is nothing to install yet, and this README describes what the plugin is being built to do. A full README comes with the release.
 
 ## What it will do
 
@@ -28,7 +28,7 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 - **Shortlist**: add plots one by one from the map or the list, or every matching plot at once. The shortlist holds the plots you would accept; a run makes at most one entry per character from it, as the game allows, and the header always says so (42 plots · 1 entry this cycle).
 - **Enter a plot or the best match**: Enter on a plot travels there, reads its placard and enters that plot only, for the exact deposit it showed. Enter best match ranks the shortlist by fewest reported entries, then lowest deposit, then address, and enters the first plot that still passes the live checks, stopping after one entry.
 - **My lottery**: your entries with their deposit, lottery number and phase, and one action each: Check result, Claim house, Collect refund or View receipt. A win is always presented as a claim and never collected as a refund.
-- **Automatic refunds**: on by default, since the game refuses a new entry while an earlier refund is waiting. When results are in and you are idle, the plugin visits your entered plots and collects the deposits of confirmed losses.
+- **Automatic refunds**: on by default per character, since the game refuses a new entry while an earlier refund is waiting. When results are in and you have left the game alone for 30 seconds (keyboard, mouse and gamepad), outside combat, duties and cutscenes, the plugin visits your entered plots and collects the deposits of confirmed losses, within a 10,000 gil travel budget per session and your gil reserve. When you act again it stops before its next step; once it has pressed Yes on a refund it first finishes checking that the refund went through, which can take about a minute. A plot whose placard no longer offers you a result stays pending on My lottery: the plugin does not treat it as settled. My lottery shows the refunds received, the travel spent, the net returned and what is still pending.
 - **Saved**: named searches and fixed plot lists to start the next lottery period from.
 - **Careful with your gil**: the plugin records what it is about to do before it confirms an entry, never submits again after an entry whose result is unclear, and has a dry run that goes all the way to the lottery confirmation and presses Cancel.
 - **Later versions**: entries for several characters in one run, placed on the same plot or spread across the shortlist by ownership group.
@@ -51,7 +51,7 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 | `/autohouselottery log` | Open the Console page |
 | `/autohouselottery changelog` | Open the Changelog page |
 | `/autohouselottery about` | Open the About page |
-| `/autohouselottery stop` | Stop the running lottery run before its next step; a press that may already have reached the game is verified first |
+| `/autohouselottery stop` | Stop the running lottery run or result visit before its next step; a press that may already have reached the game is verified first |
 | `/autohouselottery pause` | Pause the running lottery run before its next game-changing step |
 | `/autohouselottery resume` | Resume a paused run, or retry one that is waiting for you, from a fresh check of the character and the plot |
 | `/autohouselottery target` | Log the targeted object's BaseId (debug helper) |
@@ -65,8 +65,12 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 | `/autohouselottery dev run <district> <ward> <plot> <deposit> [fc] [real]` | Maintainer tool for the in-game ladder: enter one plot on your home world for exactly that deposit. It is a dry run that stops at the lottery confirmation and closes it, unless the word `real` is given and a real-entry permission covers that plot |
 | `/autohouselottery dev allow-real-entry <character name> <district> <ward> <plot> <max gil>` | Maintainer tool for the one supervised real entry: allow one real entry for the logged-in character on that plot, up to that deposit, for a `dev run ... real` on exactly that plot. It never applies to a best match, lives only in this session and ends at logout, at unload, or after the one entry |
 | `/autohouselottery dev revoke-real-entry` | Withdraw the real-entry permission; every run is a dry run again |
+| `/autohouselottery dev settle <receipt or district ward plot> [claim] [real]` | Maintainer tool for the in-game ladder: visit the plot of one of your entries (by the first characters of its receipt id, or by its address), read its result through View Lottery Results and record it. It closes the result as a dry run unless the word `real` is given and a real refund (or, with `claim`, a real claim) permission covers that plot |
+| `/autohouselottery dev allow-real-refund <character name> <district> <ward> <plot>` | Maintainer tool for the supervised real refund: allow the logged-in character to accept the refund of its unsettled entry on that plot once, through `dev settle ... real` or an automatic refund. It is bound to that entry, lives only in this session and ends at logout, at unload, or after the one press |
+| `/autohouselottery dev allow-real-claim <character name> <district> <ward> <plot>` | Maintainer tool for the supervised real claim: allow the logged-in character to claim its winning entry's plot once, through `dev settle ... claim real`. It is bound to that entry, lives only in this session and ends at logout, at unload, or after the one press |
+| `/autohouselottery dev revoke-real-settlement` | Withdraw the real refund and claim permissions; every result visit is a dry run again |
 
-Before testing runs in game, turn off any plugin that answers dialogs on its own, such as YesAlready: the dry run opens the real lottery confirmation, and such a plugin could press Confirm on it.
+While a plugin that answers dialogs on its own, such as YesAlready, is loaded, the plugin refuses to start anything that opens a lottery dialog: entry runs (dry or real), result checks, refunds, claims and the probe's `press enter` and `press results`. A dry run opens the real lottery confirmation and the real result dialogs, and such a plugin could press Confirm or Yes on them. Turn it off first.
 
 ## Languages
 

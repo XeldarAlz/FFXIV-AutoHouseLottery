@@ -4,6 +4,7 @@ using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Selection.Model;
+using AutoHouseLottery.Core.Settlement.Model;
 using AutoHouseLottery.Core.Tasks.Model;
 
 namespace AutoHouseLottery.Core.Tasks;
@@ -56,8 +57,6 @@ internal sealed class EntryRunSession
     // Each target is inspected once, in order, so the targets reached so far are the inspections used.
     public int InspectionsUsed => TargetIndex + 1;
 
-    public int TravelAttempts { get; set; }
-
     public bool ManualArrival { get; set; }
 
     public DepositLedger Ledger { get; set; }
@@ -74,7 +73,16 @@ internal sealed class EntryRunSession
 
     public bool PauseRequested { get; set; }
 
+    // Why the deferred pause was asked for, so a pause for a duty can still resume on its own afterwards.
+    public PauseReason RequestedPause { get; set; }
+
     public bool StopRequested { get; set; }
+
+    // The refund driver's visit to an earlier entry while SettleOutstanding runs it, so a pause or stop waits for a press
+    // it may have made.
+    public SettlementTask? Collecting { get; set; }
+
+    public bool CollectingInPressWindow => Collecting is { } visit && SettlementSteps.InPressWindow(visit.Progress.Step);
 
     public RunStatus Status { get; private set; } = RunStatus.Idle;
 
@@ -142,7 +150,6 @@ internal sealed class EntryRunSession
     public void BeginInspection()
     {
         LiveDeposit = null;
-        TravelAttempts = 0;
         Publish();
     }
 

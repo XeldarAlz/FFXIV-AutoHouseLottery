@@ -99,6 +99,8 @@ internal static unsafe class HousingDialogs
         return new EntryConfirmationReading(identified, deposit, proceed, confirm != null, confirm != null && confirm->IsEnabled);
     }
 
+    // A result dialog reads as a row only when exactly one result row matches its text, so Yes is never pressed on a text
+    // that could be read two ways.
     public static DialogIdentity? IdentifyResultDialog()
     {
         if (!AddonReads.TryGetReady(ResultAddon, out var addon))
@@ -107,7 +109,30 @@ internal static unsafe class HousingDialogs
         }
 
         var shown = AddonReads.NodeText(((AddonSelectYesno*)addon)->PromptText) ?? string.Empty;
-        return new DialogIdentity(ResultAddon, HousingSheetText.Match(shown, HousingTextRows.ResultDialogs.AsSpan()), shown);
+        return new DialogIdentity(ResultAddon, HousingSheetText.MatchExactlyOne(shown, HousingTextRows.ResultDialogs.AsSpan()), shown);
+    }
+
+    // The result dialog as it stands: the one result row its text matched (none when it matched no row or more than one),
+    // the refund and the refund deadline a refund row names (read only when its text is exactly that row's shape), and
+    // the text itself for the log.
+    public static ResultDialogReading? ReadResultDialog()
+    {
+        if (!AddonReads.TryGetReady(ResultAddon, out var addon))
+        {
+            return null;
+        }
+
+        var shown = AddonReads.NodeText(((AddonSelectYesno*)addon)->PromptText) ?? string.Empty;
+        var row = HousingSheetText.MatchExactlyOne(shown, HousingTextRows.ResultDialogs.AsSpan());
+        long? refund = null;
+        DateTime? deadline = null;
+        if (row is { } matched && HousingSheetText.Pattern(matched).TryCapture(shown, out var gaps))
+        {
+            refund = ResultDialogText.Refund(matched, gaps);
+            deadline = ResultDialogText.RefundDeadline(matched, gaps, HousingSheetText.DateOrder);
+        }
+
+        return new ResultDialogReading(row, refund, deadline, shown);
     }
 
     public static DialogActionResult PressPlacardButton(HousingText label)
@@ -199,6 +224,31 @@ internal static unsafe class HousingDialogs
         }
 
         RunLog.Info($"Housing dialog: {action} closes {EntryConfirmationAddon}.");
+        addon->Close(FireCloseCallback);
+        return DialogActionResult.Closed;
+    }
+
+    // Like the entry's Cancel, closing a result dialog presses nothing on it, and only a dialog that reads as one of the
+    // result rows is closed; any other Yes/No window is left alone.
+    public static DialogActionResult CloseResult()
+    {
+        const NativeAction action = NativeAction.CloseResult;
+        if (!NativeActionGate.IsPermitted(action))
+        {
+            return Refused(action, DialogActionResult.NotPermitted);
+        }
+
+        if (IdentifyResultDialog() is not { Text: not null } || !AddonReads.TryGetReady(ResultAddon, out var addon))
+        {
+            return Refused(action, DialogActionResult.IdentityMismatch);
+        }
+
+        if (!EzThrottler.Throttle(CloseThrottleKey, ClickThrottleMs))
+        {
+            return DialogActionResult.Throttled;
+        }
+
+        RunLog.Info($"Housing dialog: {action} closes {ResultAddon}.");
         addon->Close(FireCloseCallback);
         return DialogActionResult.Closed;
     }
