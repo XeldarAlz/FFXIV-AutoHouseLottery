@@ -6,8 +6,9 @@ namespace AutoHouseLottery.Core.Maps.Model;
 
 // Projects HousingMapMarkerInfo world positions onto the district map texture as in Aetherphone: the game map page is
 // 2048 units square around the map offset, scaled by its size factor. The sheet does not say whether the plot plane is
-// X/Z or X/Y, so both are tried and the one that spreads the plots over the texture wins; markers mostly off the page
-// mean the projection is wrong and no map is drawn rather than misplaced markers.
+// X/Z or X/Y, so both are tried and the one that spreads the plots over the texture wins. A marker well off the page is
+// left out rather than pinned to the edge, and markers mostly off the page mean the projection is wrong and no map is
+// drawn at all.
 internal static class MapProjection
 {
     public const float PageSize = 2048f;
@@ -42,6 +43,7 @@ internal static class MapProjection
                 if (point.X < -OutsideTolerance || point.X > 1f + OutsideTolerance || point.Y < -OutsideTolerance || point.Y > 1f + OutsideTolerance)
                 {
                     outside++;
+                    continue;
                 }
 
                 point = Vector2.Clamp(point, Vector2.Zero, Vector2.One);
@@ -63,7 +65,7 @@ internal static class MapProjection
             }
 
             bestSpread = spread;
-            best = candidate.MoveToImmutable();
+            best = candidate.ToImmutable();
         }
 
         return bestSpread < MinimumSpread ? [] : best;

@@ -32,6 +32,18 @@ public sealed class MapProjectionTests
     }
 
     [Fact]
+    public void AMarkerFarOffThePageIsLeftOutRatherThanPinnedToTheEdge()
+    {
+        var markers = Grid(height: 40f, verticalOnZ: true);
+        markers[7] = new Vector3(20_000f, 40f, 20_000f);
+
+        var points = MapProjection.Project(markers, 0, 0, FullSize, 1);
+
+        Assert.Equal(HousingDistricts.PlotsPerDivision - 1, points.Length);
+        Assert.DoesNotContain(points, point => point.Plot == 8);
+    }
+
+    [Fact]
     public void MarkersMostlyOffTheMapGiveNoMapRatherThanWrongMarkers()
     {
         var markers = new Vector3[HousingDistricts.PlotsPerDivision];

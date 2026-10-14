@@ -19,9 +19,6 @@ internal sealed class HousingGameMaps
 
     private const byte AethernetShardDataType = 4;
     private const byte MarketBoardDataType = 0;
-    private const string LoadingImageFolder = "ui/loadingimage/";
-    private const string HighResolutionSuffix = "_hr1.tex";
-    private const string StandardSuffix = ".tex";
 
     private readonly IDataManager data;
     private readonly ConcurrentDictionary<ushort, DistrictMap> built = new();
@@ -66,7 +63,7 @@ internal sealed class HousingGameMaps
         catch (Exception exception)
         {
             RunLog.Warning(exception, $"Reading the game map for district {districtId} failed");
-            return new DistrictMap(districtId, null, null, null, MapFailure.Error, exception.Message);
+            return new DistrictMap(districtId, null, null, MapFailure.Error, exception.Message);
         }
     }
 
@@ -74,25 +71,24 @@ internal sealed class HousingGameMaps
     {
         if (data.GetExcelSheet<TerritoryType>().GetRowOrDefault(districtId) is not { } territory)
         {
-            return Failed(districtId, null, MapFailure.TerritoryMissing, $"no TerritoryType row {districtId}");
+            return Failed(districtId, MapFailure.TerritoryMissing, $"no TerritoryType row {districtId}");
         }
 
-        var art = ArtPath(territory);
         if (territory.Map.ValueNullable is not { } mainMap)
         {
-            return Failed(districtId, art, MapFailure.MapMissing, $"TerritoryType {districtId} has no map");
+            return Failed(districtId, MapFailure.MapMissing, $"TerritoryType {districtId} has no map");
         }
 
         var groups = MarkerGroups(districtId);
         if (!groups.TryGetValue(mainMap.RowId, out var mainMarkers))
         {
-            return Failed(districtId, art, MapFailure.NoMarkers, $"no plot markers reference map {mainMap.RowId}");
+            return Failed(districtId, MapFailure.NoMarkers, $"no plot markers reference map {mainMap.RowId}");
         }
 
         var (main, failure, detail) = Division(mainMap, mainMarkers, 1);
         if (main is null)
         {
-            return Failed(districtId, art, failure, detail);
+            return Failed(districtId, failure, detail);
         }
 
         DivisionMap? subdivision = null;
@@ -101,10 +97,10 @@ internal sealed class HousingGameMaps
             subdivision = Division(subdivisionMap, group.Value, HousingDistricts.PlotsPerDivision + 1).Map;
         }
 
-        return new DistrictMap(districtId, main, subdivision, art, MapFailure.None, string.Empty);
+        return new DistrictMap(districtId, main, subdivision, MapFailure.None, string.Empty);
     }
 
-    private static DistrictMap Failed(ushort districtId, string? art, MapFailure failure, string detail) => new(districtId, null, null, art, failure, detail);
+    private static DistrictMap Failed(ushort districtId, MapFailure failure, string detail) => new(districtId, null, null, failure, detail);
 
     private (DivisionMap? Map, MapFailure Failure, string Detail) Division(Map map, List<Vector3> markers, int firstPlot)
     {
@@ -191,28 +187,5 @@ internal sealed class HousingGameMaps
         }
 
         return points.ToImmutable();
-    }
-
-    private string? ArtPath(TerritoryType territory)
-    {
-        if (territory.LoadingImage.ValueNullable is not { } loadingImage)
-        {
-            return null;
-        }
-
-        var name = loadingImage.FileName.ExtractText();
-        if (name.Length == 0)
-        {
-            return null;
-        }
-
-        var highResolution = string.Concat(LoadingImageFolder, name, HighResolutionSuffix);
-        if (data.FileExists(highResolution))
-        {
-            return highResolution;
-        }
-
-        var standard = string.Concat(LoadingImageFolder, name, StandardSuffix);
-        return data.FileExists(standard) ? standard : null;
     }
 }

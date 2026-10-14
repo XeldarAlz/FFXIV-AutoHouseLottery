@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Housing.Model;
 using Dalamud.Plugin.Services;
+using WorldSheet = Lumina.Excel.Sheets.World;
 
 namespace AutoHouseLottery.Core.Maps;
 
@@ -37,7 +38,7 @@ internal sealed class GameNames
         try
         {
             var worldNames = new Dictionary<uint, string>();
-            foreach (var world in data.GetExcelSheet<Lumina.Excel.Sheets.World>())
+            foreach (var world in data.GetExcelSheet<WorldSheet>())
             {
                 var name = world.Name.ExtractText();
                 if (name.Length > 0)
