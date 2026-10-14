@@ -197,9 +197,12 @@ internal sealed partial class RunController
         StopSettlementNow();
     }
 
+    // A logout or a disconnect. The next login, even as the same character, counts as a new session: its entry attempt
+    // still in question is read back at once and the two-session rule of a placard without a result starts afresh.
     public void Interrupt()
     {
         grant = null;
+        lastContentId = 0;
         End("logged out");
         EndSettlement("logged out");
     }

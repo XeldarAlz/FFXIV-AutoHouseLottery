@@ -69,11 +69,42 @@ internal static class ManualSettlement
                 continue;
             }
 
+            // A crash or a logout right after Yes can leave the receipt anywhere on its refund path, short of the
+            // reconciliation state the visit would have written.
             var open = SettlementLookups.OpenAttempt(snapshot, receipt.ReceiptId);
-            var refundInQuestion = open is { Kind: ActionKind.Refund, State: AttemptState.NeedsReconciliation } && settlement.State == SettlementState.NeedsReconciliation;
+            var refundInQuestion = open is { Kind: ActionKind.Refund, State: AttemptState.NeedsReconciliation }
+                && (settlement.State == SettlementState.NeedsReconciliation || SettlementStates.OnRefundPath(settlement.State));
             if ((open is null && SettlementStates.RefundOwed(settlement.State)) || refundInQuestion)
             {
                 fixes.Add(new SettlementFix(receipt.ReceiptId, SettlementState.Refunded, open?.AttemptId));
+            }
+        }
+
+        return fixes.ToImmutable();
+    }
+
+    // The plugin's own refund or claim was confirmed, but the receipt never reached Refunded or Claimed because the plugin
+    // stopped between the two writes (a crash, a logout, an unload). Every confirmation is followed by that settlement, so
+    // the receipt is settled now instead of blocking the next entry or sending a visit to a result that is gone.
+    public static ImmutableArray<SettlementFix> FromOwnConfirmations(in JournalSnapshot snapshot, ulong contentId)
+    {
+        Span<SettlementState> steps = stackalloc SettlementState[SettlementPath.MaximumSteps];
+        var fixes = ImmutableArray.CreateBuilder<SettlementFix>();
+        var attempts = snapshot.Attempts;
+        for (var index = 0; index < attempts.Length; index++)
+        {
+            var attempt = attempts[index];
+            if (attempt is not { State: AttemptState.Confirmed, Kind: ActionKind.Refund or ActionKind.Claim, ReceiptId: { } receiptId }
+                || attempt.CharacterContentId != contentId
+                || SettlementLookups.Settlement(snapshot, receiptId) is not { IsSettled: false } settlement)
+            {
+                continue;
+            }
+
+            var target = attempt.Kind == ActionKind.Refund ? SettlementState.Refunded : SettlementState.Claimed;
+            if (SettlementPath.Plan(settlement.State, target, steps) >= 0)
+            {
+                fixes.Add(new SettlementFix(receiptId, target, null));
             }
         }
 

@@ -473,7 +473,16 @@ internal sealed class ActionJournal : IDisposable
         }
     }
 
-    public void Dispose() => fileLock.Dispose();
+    // A write still under way when the plugin unloads must not land after the next load has opened the file, so the
+    // journal refuses every write from here on; the next open recovers from what is on disk.
+    public void Dispose()
+    {
+        lock (gate)
+        {
+            faulted = true;
+            fileLock.Dispose();
+        }
+    }
 
     private static JournalOpenResult Load(string path, DateTime nowUtc, int currentSchema, ImmutableArray<JournalMigration> migrations, FileStream fileLock)
     {

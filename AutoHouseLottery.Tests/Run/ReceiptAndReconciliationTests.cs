@@ -115,6 +115,15 @@ public sealed class ReceiptAndReconciliationTests
     }
 
     [Fact]
+    public void AnEmptyReadingAfterTheCycleTurnedNeverReleasesAnEarlierAttempt()
+    {
+        var attempt = Attempt(Plot(12, 5), AttemptState.NeedsReconciliation);
+        var nextCycle = VerifiedEntryPhase() with { Cycle = SecondCycle };
+
+        Assert.Equal(ReconciliationVerdict.StillUncertain, ReconciliationRules.Decide(Reconcile(attempt, Reading(LotterySnapshotState.LoadedNone), null) with { Position = nextCycle }));
+    }
+
+    [Fact]
     public void SettledAttemptsAreNotReadBack()
     {
         Assert.Equal(ReconciliationVerdict.StillUncertain, ReconciliationRules.Decide(Reconcile(Attempt(Plot(12, 5), AttemptState.Confirmed), RecordReading(12, 5), true)));

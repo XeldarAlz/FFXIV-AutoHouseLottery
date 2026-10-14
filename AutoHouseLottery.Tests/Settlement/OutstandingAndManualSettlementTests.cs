@@ -224,6 +224,48 @@ public sealed class OutstandingAndManualSettlementTests
     }
 
     [Theory]
+    [InlineData((byte)SettlementState.RefundPending)]
+    [InlineData((byte)SettlementState.LostRefundDue)]
+    [InlineData((byte)SettlementState.ForfeitRefundDue)]
+    public void AnOwnRefundLeftInQuestionByACrashIsConfirmedByAValidatedReading(byte recorded)
+    {
+        var lost = Receipt(Plot(12, 5), FirstCycle);
+        var refund = Attempt(Plot(12, 5), AttemptState.NeedsReconciliation) with { Kind = ActionKind.Refund, ReceiptId = lost.ReceiptId };
+        var journal = Journal([refund], (lost, (SettlementState)recorded));
+
+        var fix = Assert.Single(ManualSettlement.FromReading(journal, Reading(LotterySnapshotState.LoadedNone), ResultsPhase(FirstCycle)));
+
+        Assert.Equal(new SettlementFix(lost.ReceiptId, SettlementState.Refunded, refund.AttemptId), fix);
+    }
+
+    [Theory]
+    [InlineData((byte)ActionKind.Refund, (byte)SettlementState.RefundPending, (byte)SettlementState.Refunded)]
+    [InlineData((byte)ActionKind.Refund, (byte)SettlementState.NeedsReconciliation, (byte)SettlementState.Refunded)]
+    [InlineData((byte)ActionKind.Claim, (byte)SettlementState.ClaimPending, (byte)SettlementState.Claimed)]
+    [InlineData((byte)ActionKind.Claim, (byte)SettlementState.NeedsReconciliation, (byte)SettlementState.Claimed)]
+    public void AConfirmedPressWhoseReceiptWasLeftBehindSettlesTheReceipt(byte kind, byte recorded, byte expected)
+    {
+        var entry = Receipt(Plot(12, 5), FirstCycle);
+        var press = Attempt(Plot(12, 5), AttemptState.Confirmed) with { Kind = (ActionKind)kind, ReceiptId = entry.ReceiptId };
+        var journal = Journal([press], (entry, (SettlementState)recorded));
+
+        Assert.Equal(new SettlementFix(entry.ReceiptId, (SettlementState)expected, null), Assert.Single(ManualSettlement.FromOwnConfirmations(journal, ContentId)));
+        Assert.Empty(ManualSettlement.FromOwnConfirmations(journal, ContentId + 1));
+    }
+
+    [Fact]
+    public void OnlyAConfirmedPressOnAnOpenReceiptIsRepaired()
+    {
+        var settled = Receipt(Plot(12, 5), FirstCycle);
+        var questioned = Receipt(Plot(12, 6), FirstCycle);
+        var done = Attempt(Plot(12, 5), AttemptState.Confirmed) with { Kind = ActionKind.Refund, ReceiptId = settled.ReceiptId };
+        var open = Attempt(Plot(12, 6), AttemptState.NeedsReconciliation) with { Kind = ActionKind.Refund, ReceiptId = questioned.ReceiptId };
+        var journal = Journal([done, open], (settled, SettlementState.Refunded), (questioned, SettlementState.RefundPending));
+
+        Assert.Empty(ManualSettlement.FromOwnConfirmations(journal, ContentId));
+    }
+
+    [Theory]
     [InlineData((byte)AttemptState.Prepared)]
     [InlineData((byte)AttemptState.Dispatched)]
     public void AReadingNeverRacesTheVisitThatIsConfirmingItsOwnRefund(byte state)

@@ -147,7 +147,9 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     private bool Parked(Guid id) => !SettlementCapabilities.AbsenceSettlementValidated && configuration.AbsenceSighting(id) is { Strong: true };
 
     // A win the character's estate list now holds was claimed, by this plugin's press or in game; it is recorded as
-    // claimed without a visit. Checked again only when the journal's settlements change.
+    // claimed without a visit. A refund or claim of this plugin that was confirmed while its receipt was left behind (the
+    // plugin stopped between the two writes) is settled the same way. Checked again only when the journal's settlements
+    // change, and only while nothing drives the game, so a visit between its two writes is never raced.
     private void ReconcileEstates(CharacterContext context)
     {
         var settlements = housing.JournalSnapshot.Settlements;
@@ -159,14 +161,21 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
         estateCheckedFor = settlements;
         estateChecked = estates;
-        var fixes = ManualSettlement.FromEstates(housing.JournalSnapshot, context.ContentId, context.PersonalEstate, context.FreeCompanyEstate);
-        if (fixes.IsEmpty)
+        var claimed = ManualSettlement.FromEstates(housing.JournalSnapshot, context.ContentId, context.PersonalEstate, context.FreeCompanyEstate);
+        var confirmed = ManualSettlement.FromOwnConfirmations(housing.JournalSnapshot, context.ContentId);
+        if (claimed.IsEmpty && confirmed.IsEmpty)
         {
             return;
         }
 
         fixing = true;
-        _ = housing.ApplySettlementFixes(fixes, "the estate list holds the entered plot").ContinueWith(_ => fixing = false);
+        _ = ApplyFixes(claimed, confirmed).ContinueWith(_ => fixing = false);
+    }
+
+    private async System.Threading.Tasks.Task ApplyFixes(ImmutableArray<SettlementFix> claimed, ImmutableArray<SettlementFix> confirmed)
+    {
+        await housing.ApplySettlementFixes(claimed, "the estate list holds the entered plot");
+        await housing.ApplySettlementFixes(confirmed, "the plugin's own press was confirmed before the plugin stopped");
     }
 
     private readonly record struct Estates(ulong? Personal, ulong? FreeCompany);
