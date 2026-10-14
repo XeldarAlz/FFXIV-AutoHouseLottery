@@ -124,6 +124,30 @@ public sealed class SchedulerTests
     }
 
     [Fact]
+    public void AnEarlierCyclesUncertainAttemptIsSettledOnlyThroughItsPlotsResult()
+    {
+        var uncertain = Attempt(Plot(12, 5), AttemptState.NeedsReconciliation);
+        var current = Attempt(Plot(12, 6), AttemptState.NeedsReconciliation, SecondCycle);
+        var journal = Journal([uncertain, current]);
+
+        var due = SettlementSchedule.Due(journal, ContentId, VerifiedEntryPhase() with { Cycle = SecondCycle }, _ => true);
+
+        Assert.Equal([new SettlementWork(uncertain.AttemptId, SettlementMode.Refund)], due.AsSpan().ToArray());
+    }
+
+    [Fact]
+    public void AnEntryInBothTheResultChecksAndThisCycleIsQueuedOnce()
+    {
+        var older = Receipt(Plot(12, 5), FirstCycle);
+        var refund = Attempt(Plot(12, 5), AttemptState.NeedsReconciliation) with { Kind = ActionKind.Refund, ReceiptId = older.ReceiptId };
+        var journal = Journal([refund], (older, SettlementState.NeedsReconciliation));
+
+        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle), _ => true);
+
+        Assert.Equal([new SettlementWork(older.ReceiptId, SettlementMode.Inspect)], due.AsSpan().ToArray());
+    }
+
+    [Fact]
     public void EachWorkRunsAtMostTwiceASessionTenMinutesApart()
     {
         var queue = new SettlementQueue();

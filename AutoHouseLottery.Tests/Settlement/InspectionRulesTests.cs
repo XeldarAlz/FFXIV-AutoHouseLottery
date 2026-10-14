@@ -138,6 +138,25 @@ public sealed class InspectionRulesTests
         Assert.Equal(InspectionOutcome.OutcomeUnknown, refundOnRecord.Outcome);
     }
 
+    [Fact]
+    public void AnyResultRowAtTheAttemptedPlotProvesTheEntryWasMade()
+    {
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Lost, ownsPlot: false));
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.SoleEntrantWon, ownsPlot: false));
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Expired, ownsPlot: false));
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, ownsPlot: true));
+    }
+
+    [Fact]
+    public void OnlyAConfirmedPlacardWithoutAnyResultProvesTheEntryWasNotMade()
+    {
+        Assert.Equal(AttemptVerdict.NotEntered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, ownsPlot: false));
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.NotShown, ownsPlot: false));
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Unverified, false, ResultKind.NotShown, ownsPlot: false));
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.WrongPlot, true, ResultKind.Lost, ownsPlot: false));
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Unrecognized, ownsPlot: false));
+    }
+
     private static InspectionFacts Facts(
         ResultKind result,
         long? offered = Deposit,

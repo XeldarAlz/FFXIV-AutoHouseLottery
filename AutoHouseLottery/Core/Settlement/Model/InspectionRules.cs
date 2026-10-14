@@ -43,8 +43,30 @@ internal readonly record struct InspectionVerdict(InspectionOutcome Outcome, lon
     public static InspectionVerdict Unknown(InspectionReason reason) => new(InspectionOutcome.OutcomeUnknown, null, reason);
 }
 
+// What the plot's result says about an earlier cycle's entry attempt still in question: the press entered the lottery,
+// or it did not, or the visit cannot tell.
+internal enum AttemptVerdict : byte { Unknown, Entered, NotEntered }
+
 internal static class InspectionRules
 {
+    // Any result row shown to this character at the attempted plot, or the plot in its estate list, proves the entry was
+    // made. A confirmed placard that no longer offers this character any result proves it was not, since that cycle's
+    // lottery reading is gone and the placard is the only witness left. Anything else leaves the attempt in question.
+    public static AttemptVerdict DecideAttempt(PlacardIdentityVerdict identity, bool resultsOffered, ResultKind result, bool ownsPlot)
+    {
+        if (identity != PlacardIdentityVerdict.Confirmed)
+        {
+            return AttemptVerdict.Unknown;
+        }
+
+        if (ownsPlot || result is ResultKind.Won or ResultKind.SoleEntrantWon or ResultKind.Lost or ResultKind.Forfeited or ResultKind.Expired)
+        {
+            return AttemptVerdict.Entered;
+        }
+
+        return result == ResultKind.NotShown && !resultsOffered ? AttemptVerdict.NotEntered : AttemptVerdict.Unknown;
+    }
+
     // The result dialog's own row decides; inspection never infers a loss from anything else. Without a dialog the entry
     // counts as settled only on independent evidence: the plot in the character's estate list, or the placard no longer
     // offering a result together with this plugin's own refund press or a reading that proves the entry gone. A result

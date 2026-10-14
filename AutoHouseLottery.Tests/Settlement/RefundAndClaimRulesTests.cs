@@ -58,6 +58,19 @@ public sealed class RefundAndClaimRulesTests
     }
 
     [Fact]
+    public void AReadingThatHasNotCaughtUpIsReadAgainBeforeTheRefundIsDecided()
+    {
+        var first = new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit, EntryShown: true);
+
+        Assert.True(RefundRules.NeedsSecondReading(first));
+        Assert.False(RefundRules.NeedsSecondReading(first with { EntryShown = false }));
+        Assert.False(RefundRules.NeedsSecondReading(first with { GilAfter = GilBefore }));
+        Assert.Equal(RefundVerdict.Refunded, RefundRules.Settle(first with { SecondReadingTaken = true, SecondEntryShown = false }).Verdict);
+        Assert.Equal(RefundVerdict.Uncertain, RefundRules.Settle(first with { SecondReadingTaken = true, SecondEntryShown = null }).Verdict);
+        Assert.False(RefundRules.NeedsSecondReading(first with { SecondReadingTaken = true }));
+    }
+
+    [Fact]
     public void AClaimAcquiresOrRelocatesFromTheEstateList()
     {
         var house = Estate(14, 3);

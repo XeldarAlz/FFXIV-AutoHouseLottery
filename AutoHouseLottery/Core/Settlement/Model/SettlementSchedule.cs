@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using AutoHouseLottery.Core.Housing.Model;
+using AutoHouseLottery.Core.Integration.Model;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Shared;
 
@@ -140,13 +141,25 @@ internal static class SchedulerRules
 
 internal static class SettlementSchedule
 {
-    // The work the scheduler may do for one character: a result check, collecting when it is a refund, for every entry
-    // whose results have arrived and whose outcome is unknown; a collection for a refund already known to be owed once it
-    // can actually be collected (a refund that could only be inspected again teaches nothing); and a read-back for a
-    // refund of this plugin that may already have gone through. Wins wait for the player.
+    // The work the scheduler may do for one character. First the result checks (ResultChecks): every earlier cycle's
+    // entry nobody has read and every earlier attempt still in question, which only the plot's result can settle. Then
+    // this cycle's entries once its results are out, a refund already known to be owed once it can actually be collected
+    // (a refund that could only be inspected again teaches nothing), and a read-back for a refund of this plugin that may
+    // already have gone through. Anything with a refund or claim of this plugin still open is only ever read back. Wins
+    // wait for the player.
     public static ImmutableArray<SettlementWork> Due(in JournalSnapshot snapshot, ulong contentId, in CyclePosition current, Func<PlotKey, bool> collectable)
     {
         var due = ImmutableArray.CreateBuilder<SettlementWork>();
+        var checks = ResultChecks.Due(snapshot, current.Cycle);
+        for (var index = 0; index < checks.Length; index++)
+        {
+            var check = checks[index];
+            if (check.ContentId == contentId)
+            {
+                Add(due, new SettlementWork(check.Id, SettlementLookups.OpenAttempt(snapshot, check.Id) is null ? SettlementMode.Refund : SettlementMode.Inspect));
+            }
+        }
+
         var receipts = snapshot.Receipts;
         for (var index = 0; index < receipts.Length; index++)
         {
@@ -163,7 +176,7 @@ internal static class SettlementSchedule
             {
                 if (open.Kind == ActionKind.Refund)
                 {
-                    due.Add(new SettlementWork(receipt.ReceiptId, SettlementMode.Inspect));
+                    Add(due, new SettlementWork(receipt.ReceiptId, SettlementMode.Inspect));
                 }
 
                 continue;
@@ -172,11 +185,24 @@ internal static class SettlementSchedule
             if (SettlementStates.OutcomeOpen(settlement.State)
                 || (SettlementStates.RefundOwed(settlement.State) && receipt.Plot is { } plot && collectable(plot)))
             {
-                due.Add(new SettlementWork(receipt.ReceiptId, SettlementMode.Refund));
+                Add(due, new SettlementWork(receipt.ReceiptId, SettlementMode.Refund));
             }
         }
 
         return due.ToImmutable();
+    }
+
+    private static void Add(ImmutableArray<SettlementWork>.Builder due, SettlementWork work)
+    {
+        for (var index = 0; index < due.Count; index++)
+        {
+            if (due[index].Id == work.Id)
+            {
+                return;
+            }
+        }
+
+        due.Add(work);
     }
 }
 

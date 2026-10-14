@@ -8,9 +8,15 @@ namespace AutoHouseLottery.Core.Settlement.Model;
 // deposit implies, and the plugin cannot tell why.
 internal enum RefundOffer : byte { Matches, DepositUnknown, DiffersFromDeposit }
 
-// Everything seen after Yes on a refund: the amount the dialog offered, the gil before the press and afterwards, and
-// whether a fresh lottery reading still shows the entry (null when no fresh reading could say).
-internal readonly record struct RefundEvidence(long Offered, long GilBefore, long? GilAfter, bool? EntryShown);
+// Everything seen after Yes on a refund: the amount the dialog offered, the gil before the press and the latest gil, and
+// whether a fresh lottery reading still shows the entry (null when no fresh reading could say). SecondEntryShown is the
+// same from a reading taken again after a further delay, when one was.
+internal readonly record struct RefundEvidence(long Offered, long GilBefore, long? GilAfter, bool? EntryShown)
+{
+    public bool SecondReadingTaken { get; init; }
+
+    public bool? SecondEntryShown { get; init; }
+}
 
 internal enum RefundVerdict : byte { Refunded, RefundedAmountDiffers, Uncertain }
 
@@ -36,11 +42,13 @@ internal static class RefundRules
         };
     }
 
-    // Settled needs both a fresh reading that no longer shows the entry and the gil to have risen; a gil rise alone never
-    // settles a refund. A rise other than the offered amount is recorded as received, never as the full refund.
+    // Settled needs both the gil to have risen and a fresh reading that no longer shows the entry; a gil rise alone never
+    // settles a refund. A reading so soon after the press may not have caught up, so the latest of the two readings
+    // decides. A rise other than the offered amount is recorded as received, never as the full refund.
     public static RefundSettlement Settle(in RefundEvidence evidence)
     {
-        if (evidence.EntryShown != false
+        var latest = evidence.SecondReadingTaken ? evidence.SecondEntryShown : evidence.EntryShown;
+        if (latest != false
             || evidence.GilAfter is not { } after
             || !Gil.TrySubtract(after, evidence.GilBefore, out var received)
             || received <= 0)
@@ -52,6 +60,14 @@ internal static class RefundRules
             ? new RefundSettlement(RefundVerdict.Refunded, received)
             : new RefundSettlement(RefundVerdict.RefundedAmountDiffers, received);
     }
+
+    // The gil rose but the one reading so far does not show the entry gone: a second reading after a further delay is what
+    // can still settle the refund.
+    public static bool NeedsSecondReading(in RefundEvidence evidence)
+        => !evidence.SecondReadingTaken
+            && evidence.EntryShown != false
+            && evidence.GilAfter is { } after
+            && after > evidence.GilBefore;
 
     private static bool IsAfterFee(long offered, long paid)
     {

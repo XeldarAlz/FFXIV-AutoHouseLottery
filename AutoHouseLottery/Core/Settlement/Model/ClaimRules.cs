@@ -23,8 +23,6 @@ internal readonly record struct ClaimFacts(
 
 internal static class ClaimRules
 {
-    private const int OneBased = 1;
-
     // Only the entrant who won, on its own receipt, with a known buyer, a known plot and a known effect; and never while
     // another claim of the same ownership group may still be going through.
     public static ClaimRefusal Check(in ClaimFacts facts)
@@ -105,6 +103,6 @@ internal static class ClaimRules
         => estate is { Apartment: false } owned
         && owned.WorldId == plot.WorldId
         && owned.TerritoryTypeId == plot.DistrictId
-        && owned.WardIndex + OneBased == plot.Ward
-        && owned.PlotIndex + OneBased == plot.Plot;
+        && owned.WardIndex + ResidentialDistricts.OneBased == plot.Ward
+        && owned.PlotIndex + ResidentialDistricts.OneBased == plot.Plot;
 }
