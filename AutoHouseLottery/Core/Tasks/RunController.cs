@@ -24,6 +24,7 @@ internal sealed class RunController
 {
     private const int SchedulerPollMs = TimeUnits.MillisecondsPerSecond;
     private const int ConfirmationCloseRetryMs = 5_000;
+    private const int JournalWriteWaitMs = 2_000;
 
     private readonly ExecutionLease lease = new();
     private readonly HousingContext housing;
@@ -39,6 +40,7 @@ internal sealed class RunController
     private ulong lastContentId;
     private long nextPollMs;
     private long closeConfirmationUntilMs;
+    private System.Threading.Tasks.Task? pendingJournalWrite;
 
     public RunController(HousingContext housing, HousingObservers observers)
     {
@@ -177,10 +179,15 @@ internal sealed class RunController
         End("logged out");
     }
 
+    // The journal is closed right after this, so the last attempt write is waited for, briefly, before it is.
     public void Shutdown()
     {
         End("the plugin is unloading");
         Svc.Framework.Update -= OnUpdate;
+        if (pendingJournalWrite is { IsCompleted: false } write && !write.Wait(JournalWriteWaitMs))
+        {
+            RunLog.Warning("The last journal write did not finish before unload; the attempt is read back as uncertain at the next load.");
+        }
     }
 
     public void Dismiss()
@@ -406,7 +413,7 @@ internal sealed class RunController
             return;
         }
 
-        _ = System.Threading.Tasks.Task.Run(() =>
+        pendingJournalWrite = System.Threading.Tasks.Task.Run(() =>
         {
             var written = unpressed ? journal.Reject(attempt.AttemptId, DateTime.UtcNow) : journal.RequireReconciliation(attempt.AttemptId, DateTime.UtcNow);
             RunLog.Info($"Entry run {active.RunId}: attempt {attempt.AttemptId} {(unpressed ? "released, it was never pressed" : "marked for reconciliation")} ({written}).");

@@ -37,8 +37,12 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
         {
             await RunSteps();
         }
-        catch (Exception) when (CancelToken.IsCancellationRequested)
+        catch (Exception exception) when (CancelToken.IsCancellationRequested)
         {
+            if (exception is not OperationCanceledException)
+            {
+                RunLog.Warning(exception, $"Entry run {session.RunId}: an error after the run was stopped at {session.Step}");
+            }
         }
         catch (Exception exception)
         {
