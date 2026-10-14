@@ -1,0 +1,5 @@
+using AutoHouseLottery.Core.Housing.Model;
+
+namespace AutoHouseLottery.Core.Selection.Model;
+
+internal readonly record struct ExactTarget(PlotKey Plot, long Deposit);
