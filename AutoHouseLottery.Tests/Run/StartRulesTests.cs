@@ -36,6 +36,13 @@ public sealed class StartRulesTests
     }
 
     [Fact]
+    public void HomeWorldOutsideTheGlobalRegionsRefusesEveryRun()
+    {
+        Assert.Equal(StartRefusal.UnsupportedRegion, StartRules.Check(Facts() with { UnsupportedRegion = true }));
+        Assert.Equal(StartRefusal.NotLoggedIn, StartRules.Check(Facts() with { UnsupportedRegion = true, LoggedIn = false }));
+    }
+
+    [Fact]
     public void UnwritableJournalRefusesTheStart()
     {
         Assert.Equal(StartRefusal.JournalUnavailable, StartRules.Check(Facts() with { JournalWritable = false }));

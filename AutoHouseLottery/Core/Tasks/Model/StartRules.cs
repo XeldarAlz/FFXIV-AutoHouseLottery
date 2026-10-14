@@ -9,6 +9,7 @@ internal enum StartRefusal : byte
     AlreadyRunning,
     Busy,
     NotLoggedIn,
+    UnsupportedRegion,
     InContent,
     WrongMode,
     InvalidPolicy,
@@ -39,6 +40,9 @@ internal readonly record struct StartFacts(
 {
     // A plugin that answers dialogs on its own is loaded (AutoAnswerPlugins).
     public bool AutoAnswerLoaded { get; init; }
+
+    // The character's home world is on a Chinese or Korean world, or one whose region could not be read (WorldRegions).
+    public bool UnsupportedRegion { get; init; }
 }
 
 internal static class StartRules
@@ -60,6 +64,11 @@ internal static class StartRules
         if (!facts.LoggedIn)
         {
             return StartRefusal.NotLoggedIn;
+        }
+
+        if (facts.UnsupportedRegion)
+        {
+            return StartRefusal.UnsupportedRegion;
         }
 
         if (facts.AutoAnswerLoaded)

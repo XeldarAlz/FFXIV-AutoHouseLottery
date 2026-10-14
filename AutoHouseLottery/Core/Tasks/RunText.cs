@@ -29,6 +29,7 @@ internal static class RunText
         StartRefusal.AlreadyRunning => L.RunStart.AlreadyRunning,
         StartRefusal.Busy => L.RunStart.Busy,
         StartRefusal.NotLoggedIn => L.RunStart.NotLoggedIn,
+        StartRefusal.UnsupportedRegion => L.RunStart.UnsupportedRegion,
         StartRefusal.InContent => L.RunStart.InContent,
         StartRefusal.WrongMode => L.RunStart.WrongMode,
         StartRefusal.InvalidPolicy => L.RunStart.InvalidPolicy,

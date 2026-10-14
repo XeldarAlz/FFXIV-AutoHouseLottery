@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core.External;
+using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
@@ -42,6 +43,7 @@ internal sealed partial class RunController
         var context = CharacterContextReader.Read();
         var refusal = Busy || TaskStarter.Busy ? SettlementRefusal.Busy
             : context is null ? SettlementRefusal.NotLoggedIn
+            : !WorldRegionReader.Supported(context.HomeWorldId) ? SettlementRefusal.UnsupportedRegion
             : DutyWatcher.InContent() ? SettlementRefusal.InContent
             : !housing.JournalWritable ? SettlementRefusal.JournalUnavailable
             : AutoAnswerGuard.Blocks ? SettlementRefusal.AutoAnswerPlugin

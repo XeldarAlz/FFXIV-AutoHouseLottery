@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Runtime.InteropServices;
 using AutoHouseLottery.Core.Eligibility.Model;
+using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Maps;
 using AutoHouseLottery.Core.Providers;
@@ -59,6 +60,9 @@ internal sealed class Discovery : IDisposable
 
     public uint World => Find.WorldFor(Character);
 
+    // Chinese and Korean worlds, or a world whose region cannot be read, are never fetched or offered for entry.
+    public bool WorldSupported => WorldRegionReader.Supported(World);
+
     public void Dispose()
     {
         Svc.Framework.Update -= OnUpdate;
@@ -112,7 +116,7 @@ internal sealed class Discovery : IDisposable
             }
         }
 
-        scope = FetchScope.Worlds(inputs.World, CollectionsMarshal.AsSpan(watched));
+        scope = FetchScope.Worlds(WorldRegionReader.Supported(inputs.World) ? inputs.World : 0, CollectionsMarshal.AsSpan(watched));
         return scope;
     }
 }

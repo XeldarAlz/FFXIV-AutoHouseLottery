@@ -148,6 +148,12 @@ internal sealed partial class FindHomePage
             return;
         }
 
+        if (!Discovery.WorldSupported)
+        {
+            Message(FontAwesomeIcon.Ban, Loc.T(L.Find.UnsupportedRegion));
+            return;
+        }
+
         if (!status.HasData)
         {
             if (status.Failure != FeedFailure.None && !status.Loading)

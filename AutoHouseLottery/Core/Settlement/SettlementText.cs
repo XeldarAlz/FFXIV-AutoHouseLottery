@@ -75,6 +75,7 @@ internal static class SettlementText
     public static string Refusal(SettlementRefusal refusal) => refusal == SettlementRefusal.AutoAnswerPlugin ? Tasks.RunText.AutoAnswer() : Loc.T(refusal switch
     {
         SettlementRefusal.NotLoggedIn => L.RunStart.NotLoggedIn,
+        SettlementRefusal.UnsupportedRegion => L.RunStart.UnsupportedRegion,
         SettlementRefusal.InContent => L.RunStart.InContent,
         SettlementRefusal.JournalUnavailable => L.RunStart.JournalUnavailable,
         _ => L.RunStart.Busy,

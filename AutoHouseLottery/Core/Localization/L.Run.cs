@@ -99,6 +99,7 @@ internal static partial class L
         public static readonly LocString AlreadyRunning = new("runStart.alreadyRunning", "A run is already in progress.");
         public static readonly LocString Busy = new("runStart.busy", "Another task is using the game.");
         public static readonly LocString NotLoggedIn = new("runStart.notLoggedIn", "Log in to a character first.");
+        public static readonly LocString UnsupportedRegion = new("runStart.unsupportedRegion", "Housing on Chinese and Korean worlds is not supported.");
         public static readonly LocString InContent = new("runStart.inContent", "Leave the duty first.");
         public static readonly LocString WrongMode = new("runStart.wrongMode", "This plan does not match the button used.");
         public static readonly LocString InvalidPolicy = new("runStart.invalidPolicy", "The plan is incomplete.");

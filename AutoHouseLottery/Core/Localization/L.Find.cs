@@ -82,6 +82,7 @@ internal static partial class L
         public static readonly LocString SavedCopyBanner = new("findHome.savedCopyBanner", "Showing saved listings from {0}. Refresh or inspect in game.");
 
         public static readonly LocString NoWorld = new("findHome.noWorld", "Log in, or choose a world, to see its listings.");
+        public static readonly LocString UnsupportedRegion = new("findHome.unsupportedRegion", "Housing on this world is not supported. Auto House Lottery covers the Japanese, North American, European and Oceanian worlds; Chinese and Korean worlds have their own housing services.");
         public static readonly LocString Loading = new("findHome.loading", "Loading the listings for {0}…");
         public static readonly LocString Failed = new("findHome.failed", "The housing listings could not be loaded. Refresh, or inspect plots in game.");
         public static readonly LocString NoMatches = new("findHome.noMatches", "No reported plots match these filters. Clear filters or change areas.");
