@@ -181,7 +181,7 @@
   "settings.general.autoPauseHelp": "Приостанавливает выполнение, пока вы в подземелье, испытании, рейде или другом инстансе, и продолжает его, когда вы вернётесь.",
   "settings.general.pauseTyping": "Ждать, пока вы печатаете",
   "settings.general.pauseTypingHelp": "Пока текстовое поле игры в фокусе, например строка чата, выполнение не начинает новых перемещений, пока вы его не закроете. Уже начатое перемещение продолжается.",
-  "plugin.commandHelp": "Открывает или закрывает окно Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (вывести BaseId текущей цели).",
+  "plugin.commandHelp": "Открывает или закрывает окно Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (вывести BaseId текущей цели) | probe (записать в журнал все данные о жилье в этом месте).",
   "plugin.commandHelpAlias": "Псевдоним для /autohouselottery.",
   "plugin.configReset": "Не удалось прочитать ваши настройки, поэтому Auto House Lottery запущен с настройками по умолчанию. Старый файл сохранён как {0}.",
   "plugin.configResetUnsaved": "Не удалось прочитать ваши настройки, поэтому Auto House Lottery запущен с настройками по умолчанию. Старый файл сохранить не удалось; подробности в логе.",
@@ -214,5 +214,9 @@
   "safety.gm.commandsHelp": "Команды чата, выполняемые при обнаружении GM. Подходит для /logout, /sh спокойно или макроса.",
   "safety.gm.kill": "Убить игру",
   "safety.gm.killHelp": "Жестко завершить процесс игры через /xlkill. Крайняя мера: без прощаний, без заставки, без выхода из аккаунта. Вас отключит.",
-  "safety.gm.noCommands": "Команд нет."
+  "safety.gm.noCommands": "Команд нет.",
+  "probe.done": "Данные о жилье записаны в консоль (/ahl log).",
+  "probe.started": "Проверка запущена; следите за ней в консоли (/ahl log).",
+  "probe.failed": "Проверку не удалось запустить; причина указана в консоли (/ahl log).",
+  "probe.usage": "Использование: /ahl probe [scan | lottery | goto <district> <ward> <plot> | approach <ward> <plot> | press <enter | results | cancel | no> | stop]"
 }

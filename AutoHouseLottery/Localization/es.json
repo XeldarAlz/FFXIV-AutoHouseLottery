@@ -181,7 +181,7 @@
   "settings.general.autoPauseHelp": "Pausa la ejecución mientras estás en una mazmorra, prueba, incursión u otro contenido instanciado, y la reanuda al volver fuera.",
   "settings.general.pauseTyping": "Esperar mientras escribes",
   "settings.general.pauseTypingHelp": "Mientras un cuadro de texto del juego tenga el foco, como la línea del chat, una ejecución no empieza ningún movimiento nuevo hasta que lo cierres. Un movimiento en curso continúa.",
-  "plugin.commandHelp": "Muestra u oculta la ventana de Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (muestra el BaseId del objetivo actual).",
+  "plugin.commandHelp": "Muestra u oculta la ventana de Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (muestra el BaseId del objetivo actual) | probe (registra todas las lecturas de vivienda de este lugar).",
   "plugin.commandHelpAlias": "Alias de /autohouselottery.",
   "plugin.configReset": "No se pudieron leer tus ajustes, así que Auto House Lottery empezó con los ajustes predeterminados. El archivo anterior se guardó como {0}.",
   "plugin.configResetUnsaved": "No se pudieron leer tus ajustes, así que Auto House Lottery empezó con los ajustes predeterminados. No se pudo guardar el archivo anterior; el registro tiene los detalles.",
@@ -214,5 +214,9 @@
   "safety.gm.commandsHelp": "Comandos de chat que se ejecutan cuando se detecta un GM. Útil para cosas como /logout, /sh mantén la calma o una macro.",
   "safety.gm.kill": "Cerrar el juego a la fuerza",
   "safety.gm.killHelp": "Termina el proceso del juego de forma brusca mediante /xlkill. La opción de último recurso; sin despedidas, sin cinemática, sin cerrar sesión. Te desconectará.",
-  "safety.gm.noCommands": "No hay comandos en cola."
+  "safety.gm.noCommands": "No hay comandos en cola.",
+  "probe.done": "Lecturas de vivienda escritas en la consola (/ahl log).",
+  "probe.started": "Tarea de sondeo iniciada; síguela en la consola (/ahl log).",
+  "probe.failed": "El sondeo no pudo iniciarse; la consola (/ahl log) indica el motivo.",
+  "probe.usage": "Uso: /ahl probe [scan | lottery | goto <district> <ward> <plot> | approach <ward> <plot> | press <enter | results | cancel | no> | stop]"
 }

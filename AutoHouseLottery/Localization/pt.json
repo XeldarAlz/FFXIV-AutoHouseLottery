@@ -181,7 +181,7 @@
   "settings.general.autoPauseHelp": "Pausa a execução enquanto você está em uma masmorra, provação, raide ou outro conteúdo instanciado, e retoma quando você volta.",
   "settings.general.pauseTyping": "Segurar enquanto digita",
   "settings.general.pauseTypingHelp": "Enquanto uma caixa de texto do jogo estiver em foco, como a linha do chat, uma execução não começa nenhum movimento novo até você fechá-la. Um movimento em andamento continua.",
-  "plugin.commandHelp": "Abre ou fecha a janela do Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (mostra o BaseId do alvo atual).",
+  "plugin.commandHelp": "Abre ou fecha a janela do Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (mostra o BaseId do alvo atual) | probe (registra todas as leituras de moradia deste local).",
   "plugin.commandHelpAlias": "Atalho para /autohouselottery.",
   "plugin.configReset": "Não foi possível ler suas configurações, então o Auto House Lottery iniciou com as configurações padrão. O arquivo antigo foi guardado como {0}.",
   "plugin.configResetUnsaved": "Não foi possível ler suas configurações, então o Auto House Lottery iniciou com as configurações padrão. Não foi possível guardar o arquivo antigo; o log tem os detalhes.",
@@ -214,5 +214,9 @@
   "safety.gm.commandsHelp": "Comandos de chat executados quando um GM é detectado. Útil para coisas como /logout, /sh fica calmo, ou uma macro.",
   "safety.gm.kill": "Fechar o jogo à força",
   "safety.gm.killHelp": "Encerra o processo do jogo à força via /xlkill. A opção de último recurso; sem despedida, sem cutscene, sem logout. Você será desconectado.",
-  "safety.gm.noCommands": "Nenhum comando na fila."
+  "safety.gm.noCommands": "Nenhum comando na fila.",
+  "probe.done": "Leituras de moradia gravadas no console (/ahl log).",
+  "probe.started": "Tarefa de sondagem iniciada; acompanhe-a no console (/ahl log).",
+  "probe.failed": "A sondagem não pôde começar; o console (/ahl log) diz o motivo.",
+  "probe.usage": "Uso: /ahl probe [scan | lottery | goto <district> <ward> <plot> | approach <ward> <plot> | press <enter | results | cancel | no> | stop]"
 }

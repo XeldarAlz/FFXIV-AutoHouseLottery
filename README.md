@@ -52,6 +52,13 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 | `/autohouselottery changelog` | Open the Changelog page |
 | `/autohouselottery about` | Open the About page |
 | `/autohouselottery target` | Log the targeted object's BaseId (debug helper) |
+| `/autohouselottery probe` | Log every housing reading for where you stand to the Console: character, location, lottery entry, ward list, placard, open lottery dialogs, housing messages and Lifestream (debug helper) |
+| `/autohouselottery probe scan` | Page the open ward selector through every ward and log each acknowledged ward |
+| `/autohouselottery probe lottery` | Open the Timers window once to load your lottery entry, then log it |
+| `/autohouselottery probe goto <district> <ward> <plot>` | Travel with Lifestream to a plot on this world (`mist`, `lavender`, `goblet`, `shirogane`, `empyreum`), walk to the nearest placard, and once you open it, confirm from its address that it is that plot; nothing is pressed |
+| `/autohouselottery probe approach <ward> <plot>` | Walk to a plot's placard in the district you are in |
+| `/autohouselottery probe press <enter \| results \| cancel \| no>` | Do one thing that costs nothing: press Enter Lottery or View Lottery Results on the placard, close the entry confirmation, or press No on a result dialog. Each button is checked by its own label first, and nothing is pressed while a run or a probe task is going |
+| `/autohouselottery probe stop` | Stop the probe task and the travel it started |
 
 ## Languages
 

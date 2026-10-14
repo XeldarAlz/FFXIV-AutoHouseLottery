@@ -181,7 +181,7 @@
   "settings.general.autoPauseHelp": "Pausiert den Lauf, solange du in einem Dungeon, einer Prüfung, einem Raid oder anderem instanzierten Inhalt bist, und setzt ihn fort, sobald du wieder draußen bist.",
   "settings.general.pauseTyping": "Beim Tippen anhalten",
   "settings.general.pauseTypingHelp": "Solange ein Textfeld des Spiels den Fokus hat, etwa die Chatzeile, beginnt ein Lauf keine neue Bewegung, bis du es schließt. Eine laufende Bewegung geht weiter.",
-  "plugin.commandHelp": "Öffnet oder schließt das Fenster von Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (gibt die BaseId des aktuellen Ziels aus).",
+  "plugin.commandHelp": "Öffnet oder schließt das Fenster von Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (gibt die BaseId des aktuellen Ziels aus) | probe (schreibt alle Wohnungsdaten dieser Stelle ins Protokoll).",
   "plugin.commandHelpAlias": "Alias für /autohouselottery.",
   "plugin.configReset": "Deine Einstellungen konnten nicht gelesen werden, daher startet Auto House Lottery mit den Standardeinstellungen. Die alte Datei liegt unter {0}.",
   "plugin.configResetUnsaved": "Deine Einstellungen konnten nicht gelesen werden, daher startet Auto House Lottery mit den Standardeinstellungen. Die alte Datei konnte nicht aufbewahrt werden; das Protokoll enthält die Details.",
@@ -214,5 +214,9 @@
   "safety.gm.commandsHelp": "Chatbefehle, die ausgeführt werden, wenn ein GM gesichtet wird. Nützlich für Dinge wie /logout, /sh ruhig bleiben oder ein Makro.",
   "safety.gm.kill": "Spiel beenden",
   "safety.gm.killHelp": "Beendet den Spielprozess hart über /xlkill. Die letzte Option; kein Abschied, keine Zwischensequenz, kein Ausloggen. Du bekommst eine Verbindungstrennung.",
-  "safety.gm.noCommands": "Keine Befehle eingereiht."
+  "safety.gm.noCommands": "Keine Befehle eingereiht.",
+  "probe.done": "Wohnungsdaten in die Konsole geschrieben (/ahl log).",
+  "probe.started": "Prüfaufgabe gestartet; verfolge sie in der Konsole (/ahl log).",
+  "probe.failed": "Die Prüfung konnte nicht starten; die Konsole (/ahl log) nennt den Grund.",
+  "probe.usage": "Verwendung: /ahl probe [scan | lottery | goto <district> <ward> <plot> | approach <ward> <plot> | press <enter | results | cancel | no> | stop]"
 }
