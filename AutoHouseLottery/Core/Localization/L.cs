@@ -73,6 +73,7 @@ internal static partial class L
         public static readonly LocString Footer = new("plugins.footer",
             "Install adds the plugin's source repository to Dalamud and queues an install. If one-click install fails (URL drift, network), right-click a plugin name to copy its repo URL and add it manually via /xlsettings -> Experimental -> Custom Plugin Repositories.");
         public static readonly LocString PurposeLifestream = new("plugins.purpose.lifestream", "Travels to a plot's world, ward and plot for entries, result checks and refunds.");
+        public static readonly LocString PurposeVnavmesh = new("plugins.purpose.vnavmesh", "Walks the last metres to a plot's placard. Without it, you walk up to the placard when the plugin asks.");
     }
 
     internal static class Log
