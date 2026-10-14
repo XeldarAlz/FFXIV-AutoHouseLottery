@@ -398,15 +398,21 @@ internal static class BatchCodec
         return true;
     }
 
-    // Every member is one of the policy's characters, once, with the policy's settings; a member still to run, running or
-    // in question has an assignment on ranked plots and a left-out one has none; a switch names one of the members.
+    // Every member is one of the policy's characters, once, with the policy's settings for its own content ID; a member
+    // still to run, running or in question has an assignment on ranked plots and a left-out one has none; only a running
+    // batch has a running member; a switch names one of the members.
     private static bool Consistent(RunPolicy policy, ImmutableArray<RankedPlot> ranking, ImmutableArray<BatchMember> members, BatchPhase phase, ulong? switchTarget)
     {
         var switchTargetFound = switchTarget is null;
         for (var index = 0; index < members.Length; index++)
         {
             var member = members[index];
-            if (!PolicyHas(policy, member.Settings))
+            if (!PolicyHas(policy, member.Settings) || member.Settings.ContentId != member.ContentId)
+            {
+                return false;
+            }
+
+            if (member.State == BatchMemberState.Running && phase is BatchPhase.Halted or BatchPhase.WaitingForLogin or BatchPhase.Finished)
             {
                 return false;
             }

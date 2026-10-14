@@ -98,6 +98,20 @@ public sealed class BatchCheckpointTests : IDisposable
     }
 
     [Fact]
+    public void AMemberWithAnotherCharactersSettingsOrARunningMemberOfABatchNotRunningIsRefused()
+    {
+        var batch = BatchRulesTests.Batch(out _);
+        var borrowed = batch.Members[0] with { Settings = batch.Members[1].Settings };
+        var running = BatchRules.Begin(batch, 0, now);
+
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch with { Members = batch.Members.SetItem(0, borrowed) }), out _));
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(running with { Phase = BatchPhase.Halted, Halt = BatchHalt.StoppedByPlayer }), out _));
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(running with { Phase = BatchPhase.WaitingForLogin }), out _));
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(running with { Phase = BatchPhase.Finished }), out _));
+        Assert.True(BatchCodec.TryDeserialize(BatchCodec.Serialize(running), out _));
+    }
+
+    [Fact]
     public void ADamagedCheckpointIsKeptAsideAndTheBatchIsDropped()
     {
         var path = Path.Combine(directory, BatchCheckpointFile.FileName);
