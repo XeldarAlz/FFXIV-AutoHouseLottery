@@ -25,6 +25,8 @@ internal sealed class CapabilitySection
     private const float BadgeGap = 12f;
     private const float GroupGap = 8f;
     private const float HeaderGap = 10f;
+    private const float BadgeTextPadding = 14f;
+    private const float RowTint = 0.05f;
 
     private static readonly (LocString Label, CapabilityKind First, CapabilityKind Last)[] groups =
     [
@@ -139,7 +141,7 @@ internal sealed class CapabilitySection
         float badgeWidth;
         using (Fonts.PushCaption())
         {
-            badgeWidth = TextDraw.Measure(states[index]).X + 14f * scale;
+            badgeWidth = TextDraw.Measure(states[index]).X + BadgeTextPadding * scale;
         }
 
         float nameHeight;
@@ -157,7 +159,7 @@ internal sealed class CapabilitySection
         var height = padY * 2f + nameHeight + NameGap * scale + reasonHeight;
         var end = origin + new Vector2(width, height);
         var drawList = ImGui.GetWindowDrawList();
-        Paint.Glass(drawList, origin, end, Styling.CardRounding * scale, accent, 0.05f);
+        Paint.Glass(drawList, origin, end, Styling.CardRounding * scale, accent, RowTint);
 
         var nameY = origin.Y + padY;
         Paint.Dot(drawList, new Vector2(origin.X + padX + DotRadius * scale, nameY + nameHeight * 0.5f), DotRadius * scale, accent);

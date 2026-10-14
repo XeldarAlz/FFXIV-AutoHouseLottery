@@ -109,6 +109,30 @@ public sealed partial class CommandDocumentationTests
     }
 
     [Fact]
+    public void EveryCommandTheWindowCanBeAskedForHasExactlyOneVerb()
+    {
+        var commands = Enum.GetValues<PluginCommand>();
+        for (var index = 0; index < commands.Length; index++)
+        {
+            var count = 0;
+            for (var verbIndex = 0; verbIndex < PluginCommands.All.Length; verbIndex++)
+            {
+                count += PluginCommands.All[verbIndex].Command == commands[index] ? 1 : 0;
+            }
+
+            Assert.True(count == (commands[index] == PluginCommand.ToggleWindow ? 0 : 1), $"{commands[index]} is in the command table {count} times.");
+        }
+    }
+
+    [Fact]
+    public void AFullWidthSpaceFromAJapaneseInputMethodSeparatesTheWords()
+    {
+        Assert.Equal(PluginCommand.Probe, PluginCommands.Parse("probe\u3000scan", out var rest));
+        Assert.Equal("scan", rest);
+        Assert.Equal(PluginCommand.Settings, PluginCommands.Parse("\u3000config\u3000", out _));
+    }
+
+    [Fact]
     public void ParseHandsTheRestToATestingCommand()
     {
         Assert.Equal(PluginCommand.Dev, PluginCommands.Parse(" dev  run mist 3 7 3187500 ", out var rest));

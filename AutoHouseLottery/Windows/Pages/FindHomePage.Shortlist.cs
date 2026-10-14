@@ -451,9 +451,9 @@ internal sealed partial class FindHomePage
     {
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
-        var valueWidth = MathF.Min(TextDraw.Measure(value).X, width * 0.6f);
+        var valueWidth = MathF.Min(TextDraw.Measure(value).X, width * FieldValueShare);
         TextDraw.At(TextDraw.Truncate(label, width - valueWidth - FieldGap * ImGuiHelpers.GlobalScale), origin, Styling.TextDim);
-        TextDraw.At(TextDraw.Truncate(value, width * 0.6f), new Vector2(origin.X + width - valueWidth, origin.Y), color ?? Styling.TextStrong);
+        TextDraw.At(TextDraw.Truncate(value, width * FieldValueShare), new Vector2(origin.X + width - valueWidth, origin.Y), color ?? Styling.TextStrong);
         ImGui.Dummy(new Vector2(width, TextDraw.LineHeight()));
     }
 

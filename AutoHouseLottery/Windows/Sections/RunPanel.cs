@@ -23,6 +23,7 @@ internal static class RunPanel
     private const int FixedLines = 3;
     private const int AlwaysShownDetailLines = 1;
     private const float MinimumAddressWidth = 160f;
+    private const float MinimumAddressShare = 0.5f;
 
     private static bool detailsOpen;
 
@@ -124,7 +125,7 @@ internal static class RunPanel
         var scale = ImGuiHelpers.GlobalScale;
         var gap = ButtonGap * scale;
         var available = right - x;
-        var addressRoom = MathF.Max(available - TextDraw.Measure(text.StepLine).X - gap, MathF.Min(MinimumAddressWidth * scale, available * 0.5f));
+        var addressRoom = MathF.Max(available - TextDraw.Measure(text.StepLine).X - gap, MathF.Min(MinimumAddressWidth * scale, available * MinimumAddressShare));
         var address = TextDraw.Truncate(text.Address, addressRoom);
         var step = TextDraw.Truncate(text.StepLine, MathF.Max(1f, available - TextDraw.Measure(address).X - gap));
         TextDraw.At(address, new Vector2(x, y), Styling.TextSecondary);

@@ -247,7 +247,11 @@ public sealed class Plugin : IDalamudPlugin
             case PluginCommand.Dev:
                 DevCommands.Run(rest, Controller, HousingData);
                 break;
+            case PluginCommand.ToggleWindow:
+                ToggleMainUi();
+                break;
             default:
+                RunLog.Warning($"The command {command} {args} has no handler; the window is toggled instead.");
                 ToggleMainUi();
                 break;
         }

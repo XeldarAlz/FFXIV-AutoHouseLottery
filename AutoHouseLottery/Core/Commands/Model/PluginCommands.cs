@@ -32,7 +32,7 @@ internal static class PluginCommands
     {
         rest = string.Empty;
         var trimmed = arguments.AsSpan().Trim();
-        var wordEnd = trimmed.IndexOfAny(' ', '\t');
+        var wordEnd = WordEnd(trimmed);
         var word = wordEnd < 0 ? trimmed : trimmed[..wordEnd];
         var remainder = wordEnd < 0 ? ReadOnlySpan<char>.Empty : trimmed[wordEnd..].Trim();
         for (var index = 0; index < All.Length; index++)
@@ -53,5 +53,19 @@ internal static class PluginCommands
         }
 
         return PluginCommand.ToggleWindow;
+    }
+
+    // Any whitespace ends the word, including the full-width space a Japanese input method types.
+    private static int WordEnd(ReadOnlySpan<char> text)
+    {
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (char.IsWhiteSpace(text[index]))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 }

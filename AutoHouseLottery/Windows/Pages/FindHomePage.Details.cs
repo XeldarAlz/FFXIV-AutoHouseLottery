@@ -17,6 +17,8 @@ namespace AutoHouseLottery.Windows.Pages;
 internal sealed partial class FindHomePage
 {
     private const float FieldGap = 4f;
+    // A field's value keeps at most this share of the row; its label gets the rest.
+    private const float FieldValueShare = 0.6f;
     private const string ListPopup = "##ahl_find_save_to_list";
 
     private readonly DetailsText detailsText = new();
@@ -88,9 +90,9 @@ internal sealed partial class FindHomePage
     {
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
-        var valueWidth = MathF.Min(TextDraw.Measure(field.Value).X, width * 0.6f);
+        var valueWidth = MathF.Min(TextDraw.Measure(field.Value).X, width * FieldValueShare);
         TextDraw.At(TextDraw.Truncate(field.Label, width - valueWidth - FieldGap * ImGuiHelpers.GlobalScale), origin, Styling.TextDim);
-        TextDraw.At(TextDraw.Truncate(field.Value, width * 0.6f), new Vector2(origin.X + width - valueWidth, origin.Y), Styling.TextStrong);
+        TextDraw.At(TextDraw.Truncate(field.Value, width * FieldValueShare), new Vector2(origin.X + width - valueWidth, origin.Y), Styling.TextStrong);
         var height = TextDraw.LineHeight();
         if (field.Age is { } age)
         {
