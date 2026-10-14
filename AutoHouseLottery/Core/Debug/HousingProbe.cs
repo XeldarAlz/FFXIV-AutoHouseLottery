@@ -65,6 +65,10 @@ internal static unsafe class HousingProbe
             case "press" when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
+            case "stop" when Plugin.Instance.Controller.Busy:
+                RunLog.Warning($"{Prefix} stop refused; an entry run or a reconciliation owns the game. Use /ahl stop for the run.");
+                Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
+                return;
             case "stop":
                 TaskStarter.StopCurrent();
                 if (HousingTravel.CurrentToken is { } token)
