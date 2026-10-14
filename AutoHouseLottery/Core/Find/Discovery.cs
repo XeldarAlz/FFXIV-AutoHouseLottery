@@ -117,6 +117,8 @@ internal sealed class Discovery : IDisposable
             }
         }
 
+        watched.RemoveAll(static world => !WorldRegionReader.Supported(world));
+
         scope = FetchScope.Worlds(WorldRegionReader.Supported(inputs.World) ? inputs.World : 0, CollectionsMarshal.AsSpan(watched));
         return scope;
     }

@@ -78,6 +78,7 @@ internal static class SettlementText
     {
         SettlementRefusal.NotLoggedIn => L.RunStart.NotLoggedIn,
         SettlementRefusal.UnsupportedRegion => L.RunStart.UnsupportedRegion,
+        SettlementRefusal.UnknownRegion => L.RunStart.UnknownRegion,
         SettlementRefusal.InContent => L.RunStart.InContent,
         SettlementRefusal.JournalUnavailable => L.RunStart.JournalUnavailable,
         _ => L.RunStart.Busy,
@@ -98,6 +99,7 @@ internal static class SettlementText
         SchedulerBlock.BelowReserve => L.Settlement.FailureReserve,
         SchedulerBlock.TravelBudgetSpent => L.Settlement.FailureTravelBudget,
         SchedulerBlock.HeldAfterAlert => L.Settlement.BlockHeldAfterAlert,
+        SchedulerBlock.UnsupportedRegion => L.Settlement.BlockUnsupportedRegion,
         SchedulerBlock.None => L.Settlement.BlockStarting,
         _ => L.RunStart.NotLoggedIn,
     });

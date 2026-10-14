@@ -47,9 +47,11 @@ internal sealed partial class RunController
     public SettlementRefusal StartSettlement(Guid id, SettlementMode mode, SettlementOrigin origin, bool dryRun)
     {
         var context = CharacterContextReader.Read();
+        var region = context is null ? WorldRegion.Unknown : WorldRegionReader.Of(context.HomeWorldId);
         var refusal = Busy || TaskStarter.Busy ? SettlementRefusal.Busy
             : context is null ? SettlementRefusal.NotLoggedIn
-            : !WorldRegionReader.Supported(context.HomeWorldId) ? SettlementRefusal.UnsupportedRegion
+            : region == WorldRegion.Unknown ? SettlementRefusal.UnknownRegion
+            : !WorldRegions.Supported(region) ? SettlementRefusal.UnsupportedRegion
             : DutyWatcher.InContent() ? SettlementRefusal.InContent
             : !housing.JournalWritable ? SettlementRefusal.JournalUnavailable
             : AutoAnswerGuard.Blocks ? SettlementRefusal.AutoAnswerPlugin

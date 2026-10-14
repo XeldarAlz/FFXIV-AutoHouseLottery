@@ -10,6 +10,7 @@ internal enum SchedulerBlock : byte
 {
     None,
     NotLoggedIn,
+    UnsupportedRegion,
     RefundsOff,
     NothingDue,
     JournalUnavailable,
@@ -32,6 +33,7 @@ internal enum SchedulerBlock : byte
 // TravelAllowance is what this session may still spend travelling; Gil is the live balance, null when unreadable.
 internal readonly record struct SchedulerFacts(
     bool LoggedIn,
+    bool RegionSupported,
     bool AutomaticRefunds,
     bool WorkDue,
     bool JournalWritable,
@@ -65,6 +67,11 @@ internal static class SchedulerRules
         if (!facts.LoggedIn)
         {
             return SchedulerBlock.NotLoggedIn;
+        }
+
+        if (!facts.RegionSupported)
+        {
+            return SchedulerBlock.UnsupportedRegion;
         }
 
         if (!facts.AutomaticRefunds)

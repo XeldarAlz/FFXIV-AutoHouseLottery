@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core.Eligibility.Model;
+using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Selection.Model;
 
 namespace AutoHouseLottery.Core.Tasks.Model;
@@ -10,6 +11,7 @@ internal enum StartRefusal : byte
     Busy,
     NotLoggedIn,
     UnsupportedRegion,
+    UnknownRegion,
     InContent,
     WrongMode,
     InvalidPolicy,
@@ -41,8 +43,8 @@ internal readonly record struct StartFacts(
     // A plugin that answers dialogs on its own is loaded (AutoAnswerPlugins).
     public bool AutoAnswerLoaded { get; init; }
 
-    // The character's home world is on a Chinese or Korean world, or one whose region could not be read (WorldRegions).
-    public bool UnsupportedRegion { get; init; }
+    // The region of the character's home world (WorldRegions). Left unset it reads as Unknown, which refuses the start.
+    public WorldRegion HomeRegion { get; init; }
 }
 
 internal static class StartRules
@@ -66,9 +68,9 @@ internal static class StartRules
             return StartRefusal.NotLoggedIn;
         }
 
-        if (facts.UnsupportedRegion)
+        if (!WorldRegions.Supported(facts.HomeRegion))
         {
-            return StartRefusal.UnsupportedRegion;
+            return facts.HomeRegion == WorldRegion.Unknown ? StartRefusal.UnknownRegion : StartRefusal.UnsupportedRegion;
         }
 
         if (facts.AutoAnswerLoaded)

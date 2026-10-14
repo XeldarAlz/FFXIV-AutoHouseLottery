@@ -102,6 +102,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
         var next = queue.Next(due, nowMs);
         var facts = new SchedulerFacts(
             LoggedIn: true,
+            RegionSupported: WorldRegionReader.Supported(context.HomeWorldId),
             AutomaticRefunds: configuration.AutomaticRefunds(context.ContentId),
             WorkDue: next is not null,
             JournalWritable: housing.JournalWritable,

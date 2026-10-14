@@ -22,9 +22,9 @@ This is the compatibility record of Auto House Lottery 1.0.0.0 for the global ga
 
 The region of a world comes from its data center's row in the game's World and WorldDCGroupType sheets (`Core/Housing/Model/WorldRegion.cs`, `Core/Game/WorldRegionReader.cs`). A world whose region cannot be read is refused too. The housing listings, the lottery calendar and the dialog rows the plugin reads are the global client's, so on a refused world:
 
-- Find a home asks the housing service nothing about that world and says it is not supported (`findHome.unsupportedRegion`).
-- An entry run refuses to start (`StartRefusal.UnsupportedRegion`, "Housing on Chinese and Korean worlds is not supported.").
-- A result visit, a refund or a claim refuses to start (`SettlementRefusal.UnsupportedRegion`).
+- Find a home asks the housing service nothing about that world, nor about a refused world a saved search, list or the shortlist points at, and says it is not supported (`findHome.unsupportedRegion`, or `runStart.unknownRegion` when the region could not be read).
+- An entry run refuses to start (`StartRefusal.UnsupportedRegion`, "Housing on Chinese and Korean worlds is not supported.", or `StartRefusal.UnknownRegion` when the region could not be read).
+- A result visit, a refund or a claim refuses to start (`SettlementRefusal.UnsupportedRegion` or `UnknownRegion`), and the automatic refund scheduler stays off for that character (`SchedulerBlock.UnsupportedRegion`), so nothing is retried.
 - The Plugins page reports the game region as Blocked with its reason.
 
 ## Districts and divisions

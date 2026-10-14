@@ -315,7 +315,7 @@ internal sealed partial class RunController
             assignment is not null)
         {
             AutoAnswerLoaded = AutoAnswerGuard.Blocks,
-            UnsupportedRegion = context is not null && !WorldRegionReader.Supported(context.HomeWorldId),
+            HomeRegion = context is null ? WorldRegion.Unknown : WorldRegionReader.Of(context.HomeWorldId),
         };
         var refusal = StartRules.Check(facts);
         if (refusal == StartRefusal.None && (context is null || settings is null || assignment is null || preview is null))

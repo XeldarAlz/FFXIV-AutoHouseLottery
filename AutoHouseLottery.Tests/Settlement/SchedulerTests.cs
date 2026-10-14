@@ -39,6 +39,13 @@ public sealed class SchedulerTests
     }
 
     [Fact]
+    public void NoWorkStartsForACharacterOnARefusedWorld()
+    {
+        Assert.Equal(SchedulerBlock.UnsupportedRegion, SchedulerRules.Check(Ready() with { RegionSupported = false }));
+        Assert.Equal(SchedulerBlock.NotLoggedIn, SchedulerRules.Check(Ready() with { RegionSupported = false, LoggedIn = false }));
+    }
+
+    [Fact]
     public void TheSessionTravelCapAndTheReserveBoundTravel()
     {
         Assert.Equal(SchedulerRules.SessionTravelCap, SchedulerRules.TravelAllowance(0, Rich, Reserve));
@@ -215,6 +222,7 @@ public sealed class SchedulerTests
 
     private static SchedulerFacts Ready() => new(
         LoggedIn: true,
+        RegionSupported: true,
         AutomaticRefunds: true,
         WorkDue: true,
         JournalWritable: true,

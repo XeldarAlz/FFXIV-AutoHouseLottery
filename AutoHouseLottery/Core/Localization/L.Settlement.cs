@@ -17,6 +17,7 @@ internal static partial class L
         public static readonly LocString BlockNotIdle = new("settlement.block.notIdle", "Starts after 30 seconds without input from you.");
         public static readonly LocString BlockStarting = new("settlement.block.starting", "Starting.");
         public static readonly LocString BlockHeldAfterAlert = new("settlement.block.heldAfterAlert", "Held after a GM alert until you act in the game.");
+        public static readonly LocString BlockUnsupportedRegion = new("settlement.block.unsupportedRegion", "Off: housing on this character's home world is not supported.");
         public static readonly LocString SettledInGame = new("settlement.settledInGame", "Settled in game");
         public static readonly LocString SettledInGameHint = new("settlement.settledInGameHint", "Use this when you collected this entry's refund in game yourself. It is recorded as refunded for an amount not seen, and opens again if the game later says a refund still waits.");
         public static readonly LocString SettledInGameConfirm = new("settlement.settledInGameConfirm", "Yes, I collected it");
