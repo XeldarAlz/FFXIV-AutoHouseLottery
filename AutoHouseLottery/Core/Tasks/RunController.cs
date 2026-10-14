@@ -172,35 +172,11 @@ internal sealed partial class RunController
         Resume();
     }
 
-    public void Stop()
-    {
-        if (session is not { } active)
-        {
-            if (BatchActive)
-            {
-                HaltBatch(BatchHalt.StoppedByPlayer, "stopped by the player between characters");
-            }
-
-            StopRefundSwitch("stopped by the player");
-            return;
-        }
-
-        memberEnd = BatchEnd.StoppedByPlayer;
-        if (EntrySteps.InSubmissionWindow(active.Step) || active.Step == EntryStep.PersistIntent || active.CollectingInPressWindow)
-        {
-            active.StopRequested = true;
-            active.Publish();
-            RunLog.Info($"Entry run {active.RunId}: stop asked at {active.Step}; the run ends once the press it made is verified.");
-            return;
-        }
-
-        StopTask();
-        active.MoveTo(EntryStep.Stopped);
-        Settle(active, EntryStep.Stopped, "stopped by the player");
-    }
+    public void Stop() => StopWith(BatchEnd.StoppedByPlayer, BatchHalt.StoppedByPlayer, "stopped by the player");
 
     // A GM alert ends everything at once: a refund an entry run is collecting is not verified first either, and a press it
-    // may have made is left for reconciliation. No automatic visit starts again until the player touches the game.
+    // may have made is left for reconciliation. No automatic visit starts again until the player touches the game. A batch
+    // is halted as interrupted, never as stopped by the player.
     public void StopForAlert()
     {
         scheduler.HoldUntilInput(Environment.TickCount64);
@@ -210,7 +186,7 @@ internal sealed partial class RunController
         }
         else
         {
-            Stop();
+            StopWith(BatchEnd.Interrupted, BatchHalt.Interrupted, "a GM alert");
         }
 
         CancelReconcile();
@@ -221,6 +197,34 @@ internal sealed partial class RunController
         }
 
         StopRefundSwitch("a GM alert");
+    }
+
+    // The stop shared by the player's Stop and a GM alert; End and Halt say which, for the batch the run belongs to.
+    private void StopWith(BatchEnd end, BatchHalt halt, string reason)
+    {
+        if (session is not { } active)
+        {
+            if (BatchActive)
+            {
+                HaltBatch(halt, $"{reason} between characters");
+            }
+
+            StopRefundSwitch(reason);
+            return;
+        }
+
+        memberEnd = end;
+        if (EntrySteps.InSubmissionWindow(active.Step) || active.Step == EntryStep.PersistIntent || active.CollectingInPressWindow)
+        {
+            active.StopRequested = true;
+            active.Publish();
+            RunLog.Info($"Entry run {active.RunId}: stop asked at {active.Step} ({reason}); the run ends once the press it made is verified.");
+            return;
+        }
+
+        StopTask();
+        active.MoveTo(EntryStep.Stopped);
+        Settle(active, EntryStep.Stopped, reason);
     }
 
     // A logout or a disconnect. The next login, even as the same character, counts as a new session: its entry attempt
