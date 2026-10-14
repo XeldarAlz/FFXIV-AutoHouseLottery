@@ -32,6 +32,7 @@ internal sealed class RunController
     private EntryRunTask? task;
     private ReconcileTask? reconciling;
     private LeaseOwner? owner;
+    private LeaseOwner? reconcileOwner;
     private RealEntryGrant? grant;
     private RunStatus finished = RunStatus.Idle;
     private bool reconcileWanted;
@@ -200,16 +201,16 @@ internal sealed class RunController
 
         var reconcile = new ReconcileTask(housing);
         reconciling = reconcile;
-        var reconcileOwner = leaseGrant.Owner;
+        reconcileOwner = leaseGrant.Owner;
         try
         {
-            ClibServices.Automation.Start(reconcile, OnCompleted: () => _ = Svc.Framework.RunOnFrameworkThread(() => FinishReconcile(reconcile, reconcileOwner)));
+            ClibServices.Automation.Start(reconcile, OnCompleted: () => _ = Svc.Framework.RunOnFrameworkThread(() => FinishReconcile(reconcile)));
             return true;
         }
         catch (Exception exception)
         {
             RunLog.Error(exception, "Reconciliation could not be started");
-            FinishReconcile(reconcile, reconcileOwner);
+            FinishReconcile(reconcile);
             return false;
         }
     }
@@ -424,17 +425,20 @@ internal sealed class RunController
         ClibServices.Automation.Stop();
     }
 
+    // A reconciliation stopped before its first frame never reports back, so it is let go here at once rather than
+    // when its completion arrives; a completion that arrives later finds nothing left to release.
     private void CancelReconcile()
     {
-        if (reconciling is null)
+        if (reconciling is not { } reconcile)
         {
             return;
         }
 
         ClibServices.Automation.Stop();
+        FinishReconcile(reconcile);
     }
 
-    private void FinishReconcile(ReconcileTask reconcile, LeaseOwner reconcileOwner)
+    private void FinishReconcile(ReconcileTask reconcile)
     {
         if (!ReferenceEquals(reconciling, reconcile))
         {
@@ -442,7 +446,12 @@ internal sealed class RunController
         }
 
         reconciling = null;
-        lease.Release(reconcileOwner);
+        if (reconcileOwner is { } holder)
+        {
+            lease.Release(holder);
+            reconcileOwner = null;
+        }
+
         LastReconcile = reconcile.Report;
     }
 
