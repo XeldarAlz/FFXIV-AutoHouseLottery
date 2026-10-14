@@ -80,7 +80,7 @@ internal static class AssignmentPlanner
         for (var index = 0; index < followed.Count; index++)
         {
             var member = followed[index];
-            if (index != leadIndex && member.Group == lead.Group && member.Placement == PlacementMode.SamePlot)
+            if (index != leadIndex && member.Group == lead.Group && member.Placement == PlacementMode.SamePlot && !member.Exact)
             {
                 followed[index] = member with { TargetOrder = pinned };
             }
@@ -176,6 +176,11 @@ internal static class AssignmentPlanner
             var removed = EligibilityReason.None;
             for (var plotIndex = 0; plotIndex < ranking.Length; plotIndex++)
             {
+                if (settings.Target is { } target && ranking[plotIndex].Key != target)
+                {
+                    continue;
+                }
+
                 var fit = EvaluatePlot(policy, character, ranking[plotIndex], plots);
                 if (fit.Blockers != EligibilityReason.None)
                 {
@@ -198,6 +203,8 @@ internal static class AssignmentPlanner
         return planned;
     }
 
+    // Exact targets are applied first, each as its own pinned unit. Outside Spread, the other members of a group share one
+    // unit, and that unit starts on the group's exact target when one of its members chose one and the plot suits them all.
     private static List<PlacementUnit> BuildUnits(
         RunPolicy policy,
         List<PlannedCharacter> planned,
@@ -206,20 +213,31 @@ internal static class AssignmentPlanner
         ImmutableArray<CharacterExclusion>.Builder exclusions)
     {
         var units = new List<PlacementUnit>();
-        if (policy.Placement == PlacementChoice.Spread)
+        var grouped = policy.Placement != PlacementChoice.Spread;
+        var mode = grouped ? PlacementMode.SamePlot : PlacementMode.Spread;
+        for (var characterIndex = 0; characterIndex < planned.Count; characterIndex++)
         {
-            for (var characterIndex = 0; characterIndex < planned.Count; characterIndex++)
+            if (planned[characterIndex].Exact)
             {
-                units.Add(new PlacementUnit(PlacementMode.Spread, [characterIndex], planned[characterIndex].Candidates));
+                units.Add(new PlacementUnit(mode, [characterIndex], planned[characterIndex].Candidates) { Pinned = true });
             }
-
-            return units;
         }
 
         for (var characterIndex = 0; characterIndex < planned.Count; characterIndex++)
         {
             var character = planned[characterIndex];
-            var unitIndex = FindUnit(units, planned, character.Group);
+            if (character.Exact)
+            {
+                continue;
+            }
+
+            if (!grouped)
+            {
+                units.Add(new PlacementUnit(PlacementMode.Spread, [characterIndex], character.Candidates));
+                continue;
+            }
+
+            var unitIndex = FindSharedUnit(units, planned, character.Group);
             if (unitIndex < 0)
             {
                 units.Add(new PlacementUnit(PlacementMode.SamePlot, [characterIndex], [.. character.Candidates]));
@@ -238,7 +256,55 @@ internal static class AssignmentPlanner
             units[unitIndex] = unit with { Order = shared };
         }
 
+        if (grouped)
+        {
+            AnchorToExactTargets(units, planned);
+        }
+
         return units;
+    }
+
+    private static void AnchorToExactTargets(List<PlacementUnit> units, List<PlannedCharacter> planned)
+    {
+        for (var unitIndex = 0; unitIndex < units.Count; unitIndex++)
+        {
+            var unit = units[unitIndex];
+            if (unit.Pinned)
+            {
+                continue;
+            }
+
+            var anchor = GroupTarget(units, planned, planned[unit.Members[0]].Group);
+            var position = anchor < 0 ? -1 : unit.Order.IndexOf(anchor);
+            if (position < 0)
+            {
+                continue;
+            }
+
+            var order = new List<int>(unit.Order.Count) { anchor };
+            for (var orderIndex = 0; orderIndex < unit.Order.Count; orderIndex++)
+            {
+                if (orderIndex != position)
+                {
+                    order.Add(unit.Order[orderIndex]);
+                }
+            }
+
+            units[unitIndex] = unit with { Order = order, Anchored = true };
+        }
+    }
+
+    private static int GroupTarget(List<PlacementUnit> units, List<PlannedCharacter> planned, OwnershipGroup group)
+    {
+        for (var unitIndex = 0; unitIndex < units.Count; unitIndex++)
+        {
+            if (units[unitIndex].Pinned && planned[units[unitIndex].Members[0]].Group == group)
+            {
+                return units[unitIndex].Order[0];
+            }
+        }
+
+        return -1;
     }
 
     private static ImmutableArray<RunAssignment> Place(
@@ -254,7 +320,7 @@ internal static class AssignmentPlanner
         for (var unitIndex = 0; unitIndex < units.Count; unitIndex++)
         {
             var unit = units[unitIndex];
-            var primaryPosition = distinctPrimaries ? FirstUnused(unit.Order, usedPrimaries) : 0;
+            var primaryPosition = distinctPrimaries && !unit.Pinned && !unit.Anchored ? FirstUnused(unit.Order, usedPrimaries) : 0;
             var primary = unit.Order[primaryPosition];
             usedPrimaries.Add(primary);
             var targetOrder = BuildTargetOrder(unit.Order, primaryPosition, policy.MaxInspections, ranking);
@@ -269,7 +335,10 @@ internal static class AssignmentPlanner
                     targetOrder,
                     MaximumDeposit(targetOrder, ranking, character.Settings.DepositCap),
                     character.Profile.Outstanding == OutstandingSettlement.RefundDue,
-                    eligibility));
+                    eligibility)
+                {
+                    Exact = unit.Pinned,
+                });
             }
         }
 
@@ -537,11 +606,11 @@ internal static class AssignmentPlanner
         return shared;
     }
 
-    private static int FindUnit(List<PlacementUnit> units, List<PlannedCharacter> planned, OwnershipGroup group)
+    private static int FindSharedUnit(List<PlacementUnit> units, List<PlannedCharacter> planned, OwnershipGroup group)
     {
         for (var unitIndex = 0; unitIndex < units.Count; unitIndex++)
         {
-            if (planned[units[unitIndex].Members[0]].Group == group)
+            if (!units[unitIndex].Pinned && planned[units[unitIndex].Members[0]].Group == group)
             {
                 return unitIndex;
             }
@@ -623,8 +692,16 @@ internal static class AssignmentPlanner
 
         public EligibilityResult CharacterResult { get; } = characterResult;
 
+        public bool Exact => Settings.Target is not null;
+
         public List<int> Candidates { get; } = [];
     }
 
-    private readonly record struct PlacementUnit(PlacementMode Mode, List<int> Members, List<int> Order);
+    // Pinned: one member's exact target. Anchored: a group's shared unit that starts on that target.
+    private readonly record struct PlacementUnit(PlacementMode Mode, List<int> Members, List<int> Order)
+    {
+        public bool Pinned { get; init; }
+
+        public bool Anchored { get; init; }
+    }
 }

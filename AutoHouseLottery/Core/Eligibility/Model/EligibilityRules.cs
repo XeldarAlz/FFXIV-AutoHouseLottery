@@ -78,7 +78,13 @@ internal static class EligibilityRules
                 break;
         }
 
-        switch (BudgetRules.Check(budget, ledger, candidate.Deposit, character.ObservedGil))
+        var funds = BudgetRules.Check(budget, ledger, candidate.Deposit, character.ObservedGil);
+        if (character.GilIsEstimate && funds is BudgetCheck.Fits or BudgetCheck.BelowReserve)
+        {
+            funds = BudgetCheck.BalanceUnknown;
+        }
+
+        switch (funds)
         {
             case BudgetCheck.Fits:
                 break;

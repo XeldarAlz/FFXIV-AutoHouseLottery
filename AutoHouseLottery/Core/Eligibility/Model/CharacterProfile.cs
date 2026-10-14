@@ -18,6 +18,10 @@ internal readonly record struct CharacterProfile
 
     public DateTime? GilObservedUtc { get; init; }
 
+    // The balance was read at an earlier login, not now: it is shown, but it can neither prove nor disprove that the
+    // character can pay until the character logs in again.
+    public bool GilIsEstimate { get; init; }
+
     public bool? PrivateBuyerQualified { get; init; }
 
     public bool? FreeCompanyBuyerQualified { get; init; }
