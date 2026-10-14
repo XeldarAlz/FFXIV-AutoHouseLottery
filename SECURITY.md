@@ -15,16 +15,16 @@ Please don't open a public issue or Discussion for anything that could let someo
 What counts:
 
 - Code execution or crashes triggerable by crafted game state, by a crafted answer from the housing listing service, or by a crafted reply from a helper plugin such as Lifestream.
-- The plugin entering a lottery it shouldn't: a plot you did not pick and that is not on your shortlist, a deposit above the amount the run showed before you pressed Enter, a buyer type (Private or Free Company) you did not choose, a second entry for the same character in one lottery period, a character you did not select, or anything at all during a dry run.
-- The plugin settling an entry the wrong way: collecting a refund on a plot you won, claiming a plot you did not choose, entering again after an entry whose result was unclear, or answering any game dialog other than the housing dialogs it recognizes by their rows in the game data.
+- The plugin entering a lottery it shouldn't: a plot you did not pick and that is not on your shortlist, a deposit above the amount the run showed before you pressed Enter, a buyer type (Private or Free Company) you did not choose, a second entry for the same character in one lottery period, a character you did not select, a Chinese or Korean world, or anything at all during a dry run or while entering is shown as dry run only on the Plugins page.
+- The plugin settling an entry the wrong way: collecting a refund on a plot you won, claiming a plot you did not choose, pressing Yes on a refund or a claim while that action is shown as dry run only, entering again after an entry whose result was unclear, or answering any game dialog other than the housing dialogs it recognizes by their rows in the game data.
 - The plugin teleporting, travelling, or persisting something it shouldn't, beyond the documented housing automation, which is the feature.
 - Data exfiltration: the plugin's only network calls are reads of public housing listings from the Aetherphone housing service, and the one-click helper install on the Plugins page only asks Dalamud to add that helper's repository and install it. Your characters, your gil and your entries never leave your machine. Sending them anywhere would be a bug.
 
-What it reads and keeps, so you can tell a bug from the design. Auto House Lottery is in development, and this is the design every release is held to:
+What it reads and keeps, so you can tell a bug from the design:
 
 - **Read from the game, never sent anywhere**: your character's home world, gil and Free Company, your lottery entries and their results, and, during a run, the plot's placard, the lottery windows and any dialog that opens.
-- **Kept on disk in the plugin's config folder**: your settings, your shortlists and saved searches, and a record of every entry, refund and claim the plugin made (keyed by the character's content id, the number Dalamud uses to tell characters apart), kept until each one is settled so an interrupted run is checked instead of repeated.
-- **Copied only when you press Copy log**: the Console lines, with a header naming the plugin version, the Dalamud version and your zone.
+- **Kept on disk in the plugin's config folder**: your settings, including the characters seen on this install by name, home world and content id (the number Dalamud uses to tell characters apart) so My lottery can name them; `shortlist.json` and `saved.json` with your shortlist, saved searches and plot lists; the housing service's answers under `housing-cache` for up to 7 days; `lottery-schedules.json` with the lottery calendar; and `journal.jsonl`, a record of every entry, refund and claim the plugin made, keyed by content id and kept until each one is settled so an interrupted run is checked instead of repeated.
+- **Copied only when you press Copy log or Copy diagnostics**: the Console lines with a header naming the plugin version, the Dalamud version and your zone, or the diagnostics report with the game version, your client language, the Compatibility list and the last 200 Console lines. Both replace every known character's name and content id with an alias and your Windows user folder with a placeholder; a name or id that still shows in a copy is a bug.
 
 What doesn't:
 
