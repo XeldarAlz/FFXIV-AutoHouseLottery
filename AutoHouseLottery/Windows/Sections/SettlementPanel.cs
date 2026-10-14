@@ -101,9 +101,6 @@ internal sealed class SettlementPanelText
         {
             case SettlementResult.Refunded:
                 return (FontAwesomeIcon.CheckCircle, Styling.AccentMint, Loc.T(L.Settlement.RefundedTitle), Loc.T(L.Settlement.RefundedBody, Loc.Gil(status.Received ?? 0), address));
-            case SettlementResult.RefundedAmountDiffers:
-                return (FontAwesomeIcon.ExclamationTriangle, Styling.AccentAmber, Loc.T(L.Settlement.RefundedTitle),
-                    Loc.T(L.Settlement.RefundedDiffersBody, Loc.Gil(status.Received ?? 0), address, Loc.Gil(status.OfferedRefund ?? 0)));
             case SettlementResult.Claimed:
                 return (FontAwesomeIcon.Home, Styling.AccentMint, Loc.T(L.Settlement.ClaimedTitle), Loc.T(L.Settlement.ClaimedBody, address));
             case SettlementResult.DryRun:

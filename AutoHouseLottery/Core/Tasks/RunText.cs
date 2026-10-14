@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks.Model;
@@ -44,7 +45,7 @@ internal static class RunText
 
     public static string Failure(EntryFailure failure, HousingText? rejection) => failure == EntryFailure.Rejected && rejection is { } refused
         ? Loc.T(Rejection(refused))
-        : Loc.T(failure switch
+        : failure == EntryFailure.AutoAnswerPlugin ? AutoAnswer() : Loc.T(failure switch
         {
             EntryFailure.Sold => L.RunFailure.Sold,
             EntryFailure.WrongPhase => L.RunFailure.WrongPhase,
@@ -73,7 +74,6 @@ internal static class RunText
             EntryFailure.AlreadyEntered => L.RunFailure.AlreadyEntered,
             EntryFailure.CollectRefundFirst => L.RunFailure.CollectRefundFirst,
             EntryFailure.RefundDryRun => L.RunFailure.RefundDryRun,
-            EntryFailure.CheckEarlierResult => L.RunFailure.CheckEarlierResult,
             EntryFailure.UnclaimedWin => L.RunFailure.UnclaimedWin,
             EntryFailure.CycleChanged => L.RunFailure.CycleChanged,
             EntryFailure.JournalUnavailable => L.RunFailure.JournalUnavailable,
@@ -84,7 +84,7 @@ internal static class RunText
         });
 
     // The reason anything that opens a lottery dialog is held while a plugin that answers dialogs is loaded.
-    public static string AutoAnswer() => Loc.T(L.RunStart.AutoAnswer, External.AutoAnswerGuard.LoadedName() ?? Model.AutoAnswerPlugins.InternalNames[0]);
+    public static string AutoAnswer() => Loc.T(L.RunStart.AutoAnswer, AutoAnswerGuard.LoadedName() ?? AutoAnswerPlugins.InternalNames[0]);
 
     public static string Reconcile(in ReconcileReport report) => report.Outcome switch
     {

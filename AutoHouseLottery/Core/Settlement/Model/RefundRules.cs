@@ -16,7 +16,7 @@ internal readonly record struct RefundEvidence(long Offered, long GilBefore, lon
     public int Looks { get; init; } = 1;
 }
 
-internal enum RefundVerdict : byte { Refunded, RefundedAmountDiffers, Uncertain }
+internal enum RefundVerdict : byte { Refunded, Uncertain }
 
 internal readonly record struct RefundSettlement(RefundVerdict Verdict, long? Received);
 
@@ -41,33 +41,36 @@ internal static class RefundRules
         };
     }
 
-    // Settled needs the gil to have risen, the dialog to be gone and the same placard to offer no result any more; a gil
-    // rise alone never settles a refund. A rise other than the offered amount is recorded as received, never as the full
-    // refund.
+    // Settled needs the gil to have risen by exactly the offered amount, the dialog to be gone and the same placard to
+    // offer no result any more. A gil rise alone never settles a refund, and neither does a rise of any other amount: in
+    // the minutes a visit waits, a trade or a sale can move the gil too.
     public static RefundSettlement Settle(in RefundEvidence evidence)
     {
         if (!evidence.DialogGone
             || evidence.PlacardStillOffers != false
             || evidence.GilAfter is not { } after
             || !Gil.TrySubtract(after, evidence.GilBefore, out var received)
-            || received <= 0)
+            || received != evidence.Offered)
         {
             return new RefundSettlement(RefundVerdict.Uncertain, null);
         }
 
-        return received == evidence.Offered
-            ? new RefundSettlement(RefundVerdict.Refunded, received)
-            : new RefundSettlement(RefundVerdict.RefundedAmountDiffers, received);
+        return new RefundSettlement(RefundVerdict.Refunded, received);
     }
 
-    // The gil rose and the dialog is gone, but the placard re-read so soon still offers the result or could not be read:
-    // one more look after a further delay is what can still settle the refund.
+    // The gil rose and the dialog is gone, but the refund is not settled on the first look: the placard re-read so soon
+    // still offers the result or could not be read, or the rise is not exactly the offer. One more look after a further
+    // delay is what can still settle it; after that it is left for reconciliation.
     public static bool NeedsSecondLook(in RefundEvidence evidence)
         => evidence.Looks < MaximumLooks
             && evidence.DialogGone
-            && evidence.PlacardStillOffers != false
             && evidence.GilAfter is { } after
-            && after > evidence.GilBefore;
+            && after > evidence.GilBefore
+            && Settle(evidence).Verdict == RefundVerdict.Uncertain;
+
+    // A re-read placard can speak about the result once its sale data has arrived, or, for a plot the winner has already
+    // claimed (which carries no sale data), once its housing type is known and every labelled button is a known one.
+    public static bool PlacardReadable(bool saleRead, bool housingTypeKnown, bool allLabelsKnown) => saleRead || (housingTypeKnown && allLabelsKnown);
 
     private static bool IsAfterFee(long offered, long paid)
     {

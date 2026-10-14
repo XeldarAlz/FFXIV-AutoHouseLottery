@@ -85,6 +85,11 @@ internal sealed partial class SettlementTask
         if (verdict.Outcome == InspectionOutcome.OutcomeUnknown)
         {
             await CloseResult(dialog);
+            if (identity == PlacardIdentityVerdict.Confirmed && SettlementStates.OutcomeOpen(recorded.State) && recorded.State != SettlementState.OutcomeUnknown)
+            {
+                await Advance(journal, entry.ReceiptId, SettlementState.OutcomeUnknown, null);
+            }
+
             End(SettlementResult.NeedsPlayer, SettlementSteps.FromInspection(verdict.Reason));
             return;
         }
@@ -161,7 +166,15 @@ internal sealed partial class SettlementTask
 
         if (owed && dialog?.RefundDeadline is { } shownDeadline && ToUtc(shownDeadline) is { } deadlineUtc)
         {
-            await Write(() => journal.RecordRefundDeadline(entry.ReceiptId, deadlineUtc, DateTime.UtcNow), $"refund deadline {deadlineUtc:u}");
+            var estimate = SettlementDeadlines.RefundDeadline(entry.Cycle, services.Housing.CurrentPosition(DateTime.UtcNow), services.Housing.Schedule);
+            if (SettlementDeadlines.PlausibleShownDeadline(deadlineUtc, estimate))
+            {
+                await Write(() => journal.RecordRefundDeadline(entry.ReceiptId, deadlineUtc, DateTime.UtcNow), $"refund deadline {deadlineUtc:u}");
+            }
+            else
+            {
+                Warn($"{Label}: the dialog's refund deadline {deadlineUtc:u} is far from the estimate {estimate?.ToString("u") ?? "unknown"}; the estimate is kept.");
+            }
         }
 
         return SettlementFailure.None;
@@ -235,7 +248,9 @@ internal sealed partial class SettlementTask
     }
 
     private bool SeenInAnotherSession(Guid id, bool strongNow)
-        => strongNow && services.Configuration.AbsenceSighting(id) is { Strong: true } earlier && earlier.Session != services.SessionId();
+        => strongNow
+        && services.Configuration.AbsenceSighting(id) is { } earlier
+        && AbsenceRules.CountsAsSecondSighting(earlier.Strong, earlier.Session, earlier.AtUtc, services.SessionId(), DateTime.UtcNow);
 
     private static PlacardEvidence EvidenceOf(PlacardReading placard)
     {
@@ -330,19 +345,19 @@ internal sealed partial class SettlementTask
     // The close-based Cancel, with its own throttle, retried until the dialog is gone or the wait ends.
     private async Task<bool> CloseResult(ResultDialogReading? dialog)
     {
-        if (dialog is null && HousingDialogs.IdentifyResultDialog() is not { Text: not null })
+        if (dialog is null && !HousingDialogs.ResultDialogOpen())
         {
             return true;
         }
 
         var deadline = Environment.TickCount64 + CloseWaitMs;
-        while (HousingDialogs.IdentifyResultDialog() is { Text: not null } && Environment.TickCount64 < deadline)
+        while (HousingDialogs.ResultDialogOpen() && Environment.TickCount64 < deadline)
         {
             CloseResultNow();
             await NextFrame(ObservePollFrames);
         }
 
-        var closed = HousingDialogs.IdentifyResultDialog() is not { Text: not null };
+        var closed = !HousingDialogs.ResultDialogOpen();
         resultOpenedByVisit &= !closed;
         Diag($"{Label}: the result dialog {(closed ? "is closed" : "did not close")}; nothing on it was pressed.");
         return closed;

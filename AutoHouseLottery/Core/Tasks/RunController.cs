@@ -48,7 +48,7 @@ internal sealed partial class RunController
     public RunController(HousingContext housing, HousingObservers observers)
     {
         this.housing = housing;
-        services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater, AutomaticRefunds, CollectForEntry);
+        services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater, AutomaticRefunds, CollectForEntry, TrackJournalWrite);
         settlementServices = new SettlementServices(housing, observers, Plugin.Instance.Configuration, SettlementGrantFor, ConsumeSettlementGrant, RecordSettlementTravel, SettlementSession);
         scheduler = new SettlementScheduler(housing, Plugin.Instance.Configuration);
         notices = new SettlementNoticeAnnouncer(housing, Plugin.Instance.Configuration);
@@ -100,6 +100,11 @@ internal sealed partial class RunController
                 active.RequestedPause = reason;
                 active.Publish();
                 RunLog.Info($"Entry run {active.RunId}: pause asked at {active.Step}; a press may have reached the game, so the run finishes verifying it first.");
+            }
+            else if (active.PauseRequested && reason == PauseReason.Manual && active.RequestedPause == PauseReason.InContent)
+            {
+                active.RequestedPause = PauseReason.Manual;
+                RunLog.Info($"Entry run {active.RunId}: the pending duty pause is now a manual pause; leaving content will not resume it.");
             }
 
             return;
@@ -175,9 +180,10 @@ internal sealed partial class RunController
     }
 
     // A GM alert ends everything at once: a refund an entry run is collecting is not verified first either, and a press it
-    // may have made is left for reconciliation.
+    // may have made is left for reconciliation. No automatic visit starts again until the player touches the game.
     public void StopForAlert()
     {
+        scheduler.HoldUntilInput(Environment.TickCount64);
         if (session is { CollectingInPressWindow: true })
         {
             End("a GM alert");
@@ -407,7 +413,7 @@ internal sealed partial class RunController
         StopTask();
         active.ForceEnd(reason);
         Settle(active, interruptedAt, reason);
-        pendingJournalWrite = collectingWrite ?? pendingJournalWrite;
+        TrackJournalWrite(collectingWrite);
     }
 
     // InterruptedAt is the step the run was at when it ended, which can differ from its final step after an interrupt.
@@ -447,11 +453,11 @@ internal sealed partial class RunController
             return;
         }
 
-        pendingJournalWrite = System.Threading.Tasks.Task.Run(() =>
+        TrackJournalWrite(System.Threading.Tasks.Task.Run(() =>
         {
             var written = unpressed ? journal.Reject(attempt.AttemptId, DateTime.UtcNow) : journal.RequireReconciliation(attempt.AttemptId, DateTime.UtcNow);
             RunLog.Info($"Entry run {active.RunId}: attempt {attempt.AttemptId} {(unpressed ? "released, it was never pressed" : "marked for reconciliation")} ({written}).");
-        });
+        }));
         reconcileWanted = false;
     }
 

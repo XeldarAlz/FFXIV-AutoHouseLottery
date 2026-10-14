@@ -10,6 +10,7 @@ using AutoHouseLottery.Core.Integration.Model;
 using AutoHouseLottery.Core.Persistence;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Settlement.Model;
+using AutoHouseLottery.Core.Tasks.Model;
 using AutoHouseLottery.Core.Travel.Model;
 using ECommons.DalamudServices;
 
@@ -50,6 +51,7 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
     private bool pressed;
     private bool attemptSettled;
     private bool resultOpenedByVisit;
+    private EntrySubmission? submission;
 
     public SettlementStatus Progress { get; private set; } = SettlementStatus.Idle;
 
@@ -386,7 +388,8 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
     }
 
     // A visit ended around its press by a logout, an unload or a GM alert: an intent never pressed is released, and a
-    // press that may have gone through is left for reconciliation, never as settled.
+    // press that may have gone through is left for reconciliation, never as settled. The write waits for the journal write
+    // the submission still has under way, so it never lands before the intent it settles.
     private void SettleOpenAttempt()
     {
         if (ownAttempt is not { } attempt || attemptSettled || PendingWrite is not null || services.Housing.Journal is not { } journal)
@@ -396,12 +399,13 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
 
         var receiptId = attempt.ReceiptId.GetValueOrDefault();
         var wasPressed = pressed;
-        PendingWrite = Task.Run(() =>
+        var inFlight = submission?.InFlight ?? Task.CompletedTask;
+        PendingWrite = inFlight.ContinueWith(_ =>
         {
             var written = wasPressed ? journal.RequireReconciliation(attempt.AttemptId, DateTime.UtcNow) : journal.Reject(attempt.AttemptId, DateTime.UtcNow);
             var settlement = wasPressed ? journal.AdvanceSettlement(receiptId, SettlementState.NeedsReconciliation, null, DateTime.UtcNow) : JournalWrite.AlreadyRecorded;
             RunLog.Info($"{Label}: attempt {attempt.AttemptId} {(wasPressed ? "left for reconciliation" : "released, it was never pressed")} ({written}, settlement {settlement}).");
-        });
+        }, TaskScheduler.Default);
     }
 
     private static bool CloseResultNow()

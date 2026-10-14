@@ -38,6 +38,7 @@ public sealed class FallbackRulesTests
     [InlineData((byte)EntryFailure.ConfirmationNotShown)]
     [InlineData((byte)EntryFailure.ConfirmationNotReady)]
     [InlineData((byte)EntryFailure.GilUnknown)]
+    [InlineData((byte)EntryFailure.AutoAnswerPlugin)]
     public void UnclearFailureAsksThePlayerInsteadOfMovingOn(byte raw)
     {
         var failure = (EntryFailure)raw;
@@ -67,5 +68,13 @@ public sealed class FallbackRulesTests
         Assert.Equal(FallbackDecision.TryNextPlot, FallbackRules.Decide(RunMode.BestMatch, EntryFailure.Sold, false, Limit - 1, Limit, true));
         Assert.Equal(FallbackDecision.FinishCharacter, FallbackRules.Decide(RunMode.BestMatch, EntryFailure.Sold, false, Limit, Limit, true));
         Assert.Equal(FallbackDecision.FinishCharacter, FallbackRules.Decide(RunMode.BestMatch, EntryFailure.Sold, false, 1, Limit, false));
+    }
+
+    [Fact]
+    public void ALoadedAutoAnswerPluginStopsForThePlayerInEveryMode()
+    {
+        Assert.Equal(FallbackDecision.AskPlayer, FallbackRules.Decide(RunMode.Exact, EntryFailure.AutoAnswerPlugin, submissionStarted: false, 1, Limit, hasNextTarget: true));
+        Assert.Equal(FallbackDecision.AskPlayer, FallbackRules.Decide(RunMode.BestMatch, EntryFailure.AutoAnswerPlugin, submissionStarted: false, 1, Limit, hasNextTarget: false));
+        Assert.False(FallbackRules.IsAboutTheCharacter(EntryFailure.AutoAnswerPlugin));
     }
 }

@@ -1,5 +1,6 @@
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Settlement.Model;
+using AutoHouseLottery.Core.Tasks;
 
 namespace AutoHouseLottery.Core.Settlement;
 
@@ -35,7 +36,7 @@ internal static class SettlementText
         _ => Loc.T(L.Settlement.OutcomeNotEntered, address),
     };
 
-    public static string Failure(SettlementFailure failure) => failure == SettlementFailure.AutoAnswerPlugin ? Tasks.RunText.AutoAnswer() : Loc.T(failure switch
+    public static string Failure(SettlementFailure failure) => failure == SettlementFailure.AutoAnswerPlugin ? RunText.AutoAnswer() : Loc.T(failure switch
     {
         SettlementFailure.CharacterChanged => L.Settlement.FailureCharacter,
         SettlementFailure.JournalUnavailable => L.RunFailure.JournalUnavailable,
@@ -72,7 +73,7 @@ internal static class SettlementText
         _ => L.Settlement.FailureInterrupted,
     });
 
-    public static string Refusal(SettlementRefusal refusal) => refusal == SettlementRefusal.AutoAnswerPlugin ? Tasks.RunText.AutoAnswer() : Loc.T(refusal switch
+    public static string Refusal(SettlementRefusal refusal) => refusal == SettlementRefusal.AutoAnswerPlugin ? RunText.AutoAnswer() : Loc.T(refusal switch
     {
         SettlementRefusal.NotLoggedIn => L.RunStart.NotLoggedIn,
         SettlementRefusal.UnsupportedRegion => L.RunStart.UnsupportedRegion,
@@ -81,7 +82,7 @@ internal static class SettlementText
         _ => L.RunStart.Busy,
     });
 
-    public static string Block(SchedulerBlock block) => block == SchedulerBlock.AutoAnswerPlugin ? Tasks.RunText.AutoAnswer() : Loc.T(block switch
+    public static string Block(SchedulerBlock block) => block == SchedulerBlock.AutoAnswerPlugin ? RunText.AutoAnswer() : Loc.T(block switch
     {
         SchedulerBlock.RefundsOff => L.Settlement.BlockOff,
         SchedulerBlock.NothingDue => L.Settlement.BlockNothingDue,
@@ -95,6 +96,7 @@ internal static class SettlementText
         SchedulerBlock.NotIdle => L.Settlement.BlockNotIdle,
         SchedulerBlock.BelowReserve => L.Settlement.FailureReserve,
         SchedulerBlock.TravelBudgetSpent => L.Settlement.FailureTravelBudget,
+        SchedulerBlock.HeldAfterAlert => L.Settlement.BlockHeldAfterAlert,
         SchedulerBlock.None => L.Settlement.BlockStarting,
         _ => L.RunStart.NotLoggedIn,
     });
