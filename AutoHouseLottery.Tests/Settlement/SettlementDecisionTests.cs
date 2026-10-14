@@ -35,7 +35,18 @@ public sealed class SettlementDecisionTests
     {
         Assert.Equal("YesAlready", AutoAnswerPlugins.FirstLoaded([new InstalledPlugin("Lifestream", "Lifestream", true), new InstalledPlugin("YesAlready", "YesAlready", true)]));
         Assert.Null(AutoAnswerPlugins.FirstLoaded([new InstalledPlugin("YesAlready", "YesAlready", false)]));
-        Assert.Null(AutoAnswerPlugins.FirstLoaded([new InstalledPlugin("yesalready", "Look-alike", true)]));
         Assert.Equal("YesAlready", AutoAnswerPlugins.FirstLoaded([new InstalledPlugin("YesAlready", string.Empty, true)]));
+        Assert.Null(AutoAnswerPlugins.FirstLoaded([new InstalledPlugin("Lifestream", "Yes Already", true)]));
+    }
+
+    [Theory]
+    [InlineData("yesalready")]
+    [InlineData("YESALREADY")]
+    [InlineData("YesAlreadyFork")]
+    [InlineData("MyYesAlready")]
+    public void AnyLoadedPluginNamedLikeYesAlreadyCounts(string internalName)
+    {
+        Assert.Equal("Look-alike", AutoAnswerPlugins.FirstLoaded([new InstalledPlugin(internalName, "Look-alike", true)]));
+        Assert.Null(AutoAnswerPlugins.FirstLoaded([new InstalledPlugin(internalName, "Look-alike", false)]));
     }
 }

@@ -9,6 +9,7 @@ internal readonly record struct InstalledPlugin(string InternalName, string Name
 // dialogs, and such a plugin could press Confirm or Yes on them before the plugin closes them.
 internal static class AutoAnswerPlugins
 {
+    // Matched case-insensitively anywhere in a plugin's internal name, so forks and renamed builds count too.
     public static readonly ImmutableArray<string> InternalNames = ["YesAlready"];
 
     // The name of the first loaded auto-answer plugin, null when none is loaded.
@@ -30,7 +31,7 @@ internal static class AutoAnswerPlugins
     {
         for (var index = 0; index < InternalNames.Length; index++)
         {
-            if (string.Equals(InternalNames[index], internalName, StringComparison.Ordinal))
+            if (internalName.Contains(InternalNames[index], StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
