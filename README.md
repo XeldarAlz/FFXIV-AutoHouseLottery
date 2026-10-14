@@ -164,7 +164,7 @@ Spotted a wrong or awkward translation? Open a [translation issue](https://githu
 
 **Why did my run stop?** The run panel says why, and the Console has every step. Common reasons: the plot was sold or changed price, the entry period closed, an earlier refund still waits, Lifestream was busy, or a plugin that answers dialogs is loaded.
 
-**I won. What now?** My lottery shows Claim house. Claim it before the results period ends: an unclaimed win is forfeited, and its refund keeps back a 50% fee. Building the house is a separate step in game.
+**I won. What now?** Claim it in game at the plot's placard before the results period ends: an unclaimed win is forfeited, and its refund keeps back a 50% fee. Until claiming is validated (see [Validation status](#validation-status)), the win's row on My lottery and its notice say to claim it in game, and the row's button only reads the win and closes it. Building the house is a separate step in game.
 
 **A refund shows as pending. Is my deposit lost?** No. The game keeps the refund until the deadline My lottery shows. Collect it at the plot's placard in game, or let Check result read it again. If you already collected it in game, press Settled in game on My lottery.
 
