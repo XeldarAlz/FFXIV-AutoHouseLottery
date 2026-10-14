@@ -53,11 +53,36 @@ public sealed class ReceiptAndReconciliationTests
     }
 
     [Fact]
-    public void EntryElsewhereOrNoEntryWithUntouchedGilIsARejection()
+    public void OneNoEntryReadingSoSoonAfterThePressIsNotARejection()
     {
-        Assert.Equal(ReceiptVerdict.Rejected, ReceiptCorrelation.Correlate(Facts(GilBefore, RecordReading(3, 1), false)).Verdict);
-        Assert.Equal(ReceiptVerdict.Rejected, ReceiptCorrelation.Correlate(Facts(GilBefore, Reading(LotterySnapshotState.LoadedNone), null)).Verdict);
+        var once = Facts(GilBefore, Reading(LotterySnapshotState.LoadedNone), null);
+
+        Assert.Equal(ReceiptVerdict.Uncertain, ReceiptCorrelation.Correlate(once).Verdict);
+        Assert.True(ReceiptCorrelation.NeedsSecondReading(once));
+        Assert.Equal(ReceiptVerdict.Uncertain, ReceiptCorrelation.Correlate(Facts(GilBefore, RecordReading(3, 1), false)).Verdict);
         Assert.Equal(ReceiptVerdict.Uncertain, ReceiptCorrelation.Correlate(Facts(GilBefore, null, null)).Verdict);
+        Assert.False(ReceiptCorrelation.NeedsSecondReading(Facts(GilBefore, null, null)));
+    }
+
+    [Fact]
+    public void TwoReadingsWithoutTheEntryAndUntouchedGilAreARejection()
+    {
+        var none = Facts(GilBefore, Reading(LotterySnapshotState.LoadedNone), null) with { SecondReading = Reading(LotterySnapshotState.LoadedNone) };
+        var elsewhere = Facts(GilBefore, RecordReading(3, 1), false) with { SecondReading = RecordReading(3, 1), SecondReadingNamesPlot = false };
+
+        Assert.Equal(ReceiptVerdict.Rejected, ReceiptCorrelation.Correlate(none).Verdict);
+        Assert.Equal(ReceiptVerdict.Rejected, ReceiptCorrelation.Correlate(elsewhere).Verdict);
+        Assert.False(ReceiptCorrelation.NeedsSecondReading(none));
+    }
+
+    [Fact]
+    public void SecondReadingThatShowsTheEntryWithTheDepositTakenConfirms()
+    {
+        var late = Facts(GilBefore - Deposit, Reading(LotterySnapshotState.Unloaded), null) with { SecondReading = RecordReading(12, 5), SecondReadingNamesPlot = true };
+        var unclear = Facts(GilBefore, Reading(LotterySnapshotState.LoadedNone), null) with { SecondReading = Reading(LotterySnapshotState.Unloaded) };
+
+        Assert.Equal(ReceiptVerdict.Confirmed, ReceiptCorrelation.Correlate(late).Verdict);
+        Assert.Equal(ReceiptVerdict.Uncertain, ReceiptCorrelation.Correlate(unclear).Verdict);
     }
 
     [Fact]

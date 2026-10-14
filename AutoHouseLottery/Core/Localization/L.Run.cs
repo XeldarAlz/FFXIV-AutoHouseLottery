@@ -66,6 +66,7 @@ internal static partial class L
         public static readonly LocString SaleUnreadable = new("runFailure.saleUnreadable", "The placard's sale details could not be read.");
         public static readonly LocString EntryButtonUnavailable = new("runFailure.entryButtonUnavailable", "The placard offers no lottery entry to this character.");
         public static readonly LocString ConfirmationNotShown = new("runFailure.confirmationNotShown", "The lottery confirmation did not appear.");
+        public static readonly LocString ConfirmationNotReady = new("runFailure.confirmationNotReady", "The lottery confirmation changed before Confirm could be pressed. Nothing was submitted.");
         public static readonly LocString DepositUnreadable = new("runFailure.depositUnreadable", "The deposit on the lottery confirmation could not be read.");
         public static readonly LocString GilUnknown = new("runFailure.gilUnknown", "This character's gil could not be read.");
         public static readonly LocString CheckboxNotTicked = new("runFailure.checkboxNotTicked", "The confirmation's checkbox could not be ticked. Nothing was submitted.");

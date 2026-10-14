@@ -28,7 +28,6 @@ internal static unsafe class HousingProbe
     private const int DescribedDialogValues = 32;
     private const int RecentLogMessages = 8;
     private const int VisibleIdDigits = 4;
-    private const int OneBased = 1;
     private const int GotoArgumentCount = 4;
     private const int ApproachArgumentCount = 3;
     private const int PressArgumentCount = 2;
@@ -64,6 +63,10 @@ internal static unsafe class HousingProbe
                 return;
             case "press" when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
+                return;
+            case "stop" when Plugin.Instance.Controller.Busy:
+                RunLog.Warning($"{Prefix} stop refused; an entry run or a reconciliation owns the game. Use /ahl stop for the run.");
+                Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
                 return;
             case "stop":
                 TaskStarter.StopCurrent();
@@ -121,7 +124,7 @@ internal static unsafe class HousingProbe
             return false;
         }
 
-        destination = new HousingDestination(Svc.PlayerState.CurrentWorld.RowId, territoryTypeId, ward - OneBased, plot - OneBased);
+        destination = new HousingDestination(Svc.PlayerState.CurrentWorld.RowId, territoryTypeId, ward - ResidentialDistricts.OneBased, plot - ResidentialDistricts.OneBased);
         return destination.IsValid;
     }
 
@@ -233,12 +236,12 @@ internal static unsafe class HousingProbe
         {
             var acknowledged = WardPager.AcceptDisplayed(reading.WardIndex, window, observers.WardPackets);
             RunLog.Info($"{Prefix} shown ward {(acknowledged is null ? "not tied to its packet yet" : $"acknowledged ({acknowledged.Correlation})")}.");
-            RunLog.Info($"{Prefix} ward {reading.WardIndex + OneBased} '{reading.WardName}', ward count {Show(reading.WardCount)}, buyer flags 0x{reading.BuyerFlags:X8} "
+            RunLog.Info($"{Prefix} ward {reading.WardIndex + ResidentialDistricts.OneBased} '{reading.WardName}', ward count {Show(reading.WardCount)}, buyer flags 0x{reading.BuyerFlags:X8} "
                       + $"(FC bit {WardLayout.FreeCompanyFlag(reading.BuyerFlags)}, private bit {WardLayout.PrivateFlag(reading.BuyerFlags)}), {reading.Rows.Length} rows.");
             for (var rowIndex = 0; rowIndex < reading.Rows.Length; rowIndex++)
             {
                 var row = reading.Rows[rowIndex];
-                RunLog.Debug($"{Prefix} ward row {row.PlotIndex + OneBased}: status {row.Status}, size '{row.SizeText}', name or price '{row.NameOrPriceText}', "
+                RunLog.Debug($"{Prefix} ward row {row.PlotIndex + ResidentialDistricts.OneBased}: status {row.Status}, size '{row.SizeText}', name or price '{row.NameOrPriceText}', "
                            + $"value 3 {row.UnidentifiedValue}, tags {row.Tag1}/{row.Tag2}/{row.Tag3}.");
             }
         }
@@ -260,10 +263,10 @@ internal static unsafe class HousingProbe
                 continue;
             }
 
-            RunLog.Debug($"{Prefix} ward packet plot {entry.PlotIndex + OneBased}: unowned, price {entry.Price}, flags 0x{entry.Flags:X2}.");
+            RunLog.Debug($"{Prefix} ward packet plot {entry.PlotIndex + ResidentialDistricts.OneBased}: unowned, price {entry.Price}, flags 0x{entry.Flags:X2}.");
         }
 
-        RunLog.Info($"{Prefix} ward packet: territory {packet.TerritoryTypeId}, ward {packet.WardIndex + OneBased}, world {packet.WorldId}, {owned} of {packet.Entries.Length} owned, "
+        RunLog.Info($"{Prefix} ward packet: territory {packet.TerritoryTypeId}, ward {packet.WardIndex + ResidentialDistricts.OneBased}, world {packet.WorldId}, {owned} of {packet.Entries.Length} owned, "
                   + $"purchase type {packet.PurchaseType}, tenant type {packet.TenantType}, sequence {packet.Sequence}.");
     }
 
@@ -418,7 +421,7 @@ internal static unsafe class HousingProbe
     {
         var lifestream = LifestreamIpc.Instance;
         var capabilities = lifestream.Capabilities();
-        RunLog.Info($"{Prefix} Lifestream: {capabilities}, busy {Show(lifestream.IsBusy())}, current plot {(lifestream.CurrentPlotInfo() is { } info ? $"kind {info.Kind}, ward {info.Ward + OneBased}, plot {info.Plot + OneBased}" : "none")}, "
+        RunLog.Info($"{Prefix} Lifestream: {capabilities}, busy {Show(lifestream.IsBusy())}, current plot {(lifestream.CurrentPlotInfo() is { } info ? $"kind {info.Kind}, ward {info.Ward + ResidentialDistricts.OneBased}, plot {info.Plot + ResidentialDistricts.OneBased}" : "none")}, "
                   + $"travel token {Show(HousingTravel.CurrentToken)}.");
         RunLog.Info($"{Prefix} vnavmesh: {(NavmeshIpc.Instance.Available ? "available" : "not available")}.");
     }
@@ -430,10 +433,10 @@ internal static unsafe class HousingProbe
             + $"availability {info.Availability?.ToString() ?? $"unknown ({info.RawAvailability})"}, phase ends {info.PhaseEndsAtUtc?.ToString("u") ?? "unknown"}, entries {info.EntryCount}";
 
     private static string Describe(PlotAddress? address)
-        => address is not { } plot ? "none" : $"territory {plot.TerritoryTypeId}, ward {plot.WardIndex + OneBased}, plot {plot.PlotIndex + OneBased}";
+        => address is not { } plot ? "none" : $"territory {plot.TerritoryTypeId}, ward {plot.WardIndex + ResidentialDistricts.OneBased}, plot {plot.PlotIndex + ResidentialDistricts.OneBased}";
 
     private static string Describe(EstateAddress? estate)
-        => estate is not { } address ? "none" : $"territory {address.TerritoryTypeId}, ward {address.WardIndex + OneBased}, plot {address.PlotIndex + OneBased}{(address.Apartment ? " (apartment)" : string.Empty)}";
+        => estate is not { } address ? "none" : $"territory {address.TerritoryTypeId}, ward {address.WardIndex + ResidentialDistricts.OneBased}, plot {address.PlotIndex + ResidentialDistricts.OneBased}{(address.Apartment ? " (apartment)" : string.Empty)}";
 
     private static string Tail(ulong value)
     {
@@ -443,5 +446,5 @@ internal static unsafe class HousingProbe
 
     private static string Show<T>(T? value) where T : struct => value?.ToString() ?? "unknown";
 
-    private static string ShowOneBased(int? index) => index is { } value ? (value + OneBased).ToString() : "none";
+    private static string ShowOneBased(int? index) => index is { } value ? (value + ResidentialDistricts.OneBased).ToString() : "none";
 }

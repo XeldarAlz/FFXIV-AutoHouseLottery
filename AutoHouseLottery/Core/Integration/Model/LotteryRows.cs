@@ -51,7 +51,7 @@ internal static class LotteryRows
             var attempt = attempts[index];
             if (attempt.Kind == ActionKind.Entry && attempt.State != AttemptState.Confirmed)
             {
-                rows.Add(ForAttempt(attempt));
+                rows.Add(ForAttempt(attempt, current.Cycle));
             }
         }
 
@@ -78,9 +78,16 @@ internal static class LotteryRows
             receipt.Evidence);
     }
 
-    private static LotteryRow ForAttempt(ActionAttempt attempt)
+    // An attempt still in question for the current cycle needs its outcome verified; one from an earlier cycle can only
+    // be settled by reading the plot's result.
+    private static LotteryRow ForAttempt(ActionAttempt attempt, CycleKey current)
     {
         var rejected = attempt.State == AttemptState.Rejected;
+        var (state, section, action) = rejected
+            ? (LotteryRowState.Rejected, LotterySection.History, LotteryAction.None)
+            : ResultChecks.IsUncertainFromEarlierCycle(attempt, current)
+                ? (LotteryRowState.ResultsAvailable, LotterySection.ActionNeeded, LotteryAction.CheckResult)
+                : (LotteryRowState.Uncertain, LotterySection.ActionNeeded, LotteryAction.VerifyOutcome);
         return new LotteryRow(
             attempt.AttemptId,
             attempt.CharacterContentId,
@@ -91,9 +98,9 @@ internal static class LotteryRows
             attempt.Amount,
             null,
             null,
-            rejected ? LotteryRowState.Rejected : LotteryRowState.Uncertain,
-            rejected ? LotterySection.History : LotterySection.ActionNeeded,
-            rejected ? LotteryAction.None : LotteryAction.VerifyOutcome,
+            state,
+            section,
+            action,
             null);
     }
 

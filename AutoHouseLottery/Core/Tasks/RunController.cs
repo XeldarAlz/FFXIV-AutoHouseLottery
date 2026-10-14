@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
+using AutoHouseLottery.Core.Game.Dialogs;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
@@ -22,6 +23,8 @@ namespace AutoHouseLottery.Core.Tasks;
 internal sealed class RunController
 {
     private const int SchedulerPollMs = TimeUnits.MillisecondsPerSecond;
+    private const int ConfirmationCloseRetryMs = 5_000;
+    private const int JournalWriteWaitMs = 2_000;
 
     private readonly ExecutionLease lease = new();
     private readonly HousingContext housing;
@@ -30,16 +33,19 @@ internal sealed class RunController
     private EntryRunTask? task;
     private ReconcileTask? reconciling;
     private LeaseOwner? owner;
+    private LeaseOwner? reconcileOwner;
     private RealEntryGrant? grant;
     private RunStatus finished = RunStatus.Idle;
     private bool reconcileWanted;
     private ulong lastContentId;
     private long nextPollMs;
+    private long closeConfirmationUntilMs;
+    private System.Threading.Tasks.Task? pendingJournalWrite;
 
     public RunController(HousingContext housing, HousingObservers observers)
     {
         this.housing = housing;
-        services = new RunServices(housing, observers, () => grant, ConsumeGrant);
+        services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater);
         reconcileWanted = true;
         Svc.Framework.Update += OnUpdate;
     }
@@ -173,10 +179,15 @@ internal sealed class RunController
         End("logged out");
     }
 
+    // The journal is closed right after this, so the last attempt write is waited for, briefly, before it is.
     public void Shutdown()
     {
         End("the plugin is unloading");
         Svc.Framework.Update -= OnUpdate;
+        if (pendingJournalWrite is { IsCompleted: false } write && !write.Wait(JournalWriteWaitMs))
+        {
+            RunLog.Warning("The last journal write did not finish before unload; the attempt is read back as uncertain at the next load.");
+        }
     }
 
     public void Dismiss()
@@ -197,16 +208,16 @@ internal sealed class RunController
 
         var reconcile = new ReconcileTask(housing);
         reconciling = reconcile;
-        var reconcileOwner = leaseGrant.Owner;
+        reconcileOwner = leaseGrant.Owner;
         try
         {
-            ClibServices.Automation.Start(reconcile, OnCompleted: () => _ = Svc.Framework.RunOnFrameworkThread(() => FinishReconcile(reconcile, reconcileOwner)));
+            ClibServices.Automation.Start(reconcile, OnCompleted: () => _ = Svc.Framework.RunOnFrameworkThread(() => FinishReconcile(reconcile)));
             return true;
         }
         catch (Exception exception)
         {
             RunLog.Error(exception, "Reconciliation could not be started");
-            FinishReconcile(reconcile, reconcileOwner);
+            FinishReconcile(reconcile);
             return false;
         }
     }
@@ -266,7 +277,7 @@ internal sealed class RunController
             policy,
             settings is not null,
             housing.JournalWritable,
-            context is not null && housing.HasPendingAttempt(context.ContentId),
+            context is not null && housing.HasPendingAttempt(context.ContentId, policy.Cycle.Cycle),
             slot,
             preview?.Blockers ?? RunBlocker.None,
             assignment is not null);
@@ -294,7 +305,7 @@ internal sealed class RunController
         }
 
         owner = leaseGrant.Owner;
-        var entryMode = RealEntryGate.ModeFor(EntryCapabilities.EntryConfirmValidated, dryRun, grant, context.ContentId, planned.TargetOrder.AsSpan());
+        var entryMode = RealEntryGate.ModeFor(EntryCapabilities.EntryConfirmValidated, dryRun, grant, mode, context.ContentId, planned.TargetOrder.AsSpan());
         var active = new EntryRunSession(Guid.NewGuid(), mode, entryMode, dryRun, policy, planned, chosen, context.Name, preview.Ranking);
         session = active;
         finished = RunStatus.Idle;
@@ -402,7 +413,7 @@ internal sealed class RunController
             return;
         }
 
-        _ = System.Threading.Tasks.Task.Run(() =>
+        pendingJournalWrite = System.Threading.Tasks.Task.Run(() =>
         {
             var written = unpressed ? journal.Reject(attempt.AttemptId, DateTime.UtcNow) : journal.RequireReconciliation(attempt.AttemptId, DateTime.UtcNow);
             RunLog.Info($"Entry run {active.RunId}: attempt {attempt.AttemptId} {(unpressed ? "released, it was never pressed" : "marked for reconciliation")} ({written}).");
@@ -421,17 +432,20 @@ internal sealed class RunController
         ClibServices.Automation.Stop();
     }
 
+    // A reconciliation stopped before its first frame never reports back, so it is let go here at once rather than
+    // when its completion arrives; a completion that arrives later finds nothing left to release.
     private void CancelReconcile()
     {
-        if (reconciling is null)
+        if (reconciling is not { } reconcile)
         {
             return;
         }
 
         ClibServices.Automation.Stop();
+        FinishReconcile(reconcile);
     }
 
-    private void FinishReconcile(ReconcileTask reconcile, LeaseOwner reconcileOwner)
+    private void FinishReconcile(ReconcileTask reconcile)
     {
         if (!ReferenceEquals(reconciling, reconcile))
         {
@@ -439,8 +453,48 @@ internal sealed class RunController
         }
 
         reconciling = null;
-        lease.Release(reconcileOwner);
+        if (reconcileOwner is { } holder)
+        {
+            lease.Release(holder);
+            reconcileOwner = null;
+        }
+
         LastReconcile = reconcile.Report;
+    }
+
+    // A paused or stopped run that could not close the confirmation it opened leaves it to these retries, for a few
+    // seconds and only while no run task is driving the game again.
+    private void CloseConfirmationLater()
+    {
+        closeConfirmationUntilMs = Environment.TickCount64 + ConfirmationCloseRetryMs;
+        RunLog.Info("The entry confirmation the run opened is still open; closing it again.");
+    }
+
+    private void RetryConfirmationClose(long now)
+    {
+        if (closeConfirmationUntilMs == 0)
+        {
+            return;
+        }
+
+        if (HousingDialogs.IdentifyEntryConfirmation() is not { Text: HousingText.EntryConfirmation })
+        {
+            closeConfirmationUntilMs = 0;
+            RunLog.Info("The entry confirmation the run opened is closed.");
+            return;
+        }
+
+        if (task is not null || now >= closeConfirmationUntilMs)
+        {
+            closeConfirmationUntilMs = 0;
+            RunLog.Warning("The entry confirmation the run opened is still open; close it by hand and do not press Confirm.");
+            return;
+        }
+
+        using (NativeActionGate.Allow(NativeAction.CancelEntry))
+        {
+            HousingDialogs.CancelEntry();
+        }
     }
 
     private void ConsumeGrant()
@@ -454,10 +508,10 @@ internal sealed class RunController
         RunLog.Warning($"Real entry permission for {open.CharacterName}, {open.Plot} used; it opens nothing more.");
     }
 
-    // Once a second: remember the logged-in character, and read back its uncertain attempts when it is free to.
     private void OnUpdate(IFramework framework)
     {
         var now = Environment.TickCount64;
+        RetryConfirmationClose(now);
         if (now < nextPollMs)
         {
             return;
@@ -489,7 +543,7 @@ internal sealed class RunController
         }
 
         reconcileWanted = false;
-        if (housing.HasPendingAttempt(contentId))
+        if (housing.HasPendingAttempt(contentId, housing.CurrentPosition(DateTime.UtcNow).Cycle))
         {
             RunLog.Info("Reconciliation: this character has an entry attempt in question; reading its lottery entry before any further entry.");
             Reconcile();

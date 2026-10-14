@@ -73,7 +73,7 @@ internal sealed class FindState
             snapshot.PlotsRevision,
             selection.QueryRevision,
             Shortlist.Revision,
-            character,
+            CharacterKey.Of(character),
             world,
             configuration.Find.GilReserve,
             nowUtc.Ticks / TimeSpan.TicksPerMinute);
@@ -310,7 +310,7 @@ internal sealed class FindState
         return new FindSelection(shortlist, area, filter, sort, AreaScope.DistrictMaskOf([.. settings.PreferredDistricts]));
     }
 
-    private readonly record struct ViewInputs(int PlotsRevision, int QueryRevision, int ShortlistRevision, CharacterProfile? Character, uint WorldId, long GilReserve, long Minute);
+    private readonly record struct ViewInputs(int PlotsRevision, int QueryRevision, int ShortlistRevision, CharacterKey? Character, uint WorldId, long GilReserve, long Minute);
 
     private sealed record ViewRequest(
         int Revision,

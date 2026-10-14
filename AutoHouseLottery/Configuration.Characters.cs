@@ -14,18 +14,33 @@ public sealed partial class Configuration
         }
 
         Characters[contentId] = new KnownCharacter(name, homeWorldId, known.AccountGroup);
-        Save();
+        SaveDebounced();
     }
 
+    // A hand-edited file can carry a null roster or a character without a name; both are put right once on load.
     private bool RepairCharacters()
     {
-        if (Characters is not null)
+        if (Characters is null)
         {
-            return false;
+            Characters = [];
+            return true;
         }
 
-        Characters = [];
-        return true;
+        var unnamed = new List<ulong>();
+        foreach (var (contentId, known) in Characters)
+        {
+            if (string.IsNullOrEmpty(known.Name))
+            {
+                unnamed.Add(contentId);
+            }
+        }
+
+        for (var index = 0; index < unnamed.Count; index++)
+        {
+            Characters.Remove(unnamed[index]);
+        }
+
+        return unnamed.Count > 0;
     }
 }
 

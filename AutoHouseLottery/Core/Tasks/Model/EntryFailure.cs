@@ -25,6 +25,7 @@ internal enum EntryFailure : byte
     SaleUnreadable,
     EntryButtonUnavailable,
     ConfirmationNotShown,
+    ConfirmationNotReady,
     DepositUnreadable,
     GilUnknown,
     CheckboxNotTicked,

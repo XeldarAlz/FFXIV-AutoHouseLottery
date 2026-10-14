@@ -10,16 +10,17 @@ using System.Globalization;
 
 namespace AutoHouseLottery.Core.Debug;
 
-// /ahl dev: the maintainer's tools for the in-game validation ladder until Find a home starts runs. "run" starts an
-// exact-plot run for the logged-in character, which is a dry run unless a grant covers it. "allow-real-entry" grants
-// one real entry for one named character, plot and deposit ceiling for this session only; nothing about it is saved.
+// /ahl dev: the maintainer's tools for the in-game validation ladder. "run" starts an exact-plot run for the logged-in
+// character; it is a dry run unless the word "real" is given and a grant covers that plot. "allow-real-entry" grants one
+// real entry for one named character, plot and deposit ceiling for this session only; nothing about it is saved.
 internal static class DevCommands
 {
     private const int RunArgumentCount = 5;
-    private const int RunWithBuyerArgumentCount = 6;
+    private const int RunWithOptionsArgumentCount = 7;
     private const int GrantPlaceArgumentCount = 4;
     private const int MinimumNameParts = 2;
     private const string FreeCompanyBuyer = "fc";
+    private const string RealEntryWord = "real";
     private const long NoReserve = 0;
     private const long NoTravelAllowance = 0;
     private const int FirstRevision = 1;
@@ -30,7 +31,7 @@ internal static class DevCommands
         var verb = tokens.Length == 0 ? string.Empty : tokens[0].ToLowerInvariant();
         switch (verb)
         {
-            case "run" when tokens.Length is RunArgumentCount or RunWithBuyerArgumentCount:
+            case "run" when tokens.Length is >= RunArgumentCount and <= RunWithOptionsArgumentCount:
                 StartRun(tokens, controller, housing);
                 return;
             case "allow-real-entry" when tokens.Length >= 1 + MinimumNameParts + GrantPlaceArgumentCount:
@@ -59,7 +60,8 @@ internal static class DevCommands
             return;
         }
 
-        var buyer = tokens.Length == RunWithBuyerArgumentCount && tokens[5].Equals(FreeCompanyBuyer, StringComparison.OrdinalIgnoreCase) ? BuyerType.FreeCompany : BuyerType.Private;
+        var buyer = HasOption(tokens, FreeCompanyBuyer) ? BuyerType.FreeCompany : BuyerType.Private;
+        var dryRun = !HasOption(tokens, RealEntryWord);
         var policy = new RunPolicy
         {
             Revision = FirstRevision,
@@ -68,7 +70,7 @@ internal static class DevCommands
             TravelAllowance = NoTravelAllowance,
             Exact = new ExactTarget(key, deposit),
         };
-        var refusal = controller.StartExact(policy);
+        var refusal = controller.StartExact(policy, dryRun);
         if (refusal != StartRefusal.None)
         {
             Print(Loc.T(L.Dev.RunRefused, RunText.Refusal(refusal)));
@@ -93,6 +95,19 @@ internal static class DevCommands
         }
 
         Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Dev.GrantWarning, grant.CharacterName, PlotNames.Address(grant.Plot), Loc.Gil(grant.MaxDeposit))}");
+    }
+
+    private static bool HasOption(string[] tokens, string option)
+    {
+        for (var index = RunArgumentCount; index < tokens.Length; index++)
+        {
+            if (tokens[index].Equals(option, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void Print(string message) => Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {message}");

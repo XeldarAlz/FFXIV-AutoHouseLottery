@@ -77,6 +77,14 @@ public sealed class LiveCheckTests
     }
 
     [Fact]
+    public void UnlistedAmountBelowAnyPlotPriceIsUnreadable()
+    {
+        Assert.Equal(EntryFailure.DepositUnreadable, ConfirmationRules.Check(Confirmation(3, RunMode.BestMatch, null)));
+        Assert.Equal(EntryFailure.DepositUnreadable, ConfirmationRules.Check(Confirmation(HousingDistricts.MinimumPlotPrice - 1, RunMode.BestMatch, null)));
+        Assert.Equal(EntryFailure.None, ConfirmationRules.Check(Confirmation(HousingDistricts.MinimumPlotPrice, RunMode.BestMatch, null)));
+    }
+
+    [Fact]
     public void LiveGilMustCoverTheDepositAndTheReserve()
     {
         Assert.Equal(EntryFailure.None, ConfirmationRules.Check(Confirmation(Deposit, RunMode.Exact, Deposit) with { LiveGil = Deposit + Reserve }));

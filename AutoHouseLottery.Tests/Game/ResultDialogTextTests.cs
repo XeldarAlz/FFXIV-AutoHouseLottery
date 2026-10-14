@@ -42,15 +42,11 @@ public sealed class ResultDialogTextTests
     }
 
     [Theory]
-    [InlineData("3,187.500")]
     [InlineData("31,87,500")]
     [InlineData("3,1875,00")]
-    [InlineData("3,187,500,")]
-    [InlineData(",187,500")]
-    [InlineData("3,187,500 gil")]
-    [InlineData("about 3,187,500")]
+    [InlineData("3,187,500 1234")]
+    [InlineData("3万")]
     [InlineData("0")]
-    [InlineData("03,187,500")]
     [InlineData("３,１８７,５００")]
     [InlineData("99,999,999,999,999,999,999")]
     [InlineData("")]

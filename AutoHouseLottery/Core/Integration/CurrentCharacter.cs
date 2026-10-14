@@ -9,8 +9,9 @@ namespace AutoHouseLottery.Core.Integration;
 
 // The logged-in character's profile, from the character context reader, the journal and its latest lottery reading,
 // read on the framework thread. Read runs every frame and hands back the cached profile; once a second it compares what
-// the profile is made of without allocating (the character, its gil and Free Company, the journal, the reading and the
-// cycle) and rebuilds the profile only when one of them changed. A different character is read at once.
+// the profile is made of without allocating (the character, its gil, Free Company, own house and account group, the
+// journal, the reading and the cycle) and rebuilds the profile only when one of them changed. A different character is
+// read at once.
 internal sealed class CurrentCharacter(HousingContext housing)
 {
     private const long CheckIntervalMs = TimeUnits.MillisecondsPerSecond;
@@ -44,6 +45,8 @@ internal sealed class CurrentCharacter(HousingContext housing)
             Svc.PlayerState.HomeWorld.RowId,
             CharacterContextReader.ReadGil(),
             CharacterContextReader.ReadFreeCompanyId(),
+            CharacterContextReader.ReadPersonalEstateId(),
+            housing.AccountGroup(contentId),
             journal.Attempts,
             journal.Receipts,
             journal.Settlements,
@@ -65,6 +68,8 @@ internal sealed class CurrentCharacter(HousingContext housing)
         uint HomeWorldId,
         long? Gil,
         ulong? FreeCompanyId,
+        ulong? PersonalEstateId,
+        int? AccountGroup,
         ImmutableArray<ActionAttempt> Attempts,
         ImmutableArray<EntryReceipt> Receipts,
         ImmutableArray<EntrySettlement> Settlements,

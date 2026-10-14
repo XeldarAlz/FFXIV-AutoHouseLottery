@@ -36,6 +36,7 @@ public sealed class FallbackRulesTests
     [InlineData((byte)EntryFailure.SaleUnreadable)]
     [InlineData((byte)EntryFailure.DepositUnreadable)]
     [InlineData((byte)EntryFailure.ConfirmationNotShown)]
+    [InlineData((byte)EntryFailure.ConfirmationNotReady)]
     [InlineData((byte)EntryFailure.GilUnknown)]
     public void UnclearFailureAsksThePlayerInsteadOfMovingOn(byte raw)
     {

@@ -14,7 +14,7 @@ using AutoHouseLottery.Core.Travel.Model;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-internal sealed record RunServices(HousingContext Housing, HousingObservers Observers, Func<RealEntryGrant?> Grant, Action ConsumeGrant);
+internal sealed record RunServices(HousingContext Housing, HousingObservers Observers, Func<RealEntryGrant?> Grant, Action ConsumeGrant, Action CloseConfirmationLater);
 
 // Drives one character's entry through the steps of TECHNICAL_DESIGN section 11. Each await does at most one validated
 // operation and every wait has its own deadline. A pause or stop before the intent cancels this task and relaunches
@@ -23,7 +23,6 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
 {
     private const int ObservePollFrames = 15;
     private const int TimersPassWatchdogMs = 75_000;
-    private const int OneBased = 1;
 
     private LotterySnapshot? reading;
     private HousingText? rejection;
@@ -37,8 +36,12 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
         {
             await RunSteps();
         }
-        catch (Exception) when (CancelToken.IsCancellationRequested)
+        catch (Exception exception) when (CancelToken.IsCancellationRequested)
         {
+            if (exception is not OperationCanceledException)
+            {
+                RunLog.Warning(exception, $"Entry run {session.RunId}: an error after the run was stopped at {session.Step}");
+            }
         }
         catch (Exception exception)
         {
@@ -111,7 +114,7 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
             return Stop(EntryFailure.JournalUnavailable);
         }
 
-        if (services.Housing.HasPendingAttempt(context.ContentId))
+        if (services.Housing.HasPendingAttempt(context.ContentId, session.Policy.Cycle.Cycle))
         {
             session.Fail(EntryFailure.SubmissionUncertain);
             Move(EntryStep.NeedsReconciliation);
@@ -251,7 +254,7 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
     private DepositLedger OtherCommitments()
         => session.Reserved > 0 && session.Ledger.TryRelease(session.Reserved, out var others) ? others : session.Ledger;
 
-    private static HousingDestination DestinationOf(PlotKey plot) => new(plot.WorldId, plot.DistrictId, plot.Ward - OneBased, plot.Plot - OneBased);
+    private static HousingDestination DestinationOf(PlotKey plot) => new(plot.WorldId, plot.DistrictId, plot.Ward - ResidentialDistricts.OneBased, plot.Plot - ResidentialDistricts.OneBased);
 
     private void ReleaseOwnedWork()
     {
@@ -262,9 +265,9 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
             travelToken = 0;
         }
 
-        if (confirmationOpenedByRun && !EntrySteps.InSubmissionWindow(session.Step))
+        if (confirmationOpenedByRun && !EntrySteps.InSubmissionWindow(session.Step) && !CloseConfirmationNow())
         {
-            CloseConfirmationNow();
+            services.CloseConfirmationLater();
         }
     }
 

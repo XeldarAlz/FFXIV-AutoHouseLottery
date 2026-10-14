@@ -21,7 +21,6 @@ internal static unsafe class LotteryReader
 
     private const int RecordPointerOffset = 0xB0;
     private const int MaxWindowTexts = 128;
-    private const int OneBased = 1;
 
     public static string GameVersion() => Framework.Instance()->GameVersionString;
 
@@ -129,5 +128,5 @@ internal static unsafe class LotteryReader
 
     private static string Show<T>(T? value) where T : struct => value?.ToString() ?? "unknown";
 
-    private static string ShowOneBased(int? index) => index is { } value ? (value + OneBased).ToString() : "unknown";
+    private static string ShowOneBased(int? index) => index is { } value ? (value + ResidentialDistricts.OneBased).ToString() : "unknown";
 }

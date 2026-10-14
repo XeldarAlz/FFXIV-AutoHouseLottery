@@ -55,6 +55,9 @@ internal static unsafe class CharacterContextReader
         return freeCompany != null && freeCompany->Id != NoFreeCompany ? freeCompany->Id : null;
     }
 
+    // The ID of the character's own house, null when it owns none or the game has not loaded it.
+    public static ulong? ReadPersonalEstateId() => OwnedEstate(EstateType.PersonalEstate)?.RawId;
+
     public static long? ReadGil()
     {
         var inventory = InventoryManager.Instance();

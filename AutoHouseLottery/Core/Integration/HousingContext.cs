@@ -14,10 +14,13 @@ namespace AutoHouseLottery.Core.Integration;
 // The action journal for the plugin's lifetime, and the one place game readings become domain facts. The plot store,
 // the lottery calendar and the cycle position belong to the housing feed service; readings made in game are routed
 // through it, so the listings, the placard and the ward scans share one store and one calendar. Readings arrive on the
-// framework thread; disk work is sent off it.
+// framework thread; merging them into the store and every disk write are sent off it.
 internal sealed class HousingContext : IDisposable
 {
     public const string JournalFileName = "journal.jsonl";
+
+    // An earlier build kept its own calendar file next to the feed's; the feed's lottery-schedules.json is the only one.
+    private const string ObsoleteScheduleFileName = "lottery-schedule.json";
 
     // This plugin runs on the global client; the Chinese and Korean clients are separate Dalamud builds.
     public const GameRegion Region = GameRegion.Global;
@@ -33,6 +36,7 @@ internal sealed class HousingContext : IDisposable
         this.configuration = configuration;
         this.feed = feed;
         Directory.CreateDirectory(directory);
+        DeleteObsoleteScheduleFile(Path.Combine(directory, ObsoleteScheduleFileName));
         var opened = ActionJournal.Open(Path.Combine(directory, JournalFileName), DateTime.UtcNow);
         Journal = opened.Journal;
         JournalStatus = opened.Status;
@@ -88,8 +92,11 @@ internal sealed class HousingContext : IDisposable
 
         if (PlacardObservations.From(reading, worldId, Region, proved?.Cycle) is { } observation)
         {
-            var rejection = feed.MergeLocal(observation);
-            RunLog.Info($"Plot store: placard observation of {observation.Key} {(rejection == MergeRejection.None ? "merged" : $"rejected ({rejection})")}.");
+            _ = Task.Run(() =>
+            {
+                var rejection = feed.MergeLocal(observation);
+                RunLog.Info($"Plot store: placard observation of {observation.Key} {(rejection == MergeRejection.None ? "merged" : $"rejected ({rejection})")}.");
+            });
         }
 
         return proved;
@@ -103,8 +110,11 @@ internal sealed class HousingContext : IDisposable
             return;
         }
 
-        var applied = feed.ApplyLocal(batch.Coverage, batch.Observations.AsSpan());
-        RunLog.Info($"Plot store: ward scan recorded {applied.Merged} plot(s), {applied.Rejected} rejected, coverage {applied.RecordedOutcome}.");
+        _ = Task.Run(() =>
+        {
+            var applied = feed.ApplyLocal(batch.Coverage, batch.Observations.AsSpan());
+            RunLog.Info($"Plot store: ward scan recorded {applied.Merged} plot(s), {applied.Rejected} rejected, coverage {applied.RecordedOutcome}.");
+        });
     }
 
     public CycleParticipation Participation(ulong contentId, uint homeWorldId, LotterySnapshot? reading, in CyclePosition position)
@@ -118,20 +128,26 @@ internal sealed class HousingContext : IDisposable
 
     public OutstandingEntry Outstanding(ulong contentId, CycleKey cycle) => OutstandingRules.Find(JournalSnapshot, contentId, cycle);
 
+    public int? AccountGroup(ulong contentId) => configuration.Characters.TryGetValue(contentId, out var known) ? known.AccountGroup : null;
+
     public CharacterProfile Profile(CharacterContext context, LotterySnapshot? reading, in CyclePosition position)
     {
-        var accountGroup = configuration.Characters.TryGetValue(context.ContentId, out var known) ? known.AccountGroup : null;
+        var accountGroup = AccountGroup(context.ContentId);
         var outstanding = OutstandingRules.ToSettlement(Outstanding(context.ContentId, position.Cycle).Kind);
         return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position));
     }
 
-    public bool HasPendingAttempt(ulong contentId)
+    // An attempt in question for this cycle holds its entry slot. One from an earlier cycle cannot hold this cycle's
+    // slot; it waits for a result check instead (ResultChecks).
+    public bool HasPendingAttempt(ulong contentId, CycleKey cycle)
     {
         var attempts = JournalSnapshot.Attempts;
         for (var index = 0; index < attempts.Length; index++)
         {
             var attempt = attempts[index];
-            if (attempt.CharacterContentId == contentId && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
+            if (attempt.CharacterContentId == contentId
+                && attempt.Cycle == cycle
+                && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
             {
                 return true;
             }
@@ -158,5 +174,23 @@ internal sealed class HousingContext : IDisposable
         var written = await Task.Run(() => journal.ImportReceipt(receipt, DateTime.UtcNow));
         RunLog.Info($"Journal: the lottery reading shows an entry made outside this plugin for cycle {receipt.Cycle} (number {receipt.EntryNumber?.ToString() ?? "unknown"}, "
                   + $"plot {receipt.Plot?.ToString() ?? "not named"}); import {written}.");
+    }
+
+    private static void DeleteObsoleteScheduleFile(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(path);
+            RunLog.Info($"Removed the obsolete calendar file {path}; the listings' calendar file is the only one.");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            RunLog.Warning(exception, $"The obsolete calendar file {path} could not be removed; it is ignored");
+        }
     }
 }

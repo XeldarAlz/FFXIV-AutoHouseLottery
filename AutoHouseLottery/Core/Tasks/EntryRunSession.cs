@@ -8,8 +8,6 @@ using AutoHouseLottery.Core.Tasks.Model;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-// One run's frozen policy and its progress. Every step change goes through MoveTo, which refuses an illegal
-// transition loudly and writes the step to the run log.
 internal sealed class EntryRunSession
 {
     private readonly ImmutableArray<RankedPlot> ranking;

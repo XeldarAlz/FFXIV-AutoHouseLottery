@@ -18,7 +18,7 @@
 
 ## Status
 
-**In development, not released.** The window, its settings, the Console and the changelog are in place. Find a home already shows the reported plots on the district map and in a list, with the shortlist, the best match and a run preview, and Saved keeps searches, plot lists and their notices; entering a lottery and My lottery arrive with the next updates. There is nothing to install yet, and this README describes what the plugin is being built to do. A full README comes with the release.
+**In development, not released.** The window, its settings, the Console and the changelog are in place. Find a home already shows the reported plots on the district map and in a list, with the shortlist, the best match and a run preview, and Saved keeps searches, plot lists and their notices; Enter on a plot or on the best match runs the entry as a dry run that goes as far as the lottery confirmation and closes it, and My lottery lists your entries; real entries, results, refunds and claims arrive with the next updates. There is nothing to install yet, and this README describes what the plugin is being built to do. A full README comes with the release.
 
 ## What it will do
 
@@ -62,9 +62,11 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 | `/autohouselottery probe approach <ward> <plot>` | Walk to a plot's placard in the district you are in |
 | `/autohouselottery probe press <enter \| results \| cancel \| no>` | Do one thing that costs nothing: press Enter Lottery or View Lottery Results on the placard, close the entry confirmation, or press No on a result dialog. Each button is checked by its own label first, and nothing is pressed while a run or a probe task is going |
 | `/autohouselottery probe stop` | Stop the probe task and the travel it started |
-| `/autohouselottery dev run <district> <ward> <plot> <deposit> [fc]` | Maintainer tool until Find a home starts runs: enter one plot on your home world for exactly that deposit. It is a dry run that stops at the lottery confirmation and closes it, unless a real-entry permission covers it |
-| `/autohouselottery dev allow-real-entry <character name> <district> <ward> <plot> <max gil>` | Maintainer tool for the one supervised real entry: allow one real entry for the logged-in character on that plot, up to that deposit. It lives only in this session and ends at logout, at unload, or after the one entry |
+| `/autohouselottery dev run <district> <ward> <plot> <deposit> [fc] [real]` | Maintainer tool for the in-game ladder: enter one plot on your home world for exactly that deposit. It is a dry run that stops at the lottery confirmation and closes it, unless the word `real` is given and a real-entry permission covers that plot |
+| `/autohouselottery dev allow-real-entry <character name> <district> <ward> <plot> <max gil>` | Maintainer tool for the one supervised real entry: allow one real entry for the logged-in character on that plot, up to that deposit, for a `dev run ... real` on exactly that plot. It never applies to a best match, lives only in this session and ends at logout, at unload, or after the one entry |
 | `/autohouselottery dev revoke-real-entry` | Withdraw the real-entry permission; every run is a dry run again |
+
+Before testing runs in game, turn off any plugin that answers dialogs on its own, such as YesAlready: the dry run opens the real lottery confirmation, and such a plugin could press Confirm on it.
 
 ## Languages
 

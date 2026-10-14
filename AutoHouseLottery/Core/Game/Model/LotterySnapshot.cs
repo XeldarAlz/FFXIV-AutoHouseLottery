@@ -170,7 +170,7 @@ internal static class LotteryWindowText
             {
                 phase = LotteryPhase.ResultsPeriod;
             }
-            else if (patterns.Number.TryCapture(text, out var numberGaps) && DisplayNumbers.First(numberGaps) is { } number and <= uint.MaxValue)
+            else if (patterns.Number.TryCapture(text, out var numberGaps) && DisplayNumbers.Single(numberGaps) is { } number and >= 0 and <= uint.MaxValue)
             {
                 lotteryNumber = (uint)number;
             }

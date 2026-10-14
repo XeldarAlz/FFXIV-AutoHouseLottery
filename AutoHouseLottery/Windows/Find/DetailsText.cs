@@ -14,7 +14,7 @@ internal readonly record struct DetailField(string Label, string Value, string? 
 // rather than on every frame.
 internal sealed class DetailsText
 {
-    private (PlotKey Key, int View, long Minute, LanguageInfo? Language, bool Named, int Query, CharacterProfile? Character, long Reserve) builtFor;
+    private (PlotKey Key, int View, long Minute, LanguageInfo? Language, bool Named, int Query, CharacterKey? Character, long? Gil, long Reserve) builtFor;
 
     public string Address { get; private set; } = string.Empty;
 
@@ -49,7 +49,7 @@ internal sealed class DetailsText
     public void Refresh(PlotKey key, FindView view, FindState state, Discovery discovery, DateTime nowUtc)
     {
         var character = discovery.Character;
-        var inputs = (key, view.Revision, nowUtc.Ticks / TimeSpan.TicksPerMinute, Loc.Current, discovery.Names.Ready, state.QueryRevision, character, state.GilReserve);
+        var inputs = (key, view.Revision, nowUtc.Ticks / TimeSpan.TicksPerMinute, Loc.Current, discovery.Names.Ready, state.QueryRevision, CharacterKey.Of(character), character?.ObservedGil, state.GilReserve);
         if (inputs == builtFor)
         {
             return;
@@ -90,9 +90,15 @@ internal sealed class DetailsText
             return (null, Loc.T(L.Find.NeedCharacter));
         }
 
-        var buyer = RunPreviewBuilder.BuyerFor(plot.Buyers?.Value, state.Filter.Buyer);
+        var chosen = state.Filter.Buyer;
+        if (chosen == BuyerType.Unknown)
+        {
+            return (null, Loc.T(L.Find.NeedBuyer));
+        }
+
+        var buyer = RunPreviewBuilder.BuyerFor(plot.Buyers?.Value, chosen);
         return buyer == BuyerType.Unknown
-            ? (null, Loc.T(L.Find.NeedBuyer))
+            ? (null, Loc.T(L.RunFailure.Ineligible))
             : (RunPreviewBuilder.ExactPolicy(profile, buyer, key, deposit, state.GilReserve, view.Position, view.Revision), null);
     }
 

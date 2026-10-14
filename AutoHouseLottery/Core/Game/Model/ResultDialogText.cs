@@ -30,6 +30,6 @@ internal static class ResultDialogText
             return null;
         }
 
-        return DisplayNumbers.Whole(gaps[amountIndex]) is { } amount and > 0 ? amount : null;
+        return DisplayNumbers.Single([gaps[amountIndex]]) is { } amount and > 0 ? amount : null;
     }
 }

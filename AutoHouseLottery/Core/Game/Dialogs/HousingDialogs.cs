@@ -23,9 +23,15 @@ internal static unsafe class HousingDialogs
     private const bool FireCloseCallback = true;
     private const int ClickThrottleMs = 600;
     private const string ClickThrottleKey = "AutoHouseLottery.HousingDialogs.Click";
+    // Closing has its own throttle, so a close right after a press is never refused for it.
+    private const string CloseThrottleKey = "AutoHouseLottery.HousingDialogs.Close";
 
     private static readonly HousingText[] confirmLabel = [HousingText.ConfirmLabel];
     private static readonly HousingText[] proceedLabel = [HousingText.ProceedCheckbox];
+
+    // Every press shares one throttle, so a press right after another is refused as Throttled. A caller about to make
+    // a press that must not be refused waits until this is true.
+    public static bool ClickReady() => EzThrottler.Check(ClickThrottleKey);
 
     public static DialogIdentity? IdentifyEntryConfirmation()
     {
@@ -187,7 +193,7 @@ internal static unsafe class HousingDialogs
             return Refused(action, DialogActionResult.IdentityMismatch);
         }
 
-        if (!EzThrottler.Throttle(ClickThrottleKey, ClickThrottleMs))
+        if (!EzThrottler.Throttle(CloseThrottleKey, ClickThrottleMs))
         {
             return DialogActionResult.Throttled;
         }

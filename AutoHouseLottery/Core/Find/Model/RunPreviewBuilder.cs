@@ -4,24 +4,11 @@ using AutoHouseLottery.Core.Selection.Model;
 
 namespace AutoHouseLottery.Core.Find.Model;
 
-// The frozen policies Find a home plans and starts runs with, for the current character. Building one only plans; a run
-// starts from it only through the run controller, which checks it again.
+// The frozen policies Find a home plans its preview with and starts runs from, for the current character. A policy only
+// plans; a run starts from it only through the run controller, which checks it again.
 internal static class RunPreviewBuilder
 {
     public const long PreviewTravelAllowance = 0;
-
-    public static RunPreview Build(
-        in CharacterProfile character,
-        BuyerType buyer,
-        long depositCap,
-        long gilReserve,
-        in ShortlistSnapshot shortlist,
-        in CyclePosition position,
-        IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
-        DateTime nowUtc)
-    {
-        return AssignmentPlanner.Build(BestMatchPolicy(character, buyer, depositCap, gilReserve, shortlist, position), [character], plots, nowUtc);
-    }
 
     // The shortlist drawer's plan: the frozen shortlist, its ranking and the price ceiling as the deposit cap.
     public static RunPolicy BestMatchPolicy(in CharacterProfile character, BuyerType buyer, long depositCap, long gilReserve, in ShortlistSnapshot shortlist, in CyclePosition position)
@@ -45,12 +32,16 @@ internal static class RunPreviewBuilder
             Exact = new ExactTarget(plot, deposit),
         };
 
-    // A plot sold to one buyer type decides it; a plot open to both, or not reported, takes the buyer chosen in the
-    // filters, which stays unknown until the player picks one.
-    public static BuyerType BuyerFor(PlotBuyers? plotBuyers, BuyerType chosen) => plotBuyers switch
+    // The buyer is the player's own choice in the filters. A plot sold to one buyer type only confirms that choice:
+    // no choice, or a choice the plot does not take, gives no buyer. A plot whose buyers are not reported takes the
+    // choice, and the placard checks it before anything is pressed.
+    public static BuyerType BuyerFor(PlotBuyers? plotBuyers, BuyerType chosen)
     {
-        PlotBuyers.Private => BuyerType.Private,
-        PlotBuyers.FreeCompany => BuyerType.FreeCompany,
-        _ => chosen,
-    };
+        if (chosen == BuyerType.Unknown || EligibilityRules.Allows(plotBuyers ?? PlotBuyers.Unknown, chosen) == false)
+        {
+            return BuyerType.Unknown;
+        }
+
+        return chosen;
+    }
 }
