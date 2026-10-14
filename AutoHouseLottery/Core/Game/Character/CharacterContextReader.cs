@@ -25,7 +25,7 @@ internal static unsafe class CharacterContextReader
         var playerState = Svc.PlayerState;
         var grandCompanyId = playerState.GrandCompany.RowId;
         var freeCompany = InfoProxyFreeCompany.Instance();
-        var freeCompanyKnown = freeCompany != null && freeCompany->Id != NoFreeCompany;
+        var freeCompanyKnown = ReadFreeCompanyId() is not null;
         var companyTag = Svc.Objects.LocalPlayer?.CompanyTag.TextValue;
         var inventory = InventoryManager.Instance();
         return new CharacterContext(
@@ -46,6 +46,22 @@ internal static unsafe class CharacterContextReader
             OwnedEstate(EstateType.FreeCompanyEstate),
             OwnedEstate(EstateType.ApartmentRoom),
             DateTime.UtcNow);
+    }
+
+    // Null when the character has no Free Company or its record is not loaded; the client does not tell the two apart.
+    public static ulong? ReadFreeCompanyId()
+    {
+        var freeCompany = InfoProxyFreeCompany.Instance();
+        return freeCompany != null && freeCompany->Id != NoFreeCompany ? freeCompany->Id : null;
+    }
+
+    // The ID of the character's own house, null when it owns none or the game has not loaded it.
+    public static ulong? ReadPersonalEstateId() => OwnedEstate(EstateType.PersonalEstate)?.RawId;
+
+    public static long? ReadGil()
+    {
+        var inventory = InventoryManager.Instance();
+        return inventory == null ? null : inventory->GetGil();
     }
 
     public static HousingLocation ReadLocation()

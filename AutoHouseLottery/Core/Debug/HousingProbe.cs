@@ -5,6 +5,7 @@ using AutoHouseLottery.Core.Game.Lottery;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Placard;
 using AutoHouseLottery.Core.Game.Ward;
+using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Ipc;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
@@ -27,29 +28,29 @@ internal static unsafe class HousingProbe
     private const int DescribedDialogValues = 32;
     private const int RecentLogMessages = 8;
     private const int VisibleIdDigits = 4;
-    private const int OneBased = 1;
     private const int GotoArgumentCount = 4;
     private const int ApproachArgumentCount = 3;
     private const int PressArgumentCount = 2;
 
     private static readonly ClientLanguage[] selfCheckLanguages = [ClientLanguage.English, ClientLanguage.German, ClientLanguage.French, ClientLanguage.Japanese];
     private static readonly HousingText[] dialogLabels = [HousingText.ConfirmLabel, HousingText.YesLabel, HousingText.YesLabelAlternate, HousingText.NoLabel, HousingText.NoLabelAlternate];
+    private static readonly HousingText[] checkBoxLabels = [HousingText.ProceedCheckbox];
 
-    public static void Run(string arguments, HousingObservers observers)
+    public static void Run(string arguments, HousingObservers observers, HousingContext housing)
     {
         var tokens = arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var verb = tokens.Length == 0 ? string.Empty : tokens[0].ToLowerInvariant();
         switch (verb)
         {
             case "":
-                LogReadings(observers);
+                LogReadings(observers, housing);
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
             case "scan":
-                Start(() => new WardScanTask(observers.WardWindow, observers.WardPackets));
+                Start(() => new WardScanTask(observers.WardWindow, observers.WardPackets), task => ApplyScan(task, housing));
                 return;
             case "lottery":
-                Start(() => new LotteryTimersPass());
+                Start(() => new LotteryTimersPass(), task => ImportReading(task, housing));
                 return;
             case "goto" when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: true, observers));
@@ -62,6 +63,10 @@ internal static unsafe class HousingProbe
                 return;
             case "press" when tokens.Length == PressArgumentCount && Press(tokens[1].ToLowerInvariant()):
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
+                return;
+            case "stop" when Plugin.Instance.Controller.Busy:
+                RunLog.Warning($"{Prefix} stop refused; an entry run or a reconciliation owns the game. Use /ahl stop for the run.");
+                Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
                 return;
             case "stop":
                 TaskStarter.StopCurrent();
@@ -77,16 +82,32 @@ internal static unsafe class HousingProbe
         }
     }
 
-    private static void Start(Func<AutoCommon> build)
+    private static void Start(Func<AutoCommon> build, Action<AutoCommon>? completed = null)
     {
-        var started = !Plugin.Instance.Controller.Running && TaskStarter.TryStart(build);
+        var started = !Plugin.Instance.Controller.Busy && TaskStarter.TryStart(build, completed);
         Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(started ? L.Probe.Started : L.Probe.Failed)}");
+    }
+
+    private static void ApplyScan(AutoCommon task, HousingContext housing)
+    {
+        if (task is WardScanTask { Result: { } result })
+        {
+            housing.ApplyWardScan(result);
+        }
+    }
+
+    private static void ImportReading(AutoCommon task, HousingContext housing)
+    {
+        if (task is LotteryTimersPass { Outcome: LotteryPassOutcome.Loaded } pass && Svc.PlayerState.ContentId == pass.Snapshot.ContentId)
+        {
+            _ = housing.ImportFromReading(pass.Snapshot, pass.Snapshot.ContentId, Svc.PlayerState.HomeWorld.RowId);
+        }
     }
 
     // A press while a run or a task drives the game would fight it for the same window.
     private static bool UiIsOwned()
     {
-        if (!Plugin.Instance.Controller.Running && !TaskStarter.Busy)
+        if (!Plugin.Instance.Controller.Busy && !TaskStarter.Busy)
         {
             return false;
         }
@@ -103,7 +124,7 @@ internal static unsafe class HousingProbe
             return false;
         }
 
-        destination = new HousingDestination(Svc.PlayerState.CurrentWorld.RowId, territoryTypeId, ward - OneBased, plot - OneBased);
+        destination = new HousingDestination(Svc.PlayerState.CurrentWorld.RowId, territoryTypeId, ward - ResidentialDistricts.OneBased, plot - ResidentialDistricts.OneBased);
         return destination.IsValid;
     }
 
@@ -151,13 +172,13 @@ internal static unsafe class HousingProbe
         return true;
     }
 
-    private static void LogReadings(HousingObservers observers)
+    private static void LogReadings(HousingObservers observers, HousingContext housing)
     {
         RunLog.Info($"{Prefix} ---- housing probe, client language {HousingSheetText.Language} ----");
         LogCharacter();
         LogLottery();
         LogWard(observers);
-        LogPlacard(observers);
+        LogPlacard(observers, housing);
         LogDialogs();
         LogSheetRows();
         LogHousingMessages(observers.HousingLog);
@@ -215,12 +236,12 @@ internal static unsafe class HousingProbe
         {
             var acknowledged = WardPager.AcceptDisplayed(reading.WardIndex, window, observers.WardPackets);
             RunLog.Info($"{Prefix} shown ward {(acknowledged is null ? "not tied to its packet yet" : $"acknowledged ({acknowledged.Correlation})")}.");
-            RunLog.Info($"{Prefix} ward {reading.WardIndex + OneBased} '{reading.WardName}', ward count {Show(reading.WardCount)}, buyer flags 0x{reading.BuyerFlags:X8} "
+            RunLog.Info($"{Prefix} ward {reading.WardIndex + ResidentialDistricts.OneBased} '{reading.WardName}', ward count {Show(reading.WardCount)}, buyer flags 0x{reading.BuyerFlags:X8} "
                       + $"(FC bit {WardLayout.FreeCompanyFlag(reading.BuyerFlags)}, private bit {WardLayout.PrivateFlag(reading.BuyerFlags)}), {reading.Rows.Length} rows.");
             for (var rowIndex = 0; rowIndex < reading.Rows.Length; rowIndex++)
             {
                 var row = reading.Rows[rowIndex];
-                RunLog.Debug($"{Prefix} ward row {row.PlotIndex + OneBased}: status {row.Status}, size '{row.SizeText}', name or price '{row.NameOrPriceText}', "
+                RunLog.Debug($"{Prefix} ward row {row.PlotIndex + ResidentialDistricts.OneBased}: status {row.Status}, size '{row.SizeText}', name or price '{row.NameOrPriceText}', "
                            + $"value 3 {row.UnidentifiedValue}, tags {row.Tag1}/{row.Tag2}/{row.Tag3}.");
             }
         }
@@ -242,14 +263,14 @@ internal static unsafe class HousingProbe
                 continue;
             }
 
-            RunLog.Debug($"{Prefix} ward packet plot {entry.PlotIndex + OneBased}: unowned, price {entry.Price}, flags 0x{entry.Flags:X2}.");
+            RunLog.Debug($"{Prefix} ward packet plot {entry.PlotIndex + ResidentialDistricts.OneBased}: unowned, price {entry.Price}, flags 0x{entry.Flags:X2}.");
         }
 
-        RunLog.Info($"{Prefix} ward packet: territory {packet.TerritoryTypeId}, ward {packet.WardIndex + OneBased}, world {packet.WorldId}, {owned} of {packet.Entries.Length} owned, "
+        RunLog.Info($"{Prefix} ward packet: territory {packet.TerritoryTypeId}, ward {packet.WardIndex + ResidentialDistricts.OneBased}, world {packet.WorldId}, {owned} of {packet.Entries.Length} owned, "
                   + $"purchase type {packet.PurchaseType}, tenant type {packet.TenantType}, sequence {packet.Sequence}.");
     }
 
-    private static void LogPlacard(HousingObservers observers)
+    private static void LogPlacard(HousingObservers observers, HousingContext housing)
     {
         RunLog.Info($"{Prefix} placard sources: sale hook {(observers.PlacardSales.Active ? "active" : observers.PlacardSales.SignatureFound ? "signature found, not hooked" : "signature missing")}, "
                   + $"agent layout {observers.SignboardLayout.Describe()}.");
@@ -278,6 +299,8 @@ internal static unsafe class HousingProbe
                   + $"owner FC {(reading.OwnerFreeCompanyId is { } owner ? (owner == 0 ? "none" : "set") : "unknown")}, sale {Describe(reading.Sale)} (from {reading.SaleSource}), "
                   + $"details '{reading.DetailsText ?? "missing"}'.");
         LogButtons("placard", reading.Buttons);
+        var proved = housing.ObservePlacard(reading, Svc.PlayerState.CurrentWorld.RowId);
+        RunLog.Info($"{Prefix} placard cycle {(proved is { } position ? $"{position.Cycle}, {position.Phase} until {position.PhaseEndUtc:u}" : "not proved")}.");
     }
 
     private static void LogButtons(string window, ImmutableArray<WindowButton> buttons)
@@ -290,6 +313,20 @@ internal static unsafe class HousingProbe
         }
     }
 
+    private static void LogCheckBoxes(string window, ImmutableArray<WindowCheckBox> checkBoxes)
+    {
+        if (checkBoxes.IsEmpty)
+        {
+            RunLog.Info($"{Prefix} {window}: no checkbox component found.");
+        }
+
+        for (var checkBoxIndex = 0; checkBoxIndex < checkBoxes.Length; checkBoxIndex++)
+        {
+            var checkBox = checkBoxes[checkBoxIndex];
+            RunLog.Info($"{Prefix} {window} checkbox node {checkBox.NodeId}: '{checkBox.Text}', enabled {checkBox.Enabled}, visible {checkBox.Visible}, checked {checkBox.Checked}, matches {Show(checkBox.MatchedText)}.");
+        }
+    }
+
     private static void LogDialogs()
     {
         if (HousingDialogs.IdentifyEntryConfirmation() is { } confirmation)
@@ -299,6 +336,11 @@ internal static unsafe class HousingProbe
             {
                 RunLog.Info($"{Prefix} {HousingDialogs.EntryConfirmationAddon} values: {AddonReads.Describe(addon, DescribedDialogValues)}.");
                 LogButtons(HousingDialogs.EntryConfirmationAddon, LabelledButtons.Collect(addon, dialogLabels));
+                LogCheckBoxes(HousingDialogs.EntryConfirmationAddon, LabelledButtons.CollectCheckBoxes(addon, checkBoxLabels));
+                if (HousingDialogs.ReadEntryConfirmation() is { } shown)
+                {
+                    RunLog.Info($"{Prefix} entry confirmation reads as row 7046 {shown.Identified}, deposit {Show(shown.Deposit)}, checkbox {shown.Proceed}, Confirm {(shown.ConfirmFound ? shown.ConfirmEnabled ? "enabled" : "disabled" : "missing")}.");
+                }
             }
         }
 
@@ -379,7 +421,7 @@ internal static unsafe class HousingProbe
     {
         var lifestream = LifestreamIpc.Instance;
         var capabilities = lifestream.Capabilities();
-        RunLog.Info($"{Prefix} Lifestream: {capabilities}, busy {Show(lifestream.IsBusy())}, current plot {(lifestream.CurrentPlotInfo() is { } info ? $"kind {info.Kind}, ward {info.Ward + OneBased}, plot {info.Plot + OneBased}" : "none")}, "
+        RunLog.Info($"{Prefix} Lifestream: {capabilities}, busy {Show(lifestream.IsBusy())}, current plot {(lifestream.CurrentPlotInfo() is { } info ? $"kind {info.Kind}, ward {info.Ward + ResidentialDistricts.OneBased}, plot {info.Plot + ResidentialDistricts.OneBased}" : "none")}, "
                   + $"travel token {Show(HousingTravel.CurrentToken)}.");
         RunLog.Info($"{Prefix} vnavmesh: {(NavmeshIpc.Instance.Available ? "available" : "not available")}.");
     }
@@ -391,10 +433,10 @@ internal static unsafe class HousingProbe
             + $"availability {info.Availability?.ToString() ?? $"unknown ({info.RawAvailability})"}, phase ends {info.PhaseEndsAtUtc?.ToString("u") ?? "unknown"}, entries {info.EntryCount}";
 
     private static string Describe(PlotAddress? address)
-        => address is not { } plot ? "none" : $"territory {plot.TerritoryTypeId}, ward {plot.WardIndex + OneBased}, plot {plot.PlotIndex + OneBased}";
+        => address is not { } plot ? "none" : $"territory {plot.TerritoryTypeId}, ward {plot.WardIndex + ResidentialDistricts.OneBased}, plot {plot.PlotIndex + ResidentialDistricts.OneBased}";
 
     private static string Describe(EstateAddress? estate)
-        => estate is not { } address ? "none" : $"territory {address.TerritoryTypeId}, ward {address.WardIndex + OneBased}, plot {address.PlotIndex + OneBased}{(address.Apartment ? " (apartment)" : string.Empty)}";
+        => estate is not { } address ? "none" : $"territory {address.TerritoryTypeId}, ward {address.WardIndex + ResidentialDistricts.OneBased}, plot {address.PlotIndex + ResidentialDistricts.OneBased}{(address.Apartment ? " (apartment)" : string.Empty)}";
 
     private static string Tail(ulong value)
     {
@@ -404,5 +446,5 @@ internal static unsafe class HousingProbe
 
     private static string Show<T>(T? value) where T : struct => value?.ToString() ?? "unknown";
 
-    private static string ShowOneBased(int? index) => index is { } value ? (value + OneBased).ToString() : "none";
+    private static string ShowOneBased(int? index) => index is { } value ? (value + ResidentialDistricts.OneBased).ToString() : "none";
 }

@@ -4,22 +4,15 @@ using AutoHouseLottery.Core.Selection.Model;
 
 namespace AutoHouseLottery.Core.Find.Model;
 
-// The preview the shortlist drawer shows for the current character. It only plans; nothing here can enter a lottery.
+// The frozen policies Find a home plans its preview with and starts runs from, for the current character. A policy only
+// plans; a run starts from it only through the run controller, which checks it again.
 internal static class RunPreviewBuilder
 {
     public const long PreviewTravelAllowance = 0;
 
-    public static RunPreview Build(
-        in CharacterProfile character,
-        BuyerType buyer,
-        long depositCap,
-        long gilReserve,
-        in ShortlistSnapshot shortlist,
-        in CyclePosition position,
-        IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
-        DateTime nowUtc)
-    {
-        var policy = new RunPolicy
+    // The shortlist drawer's plan: the frozen shortlist, its ranking and the price ceiling as the deposit cap.
+    public static RunPolicy BestMatchPolicy(in CharacterProfile character, BuyerType buyer, long depositCap, long gilReserve, in ShortlistSnapshot shortlist, in CyclePosition position)
+        => new()
         {
             Revision = shortlist.Revision,
             Cycle = position,
@@ -27,6 +20,28 @@ internal static class RunPreviewBuilder
             TravelAllowance = PreviewTravelAllowance,
             Shortlist = shortlist,
         };
-        return AssignmentPlanner.Build(policy, [character], plots, nowUtc);
+
+    // One plot for exactly the deposit its details show. The deposit is also the cap, so the run can never pay more.
+    public static RunPolicy ExactPolicy(in CharacterProfile character, BuyerType buyer, PlotKey plot, long deposit, long gilReserve, in CyclePosition position, int revision)
+        => new()
+        {
+            Revision = revision,
+            Cycle = position,
+            Characters = [new CharacterRunSettings(character.ContentId, buyer, deposit, gilReserve)],
+            TravelAllowance = PreviewTravelAllowance,
+            Exact = new ExactTarget(plot, deposit),
+        };
+
+    // The buyer is the player's own choice in the filters. A plot sold to one buyer type only confirms that choice:
+    // no choice, or a choice the plot does not take, gives no buyer. A plot whose buyers are not reported takes the
+    // choice, and the placard checks it before anything is pressed.
+    public static BuyerType BuyerFor(PlotBuyers? plotBuyers, BuyerType chosen)
+    {
+        if (chosen == BuyerType.Unknown || EligibilityRules.Allows(plotBuyers ?? PlotBuyers.Unknown, chosen) == false)
+        {
+            return BuyerType.Unknown;
+        }
+
+        return chosen;
     }
 }

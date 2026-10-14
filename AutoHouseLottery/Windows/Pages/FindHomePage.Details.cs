@@ -1,6 +1,9 @@
 using AutoHouseLottery.Core.Find;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
+using AutoHouseLottery.Core.Selection.Model;
+using AutoHouseLottery.Core.Tasks;
+using AutoHouseLottery.Core.Tasks.Model;
 using AutoHouseLottery.Windows.Components;
 using AutoHouseLottery.Windows.Find;
 using Dalamud.Bindings.ImGui;
@@ -17,6 +20,8 @@ internal sealed partial class FindHomePage
     private const string ListPopup = "##ahl_find_save_to_list";
 
     private readonly DetailsText detailsText = new();
+    private readonly StartCheck exactCheck = new();
+    private readonly StartCheck bestMatchCheck = new();
 
     private void DrawDetails(FindView view, PlotKey key, DateTime now)
     {
@@ -134,14 +139,48 @@ internal sealed partial class FindHomePage
         Styling.VSpace(6f);
         if (detailsText.EnterTitle is { } enterTitle)
         {
-            UnavailableAction(FontAwesomeIcon.Ticket, enterTitle, Styling.AccentGlow, Loc.T(L.Find.EnteringLater));
+            DrawEnterAction(enterTitle, RunMode.Exact, detailsText.EnterPolicy, detailsText.EnterMissing, exactCheck);
             return;
         }
 
         UnavailableAction(FontAwesomeIcon.Search, Loc.T(L.Find.InspectPlot), Styling.AccentBlue, Loc.T(L.Find.InspectLater));
     }
 
-    // Entering and visiting arrive with later updates; their buttons are shown, locked, with the reason under them.
+    // Enter always asks for a dry run, which no grant can turn real, from the frozen policy; while the controller would
+    // refuse it, the button is locked and its reason is shown under it.
+    private void DrawEnterAction(string title, RunMode mode, RunPolicy? policy, string? missing, StartCheck check)
+    {
+        var controller = plugin.Controller;
+        var reason = policy is null ? missing ?? string.Empty : check.Reason(controller, mode, policy);
+        var enabled = policy is not null && reason.Length == 0;
+        if (HeroButton.Draw(FontAwesomeIcon.Ticket, title, BuyerLabel(State.Filter.Buyer), Styling.AccentGlow, enabled) && policy is not null && enabled)
+        {
+            var refusal = mode == RunMode.Exact ? controller.StartExact(policy) : controller.StartBestMatch(policy);
+            check.Invalidate();
+            if (refusal != StartRefusal.None)
+            {
+                notice.Show(RunText.Refusal(refusal), Styling.AccentRose);
+            }
+        }
+
+        Styling.VSpace(4f);
+        ImGui.PushTextWrapPos();
+        using (ImRaii.PushColor(ImGuiCol.Text, enabled ? Styling.TextDim : Styling.TextMuted))
+        {
+            ImGui.TextUnformatted(enabled ? Loc.T(L.Run.DryRunHint) : reason);
+        }
+
+        ImGui.PopTextWrapPos();
+    }
+
+    private static string? BuyerLabel(BuyerType buyer) => buyer switch
+    {
+        BuyerType.Private => Loc.T(L.Find.BuyerPrivate),
+        BuyerType.FreeCompany => Loc.T(L.Find.BuyerFreeCompany),
+        _ => null,
+    };
+
+    // Visiting arrives with a later update; its button is shown, locked, with the reason under it.
     private static void UnavailableAction(FontAwesomeIcon icon, string title, Vector4 accent, string reason)
     {
         HeroButton.Draw(icon, title, null, accent, false);

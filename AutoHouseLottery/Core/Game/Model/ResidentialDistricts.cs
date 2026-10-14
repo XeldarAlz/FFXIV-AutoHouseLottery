@@ -8,6 +8,8 @@ internal readonly record struct ResidentialDistrict(string Keyword, uint Territo
 
 internal static class ResidentialDistricts
 {
+    // The game counts wards and plots from zero; addresses shown to the player count from one.
+    public const int OneBased = 1;
     public const int WardCount = 30;
     public const int PlotsPerWard = 60;
     public const int PlotsPerDivision = 30;

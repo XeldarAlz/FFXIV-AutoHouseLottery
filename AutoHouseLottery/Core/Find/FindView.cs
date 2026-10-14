@@ -23,6 +23,7 @@ internal sealed class FindView
         QueryRevision = -1,
         BestMatch = [],
         Preview = null,
+        PreviewPolicy = null,
         UnavailableCount = 0,
     };
 
@@ -45,6 +46,9 @@ internal sealed class FindView
     public required ImmutableArray<RankedPlot> BestMatch { get; init; }
 
     public required RunPreview? Preview { get; init; }
+
+    // The frozen policy the preview was planned from, which Enter best match starts; null when it could not be planned.
+    public required RunPolicy? PreviewPolicy { get; init; }
 
     public required int UnavailableCount { get; init; }
 

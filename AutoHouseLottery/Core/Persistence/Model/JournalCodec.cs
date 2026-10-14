@@ -38,13 +38,14 @@ internal static class JournalCodec
             Character = receipt.CharacterContentId,
             HomeWorld = receipt.HomeWorldId,
             Cycle = CycleKeyJson.From(receipt.Cycle),
-            Plot = PlotKeyJson.From(receipt.Plot),
+            Plot = receipt.Plot is { } plot ? PlotKeyJson.From(plot) : null,
             Buyer = receipt.Buyer,
             Evidence = receipt.Evidence,
             Attempt = receipt.AttemptId,
             EntryNumber = receipt.EntryNumber,
             Deposit = receipt.Deposit,
             EnteredUtc = receipt.EnteredUtc,
+            AddressText = receipt.AddressText,
         },
     };
 
@@ -66,6 +67,13 @@ internal static class JournalCodec
     {
         Kind = JournalRecordKind.Confirmation,
         Attempt = Encode(attempt).Attempt,
+        Receipt = Encode(receipt).Receipt,
+        Settlement = Encode(settlement).Settlement,
+    };
+
+    public static JournalRecordJson Import(EntryReceipt receipt, in EntrySettlement settlement) => new()
+    {
+        Kind = JournalRecordKind.Import,
         Receipt = Encode(receipt).Receipt,
         Settlement = Encode(settlement).Settlement,
     };
@@ -124,10 +132,23 @@ internal static class JournalCodec
             || json.HomeWorld is not { } homeWorld
             || json.Cycle is not { } cycleJson
             || !cycleJson.TryToKey(out var cycle)
-            || json.Plot is not { } plotJson
-            || !plotJson.TryToKey(out var plot)
             || json.Buyer is not { } buyer
             || json.Evidence is not { } evidence)
+        {
+            return false;
+        }
+
+        PlotKey? plot = null;
+        if (json.Plot is { } plotJson)
+        {
+            if (!plotJson.TryToKey(out var key))
+            {
+                return false;
+            }
+
+            plot = key;
+        }
+        else if (evidence != ReceiptEvidence.ImportedFromGame)
         {
             return false;
         }
@@ -145,6 +166,7 @@ internal static class JournalCodec
             EntryNumber = json.EntryNumber,
             Deposit = json.Deposit,
             EnteredUtc = json.EnteredUtc,
+            AddressText = json.AddressText,
         };
         return true;
     }

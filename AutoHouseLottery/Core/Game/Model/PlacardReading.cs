@@ -96,7 +96,6 @@ internal static class PlacardSaleRule
 
 internal static class PlacardAddressRule
 {
-    private const int OneBased = 1;
     private const int DecimalBase = 10;
 
     // The window's text is compared without parsing its wording: it names the plot when it carries the district's name
@@ -107,8 +106,8 @@ internal static class PlacardAddressRule
         var district = DisplayText.Normalize(districtName);
         return district.Length > 0
             && text.Contains(district, StringComparison.OrdinalIgnoreCase)
-            && ContainsNumber(text, address.WardIndex + OneBased)
-            && ContainsNumber(text, address.PlotIndex + OneBased);
+            && ContainsNumber(text, address.WardIndex + ResidentialDistricts.OneBased)
+            && ContainsNumber(text, address.PlotIndex + ResidentialDistricts.OneBased);
     }
 
     // districtNameOf answers null when a territory's name is not known, which leaves the text out of the comparison.

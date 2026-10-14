@@ -46,6 +46,49 @@ internal static unsafe class LabelledButtons
         return null;
     }
 
+    public static ImmutableArray<WindowCheckBox> CollectCheckBoxes(AtkUnitBase* addon, ReadOnlySpan<HousingText> labels)
+    {
+        var checkBoxes = ImmutableArray.CreateBuilder<WindowCheckBox>();
+        var nodes = addon->UldManager.NodeList;
+        for (var nodeIndex = 0; nodeIndex < addon->UldManager.NodeListCount; nodeIndex++)
+        {
+            var node = nodes[nodeIndex];
+            var checkBox = AsCheckBox(node);
+            if (checkBox == null)
+            {
+                continue;
+            }
+
+            var button = &checkBox->AtkComponentButton;
+            var label = Label(button);
+            checkBoxes.Add(new WindowCheckBox(node->NodeId, label, button->IsEnabled, ButtonPress.Visible(button), button->IsChecked, HousingSheetText.Match(label, labels)));
+        }
+
+        return checkBoxes.ToImmutable();
+    }
+
+    // A checkbox is a button underneath; its label is the button's own text.
+    public static AtkComponentButton* FindCheckBox(AtkUnitBase* addon, ReadOnlySpan<HousingText> labels)
+    {
+        var nodes = addon->UldManager.NodeList;
+        for (var nodeIndex = 0; nodeIndex < addon->UldManager.NodeListCount; nodeIndex++)
+        {
+            var checkBox = AsCheckBox(nodes[nodeIndex]);
+            if (checkBox == null)
+            {
+                continue;
+            }
+
+            var button = &checkBox->AtkComponentButton;
+            if (ButtonPress.Visible(button) && HousingSheetText.Match(Label(button), labels) is not null)
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
+
     public static string Label(AtkComponentButton* button) => AddonReads.NodeText(button->ButtonTextNode) ?? string.Empty;
 
     // The press rule applied to this button's label as the game shows it now.
@@ -57,4 +100,7 @@ internal static unsafe class LabelledButtons
 
     private static AtkComponentButton* AsButton(AtkResNode* node)
         => node == null || (ushort)node->Type < FirstComponentNodeType ? null : node->GetAsAtkComponentButton();
+
+    private static AtkComponentCheckBox* AsCheckBox(AtkResNode* node)
+        => node == null || (ushort)node->Type < FirstComponentNodeType ? null : node->GetAsAtkComponentCheckBox();
 }

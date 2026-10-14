@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Runtime.InteropServices;
 using AutoHouseLottery.Core.Eligibility.Model;
+using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Maps;
 using AutoHouseLottery.Core.Providers;
 using AutoHouseLottery.Core.Providers.Model;
@@ -13,6 +14,7 @@ namespace AutoHouseLottery.Core.Find;
 
 // Owns the housing discovery services and drives them from the framework update: the character and the Find a home view
 // every frame, which only compares numbers, and the listings and saved notices once a second. Nothing here acts in game.
+// The feed service, which holds the one plot store and lottery calendar, is the plugin's, shared with the housing context.
 internal sealed class Discovery : IDisposable
 {
     private const long TickIntervalMs = 1_000;
@@ -20,19 +22,20 @@ internal sealed class Discovery : IDisposable
     private const string ScheduleFile = "lottery-schedules.json";
 
     private readonly Func<bool> windowOpen;
-    private readonly CurrentCharacter character = new();
+    private readonly CurrentCharacter character;
     private readonly NoticeAnnouncer announcer;
     private readonly List<uint> watched = [];
     private ImmutableArray<uint> scope = [];
     private (uint World, int Library, int Shortlist) scopeInputs = (uint.MaxValue, -1, -1);
     private long nextTickMs;
 
-    public Discovery(Configuration configuration, string directory, string version, Func<bool> windowOpen)
+    public Discovery(Configuration configuration, string directory, HousingFeedService feed, CurrentCharacter character, Func<bool> windowOpen)
     {
         this.windowOpen = windowOpen;
+        this.character = character;
         Names = new GameNames(Svc.Data);
         Maps = new HousingGameMaps(Svc.Data);
-        Feed = new HousingFeedService(new HousingFeedClient(version), new HousingFeedCache(Path.Combine(directory, CacheFolder)), Path.Combine(directory, ScheduleFile));
+        Feed = feed;
         Find = new FindState(configuration, new ShortlistStore(directory));
         Saved = new SavedService(directory);
         announcer = new NoticeAnnouncer(configuration, Names);
@@ -40,6 +43,9 @@ internal sealed class Discovery : IDisposable
     }
 
     public HousingFeedService Feed { get; }
+
+    public static HousingFeedService CreateFeed(string directory, string version)
+        => new(new HousingFeedClient(version), new HousingFeedCache(Path.Combine(directory, CacheFolder)), Path.Combine(directory, ScheduleFile));
 
     public FindState Find { get; }
 
@@ -56,7 +62,6 @@ internal sealed class Discovery : IDisposable
     public void Dispose()
     {
         Svc.Framework.Update -= OnUpdate;
-        Feed.Dispose();
         Find.Close();
         Saved.Close();
     }

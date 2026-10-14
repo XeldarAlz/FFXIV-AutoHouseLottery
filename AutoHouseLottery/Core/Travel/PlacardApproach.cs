@@ -18,8 +18,8 @@ internal sealed class PlacardApproach(HousingDestination destination) : AutoComm
 
     // Estimates to confirm in game: how far a plot's placard stands from Lifestream's entrance point, and how close the
     // character must be to interact with a placard.
+    public const float InteractionRangeMeters = 3.5f;
     private const float PlacardSearchMeters = 25f;
-    private const float InteractionRangeMeters = 3.5f;
     private const float WalkToleranceMeters = 2.5f;
     private const int ApproachDeadlineMs = 30_000;
 

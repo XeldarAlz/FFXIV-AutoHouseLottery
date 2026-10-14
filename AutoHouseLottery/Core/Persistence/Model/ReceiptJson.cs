@@ -25,4 +25,6 @@ internal readonly struct ReceiptJson
     public long? Deposit { get; init; }
 
     public DateTime? EnteredUtc { get; init; }
+
+    public string? AddressText { get; init; }
 }

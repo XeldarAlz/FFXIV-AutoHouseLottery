@@ -6,6 +6,9 @@ internal static class HousingDistricts
 {
     public const int PlotsPerDivision = 30;
 
+    // A fully devalued small plot, the cheapest price the listings show; no plot is offered for less.
+    public const long MinimumPlotPrice = 3_000_000;
+
     public const ushort Mist = 339;
     public const ushort LavenderBeds = 340;
     public const ushort Goblet = 341;

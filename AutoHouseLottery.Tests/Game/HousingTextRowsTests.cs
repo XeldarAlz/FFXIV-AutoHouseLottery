@@ -31,6 +31,10 @@ public sealed class HousingTextRowsTests
     [InlineData(3497u)]
     [InlineData(6099u)]
     [InlineData(6100u)]
+    [InlineData(6097u)]
+    [InlineData(6098u)]
+    [InlineData(6101u)]
+    [InlineData(6102u)]
     public void FindsEachRejectionByItsLogMessageRow(uint rowId)
     {
         Assert.True(HousingTextRows.TryFindLogMessage(rowId, out var text));
@@ -40,10 +44,28 @@ public sealed class HousingTextRowsTests
     [Theory]
     [InlineData(7046u)]
     [InlineData(0u)]
-    [InlineData(6098u)]
+    [InlineData(6096u)]
     public void AnAddonRowOrUnknownIdIsNoRejection(uint rowId)
     {
         Assert.False(HousingTextRows.TryFindLogMessage(rowId, out _));
+    }
+
+    [Fact]
+    public void EveryEntryRejectionIsALogMessageAndTheCheckboxIsAnAddonRow()
+    {
+        for (var index = 0; index < HousingTextRows.EntryRejections.Length; index++)
+        {
+            Assert.Equal(HousingSheet.LogMessage, HousingTextRows.Of(HousingTextRows.EntryRejections[index]).Sheet);
+        }
+
+        Assert.Equal(new HousingTextRow(HousingText.ProceedCheckbox, HousingSheet.Addon, 7047), HousingTextRows.Of(HousingText.ProceedCheckbox));
+    }
+
+    [Fact]
+    public void TheCheckboxIsNoCommittingLabel()
+    {
+        Assert.True(ButtonLabelRule.MayPress([HousingText.ProceedCheckbox], requestCommits: false, LabelReads(HousingText.ProceedCheckbox)));
+        Assert.False(ButtonLabelRule.MayPress([HousingText.ProceedCheckbox], requestCommits: false, LabelReads(HousingText.ConfirmLabel)));
     }
 
     [Fact]

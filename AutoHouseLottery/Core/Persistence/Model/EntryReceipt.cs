@@ -2,6 +2,8 @@ using AutoHouseLottery.Core.Housing.Model;
 
 namespace AutoHouseLottery.Core.Persistence.Model;
 
+// Plot is null only for an entry imported from the Timers text, which names the plot in words the plugin does not
+// parse; AddressText keeps those words as the game showed them.
 internal sealed record EntryReceipt
 {
     public required Guid ReceiptId { get; init; }
@@ -12,7 +14,7 @@ internal sealed record EntryReceipt
 
     public required CycleKey Cycle { get; init; }
 
-    public required PlotKey Plot { get; init; }
+    public required PlotKey? Plot { get; init; }
 
     public required BuyerType Buyer { get; init; }
 
@@ -26,6 +28,10 @@ internal sealed record EntryReceipt
 
     public DateTime? EnteredUtc { get; init; }
 
+    public string? AddressText { get; init; }
+
+    public bool Imported => Evidence == ReceiptEvidence.ImportedFromGame;
+
     public bool Matches(ActionAttempt attempt)
     {
         return CharacterContentId == attempt.CharacterContentId
@@ -34,4 +40,7 @@ internal sealed record EntryReceipt
             && Plot == attempt.Plot
             && Buyer == attempt.Buyer;
     }
+
+    public bool HoldsSlotOf(ulong characterContentId, uint homeWorldId, CycleKey cycle)
+        => CharacterContentId == characterContentId && HomeWorldId == homeWorldId && Cycle == cycle;
 }

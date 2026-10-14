@@ -3,6 +3,7 @@ using AutoHouseLottery.Core.Tasks;
 using AutoHouseLottery.Windows.Components;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using System.Numerics;
 
 namespace AutoHouseLottery.Windows.Shell;
@@ -34,16 +35,20 @@ internal static class ActionDock
     {
         var gap = ButtonGap * ImGuiHelpers.GlobalScale;
         var half = (innerWidth - gap) * 0.5f;
-        if (PauseButton.Draw(controller.PauseReason, half))
+        var verifying = controller.Status.FinishingVerification;
+        using (ImRaii.Disabled(verifying))
         {
-            controller.TogglePause();
-        }
+            if (PauseButton.Draw(controller.PauseReason, half) && !verifying)
+            {
+                controller.TogglePause();
+            }
 
-        ImGui.SameLine(0f, gap);
-        var state = controller.Paused ? Loc.T(L.Dock.StatePaused) : Loc.T(L.Dock.StateRunning);
-        if (StopButton.Draw(state, half))
-        {
-            controller.Stop();
+            ImGui.SameLine(0f, gap);
+            var state = verifying ? Loc.T(L.Run.FinishingVerification) : controller.Paused ? Loc.T(L.Dock.StatePaused) : Loc.T(L.Dock.StateRunning);
+            if (StopButton.Draw(state, half) && !verifying)
+            {
+                controller.Stop();
+            }
         }
     }
 }

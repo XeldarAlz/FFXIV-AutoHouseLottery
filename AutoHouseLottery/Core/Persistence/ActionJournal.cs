@@ -128,7 +128,7 @@ internal sealed class ActionJournal : IDisposable
                 }
             }
 
-            if (FindSlotHolderLocked(attempt.Key) is not null)
+            if (FindSlotHolderLocked(attempt.Key) is not null || (attempt.Kind == ActionKind.Entry && HasImportedEntryLocked(attempt)))
             {
                 return JournalWrite.SlotTaken;
             }
@@ -196,6 +196,48 @@ internal sealed class ActionJournal : IDisposable
             receipts[linkedReceipt.ReceiptId] = linkedReceipt;
             settlements[settlement.ReceiptId] = settlement;
             attempts[confirmed.AttemptId] = confirmed;
+            Publish();
+            return JournalWrite.Written;
+        }
+    }
+
+    // An entry the character's lottery reading shows that no attempt of this plugin made. It takes the cycle's slot
+    // like any receipt, so a later run cannot add a second entry for the same character and cycle.
+    public JournalWrite ImportReceipt(EntryReceipt receipt, DateTime nowUtc)
+    {
+        lock (gate)
+        {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
+            if (!IsWellFormedImport(receipt) || receipts.ContainsKey(receipt.ReceiptId))
+            {
+                return JournalWrite.Invalid;
+            }
+
+            if (FindSlotHolderLocked(OperationKey.ForEntry(receipt.CharacterContentId, receipt.HomeWorldId, receipt.Cycle)) is not null)
+            {
+                return JournalWrite.SlotTaken;
+            }
+
+            foreach (var existing in receipts.Values)
+            {
+                if (existing.HoldsSlotOf(receipt.CharacterContentId, receipt.HomeWorldId, receipt.Cycle))
+                {
+                    return JournalWrite.AlreadyRecorded;
+                }
+            }
+
+            var settlement = EntrySettlement.Entered(receipt.ReceiptId, nowUtc);
+            if (!TryAppend(JournalCodec.Import(receipt, settlement)))
+            {
+                return JournalWrite.WriteFailed;
+            }
+
+            receipts[receipt.ReceiptId] = receipt;
+            settlements[settlement.ReceiptId] = settlement;
             Publish();
             return JournalWrite.Written;
         }
@@ -506,6 +548,16 @@ internal sealed class ActionJournal : IDisposable
         return attempt.Kind == ActionKind.Entry || attempt.ReceiptId is not null;
     }
 
+    private static bool IsWellFormedImport(EntryReceipt receipt)
+    {
+        if (!receipt.Imported || receipt.AttemptId is not null || !receipt.Cycle.IsValid || receipt.Deposit is <= 0)
+        {
+            return false;
+        }
+
+        return receipt.Plot is not { } plot || (plot.IsValid && plot.WorldId == receipt.HomeWorldId && plot.Region == receipt.Cycle.Region);
+    }
+
     private static bool IsPrunable(ActionAttempt attempt, HashSet<Guid> prunableReceipts, DateTime pruneSettledBeforeUtc)
     {
         if (attempt.State is not (AttemptState.Confirmed or AttemptState.Rejected))
@@ -535,7 +587,7 @@ internal sealed class ActionJournal : IDisposable
             && settlement.UpdatedUtc < pruneSettledBeforeUtc
             && receipt.Cycle.Region == currentCycle.Region
             && currentCycle.IsLaterThan(receipt.Cycle)
-            && IsConfirmedBy(receipt);
+            && (receipt.Imported || IsConfirmedBy(receipt));
     }
 
     private bool IsConfirmedBy(EntryReceipt receipt)
@@ -548,7 +600,7 @@ internal sealed class ActionJournal : IDisposable
 
     private bool IsReceiptFor(EntryReceipt receipt, ActionAttempt attempt)
     {
-        if (!receipt.Matches(attempt) || receipt.Deposit is not { } deposit || deposit <= 0 || deposit > attempt.Amount)
+        if (receipt.Imported || !receipt.Matches(attempt) || receipt.Deposit is not { } deposit || deposit <= 0 || deposit > attempt.Amount)
         {
             return false;
         }
@@ -604,6 +656,15 @@ internal sealed class ActionJournal : IDisposable
                 return true;
             case JournalRecordKind.Settlement when record.Settlement is { } json && JournalCodec.TryDecode(json, out var settlement):
                 settlements[settlement.ReceiptId] = settlement;
+                return true;
+            case JournalRecordKind.Import
+                when record.Receipt is { } receiptJson
+                && record.Settlement is { } settlementJson
+                && JournalCodec.TryDecode(receiptJson, out var imported)
+                && imported.Imported
+                && JournalCodec.TryDecode(settlementJson, out var importedSettlement):
+                receipts[imported.ReceiptId] = imported;
+                settlements[importedSettlement.ReceiptId] = importedSettlement;
                 return true;
             case JournalRecordKind.Confirmation
                 when record.Attempt is { } attemptJson
@@ -693,6 +754,19 @@ internal sealed class ActionJournal : IDisposable
         return JournalWrite.Written;
     }
 
+    private bool HasImportedEntryLocked(ActionAttempt attempt)
+    {
+        foreach (var receipt in receipts.Values)
+        {
+            if (receipt.Imported && receipt.HoldsSlotOf(attempt.CharacterContentId, attempt.HomeWorldId, attempt.Cycle))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private ActionAttempt? FindSlotHolderLocked(OperationKey key)
     {
         foreach (var attempt in attempts.Values)
@@ -770,7 +844,7 @@ internal sealed class ActionJournal : IDisposable
         var orphans = ImmutableArray.CreateBuilder<Guid>();
         foreach (var receipt in receipts.Values)
         {
-            if (!IsConfirmedBy(receipt) || !settlements.ContainsKey(receipt.ReceiptId))
+            if ((!receipt.Imported && !IsConfirmedBy(receipt)) || !settlements.ContainsKey(receipt.ReceiptId))
             {
                 orphans.Add(receipt.ReceiptId);
             }
