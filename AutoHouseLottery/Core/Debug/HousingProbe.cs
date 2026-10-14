@@ -60,7 +60,7 @@ internal static unsafe class HousingProbe
             case ProbeVerbs.Approach when tokens.Length == ApproachArgumentCount && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: false, observers));
                 return;
-            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && OpensLotteryDialog(tokens[1]) && AutoAnswerGuard.Blocks:
+            case ProbeVerbs.Press when tokens.Length == PressArgumentCount && OpensLotteryDialog(tokens[1]) && AutoAnswerGuard.LoadedName() is not null:
                 Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {RunText.AutoAnswer()}");
                 return;
             case ProbeVerbs.Press when tokens.Length == PressArgumentCount && UiIsOwned():

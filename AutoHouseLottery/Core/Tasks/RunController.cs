@@ -40,7 +40,6 @@ internal sealed partial class RunController
     private ReconcileTask? reconciling;
     private LeaseOwner? owner;
     private LeaseOwner? reconcileOwner;
-    private RealEntryGrant? grant;
     private RunStatus finished = RunStatus.Idle;
     private bool reconcileWanted;
     private ulong lastContentId;
@@ -53,8 +52,8 @@ internal sealed partial class RunController
         this.housing = housing;
         batchFile = CreateBatchFile(directory);
         batch = RestoreBatch();
-        services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater, AutomaticRefunds, CollectForEntry, TrackJournalWrite);
-        settlementServices = new SettlementServices(housing, observers, Plugin.Instance.Configuration, SettlementGrantFor, ConsumeSettlementGrant, RecordSettlementTravel, SettlementSession);
+        services = new RunServices(housing, observers, CloseConfirmationLater, AutomaticRefunds, CollectForEntry, TrackJournalWrite);
+        settlementServices = new SettlementServices(housing, observers, Plugin.Instance.Configuration, RecordSettlementTravel, SettlementSession);
         scheduler = new SettlementScheduler(housing, Plugin.Instance.Configuration);
         notices = new SettlementNoticeAnnouncer(housing, Plugin.Instance.Configuration);
         reconcileWanted = true;
@@ -73,14 +72,11 @@ internal sealed partial class RunController
 
     public RunStatus Status => session?.Status ?? finished;
 
-    // A maintainer's session permission for one real entry that has not been used yet.
-    public bool RealEntryAllowed => grant is { Used: false };
-
     public ReconcileReport LastReconcile { get; private set; }
 
-    public StartRefusal StartExact(RunPolicy policy, bool dryRun = true) => Start(RunMode.Exact, policy, dryRun);
+    public StartRefusal StartExact(RunPolicy policy) => Start(RunMode.Exact, policy);
 
-    public StartRefusal StartBestMatch(RunPolicy policy, bool dryRun = true) => Start(RunMode.BestMatch, policy, dryRun);
+    public StartRefusal StartBestMatch(RunPolicy policy) => Start(RunMode.BestMatch, policy);
 
     public void Pause(PauseReason reason)
     {
@@ -232,7 +228,6 @@ internal sealed partial class RunController
     // batch or refund switch logs out by design and goes on; any other logout halts a batch that was between characters.
     public void Interrupt()
     {
-        grant = null;
         lastContentId = 0;
         End("logged out");
         EndSettlement("logged out");
@@ -246,6 +241,7 @@ internal sealed partial class RunController
         EndSettlement("the plugin is unloading");
         CharacterSwitch.Release();
         Svc.Framework.Update -= OnUpdate;
+        YesAlreadyPause.Hold(false);
         if (pendingJournalWrite is { IsCompleted: false } write && !write.Wait(JournalWriteWaitMs))
         {
             RunLog.Warning("The last journal write did not finish before unload; the attempt is read back as uncertain at the next load.");
@@ -287,34 +283,6 @@ internal sealed partial class RunController
             FinishReconcile(reconcile);
             return false;
         }
-    }
-
-    // A maintainer's permission for one real entry, kept in memory only. It names the logged-in character, one plot
-    // on its home world and a deposit ceiling, and ends at logout, at unload, or after the one entry.
-    public RealEntryGrant? GrantRealEntry(string characterName, uint districtId, int ward, int plot, long maxDeposit)
-    {
-        if (CharacterContextReader.Read() is not { } context
-            || !string.Equals(context.Name, characterName, StringComparison.OrdinalIgnoreCase)
-            || maxDeposit <= 0
-            || !PlotKey.TryCreate(HousingContext.Region, context.HomeWorldId, districtId, ward, plot, out var key))
-        {
-            return null;
-        }
-
-        grant = new RealEntryGrant(context.ContentId, context.Name, key, maxDeposit, DateTime.UtcNow);
-        RunLog.Warning($"REAL ENTRY ALLOWED for this session: {context.Name}, {key}, up to {maxDeposit} gil, one entry only. It ends at logout or unload.");
-        return grant;
-    }
-
-    public void RevokeRealEntry()
-    {
-        if (grant is null)
-        {
-            return;
-        }
-
-        grant = null;
-        RunLog.Warning("Real entry permission revoked; every run is a dry run again.");
     }
 
     // What Start would say now, without starting anything: Find a home shows it on its Enter buttons.
@@ -361,7 +329,7 @@ internal sealed partial class RunController
         return new StartPlan(refusal, context, settings, assignment, preview);
     }
 
-    private StartRefusal Start(RunMode mode, RunPolicy policy, bool dryRun)
+    private StartRefusal Start(RunMode mode, RunPolicy policy)
     {
         var plan = Plan(mode, policy);
         if (plan is not { Refusal: StartRefusal.None, Context: { } context, Settings: { } chosen, Assignment: { } planned, Preview: { } preview })
@@ -376,12 +344,11 @@ internal sealed partial class RunController
         }
 
         owner = leaseGrant.Owner;
-        var entryMode = RealEntryGate.ModeFor(EntryCapabilities.EntryConfirmValidated, dryRun, grant, mode, context.ContentId, planned.TargetOrder.AsSpan());
-        var active = new EntryRunSession(Guid.NewGuid(), mode, entryMode, dryRun, policy, planned, chosen, context.Name, preview.Ranking);
+        var active = new EntryRunSession(Guid.NewGuid(), mode, policy, planned, chosen, context.Name, preview.Ranking);
         session = active;
         finished = RunStatus.Idle;
         PauseReason = PauseReason.None;
-        RunLog.Info($"Entry run {active.RunId} authorized ({mode}, {entryMode}): {context.Name}, policy revision {policy.Revision}, cycle {policy.Cycle.Cycle} ({policy.Cycle.Evidence}), "
+        RunLog.Info($"Entry run {active.RunId} authorized ({mode}): {context.Name}, policy revision {policy.Revision}, cycle {policy.Cycle.Cycle} ({policy.Cycle.Evidence}), "
                   + $"buyer {chosen.Buyer}, cap {chosen.DepositCap} gil, reserve {chosen.GilReserve} gil, targets {Describe(planned.TargetOrder)}.");
         Launch(active);
         return StartRefusal.None;
@@ -470,8 +437,7 @@ internal sealed partial class RunController
         PauseReason = PauseReason.None;
         SettleAttempt(active, interruptedAt);
         finished = active.Status;
-        RunLog.Info($"Entry run {active.RunId} ended {active.Step} ({reason}){(active.Failure == EntryFailure.None ? string.Empty : $", {active.Failure}")}"
-                  + $"{(active.Trace is { } trace ? $"; dry run reached the confirmation for {trace.Plot} at {trace.Deposit} gil" : string.Empty)}.");
+        RunLog.Info($"Entry run {active.RunId} ended {active.Step} ({reason}){(active.Failure == EntryFailure.None ? string.Empty : $", {active.Failure}")}.");
         var member = RunningMember(active);
         if (member >= 0)
         {
@@ -585,21 +551,13 @@ internal sealed partial class RunController
         }
     }
 
-    private void ConsumeGrant()
-    {
-        if (grant is not { Used: false } open)
-        {
-            return;
-        }
-
-        grant = open with { Used = true };
-        RunLog.Warning($"Real entry permission for {open.CharacterName}, {open.Plot} used; it opens nothing more.");
-    }
-
+    // YesAlready stays paused for as long as the plugin's own work drives the game, and while a confirmation a run opened
+    // is still being closed.
     private void OnUpdate(IFramework framework)
     {
         var now = Environment.TickCount64;
         RetryConfirmationClose(now);
+        YesAlreadyPause.Hold(TaskStarter.Busy || closeConfirmationUntilMs != 0);
         scheduler.SampleGamepad(now);
         if (now < nextPollMs)
         {

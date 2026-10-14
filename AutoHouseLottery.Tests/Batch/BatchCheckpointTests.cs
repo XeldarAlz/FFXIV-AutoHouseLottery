@@ -41,7 +41,6 @@ public sealed class BatchCheckpointTests : IDisposable
         Assert.Equal(batch.BatchId, read.BatchId);
         Assert.Equal(batch.Phase, read.Phase);
         Assert.Equal(batch.SwitchTarget, read.SwitchTarget);
-        Assert.Equal(batch.DryRunRequested, read.DryRunRequested);
         Assert.Equal(batch.Policy.Cycle, read.Policy.Cycle);
         Assert.Equal<CharacterRunSettings>(batch.Policy.Characters, read.Policy.Characters);
         Assert.Equal<PlotKey>(batch.Policy.Shortlist!.Value.Plots, read.Policy.Shortlist!.Value.Plots);
@@ -62,7 +61,7 @@ public sealed class BatchCheckpointTests : IDisposable
         var keys = BatchPlanningTests.Ward(3);
         var roster = new[] { CharacterFixtures.Character(1) };
         var policy = BatchPlanningTests.Policy(keys, BatchPlanningTests.Settings(1) with { Target = keys[2] });
-        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, BatchPlanningTests.Listed(keys), now), roster, true, now);
+        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, BatchPlanningTests.Listed(keys), now), roster, now);
 
         Assert.True(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch), out var read));
 
@@ -76,7 +75,7 @@ public sealed class BatchCheckpointTests : IDisposable
         var bytes = BatchCodec.Serialize(BatchRulesTests.Batch(out _));
         var text = Encoding.UTF8.GetString(bytes);
 
-        Assert.False(BatchCodec.TryDeserialize(Encoding.UTF8.GetBytes(text.Replace("\"schema\": 1", "\"schema\": 2")), out _));
+        Assert.False(BatchCodec.TryDeserialize(Encoding.UTF8.GetBytes(text.Replace("\"schema\": 2", "\"schema\": 3")), out _));
         Assert.False(BatchCodec.TryDeserialize(Encoding.UTF8.GetBytes(text.Replace("\"maximumDeposit\"", "\"somethingElse\"")), out _));
         Assert.False(BatchCodec.TryDeserialize("{ not json"u8, out _));
     }
@@ -134,7 +133,7 @@ public sealed class BatchCheckpointTests : IDisposable
         var first = batch.Members[0];
         var plot = first.Assignment!.Value.TargetOrder[0];
         batch = BatchRules.Begin(batch, 0, now);
-        batch = BatchRules.Record(batch, 0, BatchMemberState.DryRun, EntryFailure.None, plot, Deposit, now);
+        batch = BatchRules.Record(batch, 0, BatchMemberState.Entered, EntryFailure.None, plot, Deposit, now);
         var next = BatchRules.Next(batch, first.ContentId, switchingAllowed: true);
         Assert.Equal(BatchStepKind.Switch, next.Kind);
         batch = BatchRules.BeginSwitch(batch, batch.Members[next.MemberIndex].ContentId, now);
@@ -144,7 +143,7 @@ public sealed class BatchCheckpointTests : IDisposable
 
         Assert.Equal(BatchPhase.Halted, reloaded.Phase);
         Assert.Equal(BatchHalt.Reloaded, reloaded.Halt);
-        Assert.Equal(BatchMemberState.DryRun, reloaded.Members[0].State);
+        Assert.Equal(BatchMemberState.Entered, reloaded.Members[0].State);
         Assert.Equal<PlotKey>([plot], reloaded.Members[1].Assignment!.Value.TargetOrder);
         Assert.Equal(LoginVerdict.NotInBatch, BatchRules.OnLogin(reloaded, first.ContentId, HomeWorld));
         var arrived = reloaded.Members[next.MemberIndex];

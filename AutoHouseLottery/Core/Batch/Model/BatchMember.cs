@@ -5,13 +5,13 @@ using AutoHouseLottery.Core.Tasks.Model;
 
 namespace AutoHouseLottery.Core.Batch.Model;
 
-// Queued: waits for its turn. Running: its entry run is going. Entered: a confirmed real entry. DryRun: its dry run reached
-// the lottery confirmation and closed it. NotEntered: its run ended without an entry, for a reason about the plot or the
-// character. Excluded: the plan left it out before the batch started. Uncertain: a press may have reached the game.
-internal enum BatchMemberState : byte { Queued, Running, Entered, DryRun, NotEntered, Excluded, Uncertain }
+// Queued: waits for its turn. Running: its entry run is going. Entered: a confirmed entry. NotEntered: its run ended
+// without an entry, for a reason about the plot or the character. Excluded: the plan left it out before the batch started.
+// Uncertain: a press may have reached the game.
+internal enum BatchMemberState : byte { Queued, Running, Entered, NotEntered, Excluded, Uncertain }
 
 // One selected character of a batch. Assignment is null for a character the plan excluded; Reasons then says why. Plot
-// and Deposit are what its run entered, or what its dry run would have entered.
+// and Deposit are what its run entered.
 internal sealed record BatchMember
 {
     public required ulong ContentId { get; init; }

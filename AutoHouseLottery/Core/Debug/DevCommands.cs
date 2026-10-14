@@ -15,27 +15,17 @@ using System.Globalization;
 
 namespace AutoHouseLottery.Core.Debug;
 
-// /ahl dev: the maintainer's tools for the in-game validation ladder. "run" starts an exact-plot run for the logged-in
-// character; it is a dry run unless the word "real" is given and a grant covers that plot. "allow-real-entry" grants one
-// real entry for one named character, plot and deposit ceiling for this session only; nothing about it is saved.
-// "settle" visits one entry's plot to read its result and, with the word "real" and an "allow-real-refund" or
-// "allow-real-claim" grant for that plot, accepts it once. Until switching is validated in game, "allow-switching" lets one
-// batch (the one not finished yet, or else the next one started) switch characters through Lifestream and
-// "allow-refund-switching" lets the refund queue do so, each for two hours at most; "revoke-switching" withdraws both and
-// stops a switch either started.
+// /ahl dev: the maintainer's tools. "run" starts an exact-plot run for the logged-in character for exactly the deposit
+// given. "settle" visits one entry's plot to read its result and accepts it once.
 internal static class DevCommands
 {
     private const int RunArgumentCount = 5;
-    private const int RunWithOptionsArgumentCount = 7;
-    private const int GrantPlaceArgumentCount = 4;
-    private const int MinimumNameParts = 2;
+    private const int RunWithOptionsArgumentCount = 6;
     private const string FreeCompanyBuyer = "fc";
-    private const string RealEntryWord = "real";
     private const long NoReserve = 0;
     private const long NoTravelAllowance = 0;
     private const int FirstRevision = 1;
     private const int SettleMinimumArgumentCount = 2;
-    private const int SettlementGrantPlaceArgumentCount = 3;
     private const int AddressArgumentCount = 3;
     private const int MinimumIdPrefixLength = 4;
     private const string ClaimWord = "claim";
@@ -49,37 +39,8 @@ internal static class DevCommands
             case DevVerbs.Run when tokens.Length is >= RunArgumentCount and <= RunWithOptionsArgumentCount:
                 StartRun(tokens, controller, housing);
                 return;
-            case DevVerbs.AllowRealEntry when tokens.Length >= 1 + MinimumNameParts + GrantPlaceArgumentCount:
-                Grant(tokens, controller);
-                return;
-            case DevVerbs.RevokeRealEntry:
-                controller.RevokeRealEntry();
-                Print(Loc.T(L.Dev.Revoked));
-                return;
             case DevVerbs.Settle when tokens.Length >= SettleMinimumArgumentCount:
                 Settle(tokens, controller, housing);
-                return;
-            case DevVerbs.AllowRealRefund when tokens.Length >= 1 + MinimumNameParts + SettlementGrantPlaceArgumentCount:
-                GrantSettlement(tokens, ActionKind.Refund, controller);
-                return;
-            case DevVerbs.AllowRealClaim when tokens.Length >= 1 + MinimumNameParts + SettlementGrantPlaceArgumentCount:
-                GrantSettlement(tokens, ActionKind.Claim, controller);
-                return;
-            case DevVerbs.RevokeRealSettlement:
-                controller.RevokeRealSettlement();
-                Print(Loc.T(L.Dev.SettlementRevoked));
-                return;
-            case DevVerbs.AllowSwitching:
-                controller.AllowBatchSwitching();
-                Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Dev.SwitchingWarning)}");
-                return;
-            case DevVerbs.AllowRefundSwitching:
-                controller.AllowRefundSwitching();
-                Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Dev.RefundSwitchingWarning)}");
-                return;
-            case DevVerbs.RevokeSwitching:
-                controller.RevokeSwitching();
-                Print(Loc.T(L.Dev.SwitchingRevoked));
                 return;
             default:
                 Print(Loc.T(L.Dev.Usage));
@@ -101,7 +62,6 @@ internal static class DevCommands
         }
 
         var buyer = HasOption(tokens, FreeCompanyBuyer) ? BuyerType.FreeCompany : BuyerType.Private;
-        var dryRun = !HasOption(tokens, RealEntryWord);
         var policy = new RunPolicy
         {
             Revision = FirstRevision,
@@ -110,39 +70,21 @@ internal static class DevCommands
             TravelAllowance = NoTravelAllowance,
             Exact = new ExactTarget(key, deposit),
         };
-        var refusal = controller.StartExact(policy, dryRun);
+        var refusal = controller.StartExact(policy);
         if (refusal != StartRefusal.None)
         {
             Print(Loc.T(L.Dev.RunRefused, RunText.Refusal(refusal)));
             return;
         }
 
-        Print(Loc.T(controller.Status.EntryMode == EntryMode.Real ? L.Dev.RealRunStarted : L.Dev.DryRunStarted, PlotNames.Address(key), Loc.Gil(deposit)));
+        Print(Loc.T(L.Dev.RunStarted, PlotNames.Address(key), Loc.Gil(deposit)));
     }
 
-    private static void Grant(string[] tokens, RunController controller)
-    {
-        var placeStart = tokens.Length - GrantPlaceArgumentCount;
-        var name = string.Join(' ', tokens, 1, placeStart - 1);
-        if (!ResidentialDistricts.TryFindByKeyword(tokens[placeStart], out var district)
-            || !int.TryParse(tokens[placeStart + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var ward)
-            || !int.TryParse(tokens[placeStart + 2], NumberStyles.None, CultureInfo.InvariantCulture, out var plot)
-            || !long.TryParse(tokens[placeStart + 3], NumberStyles.None, CultureInfo.InvariantCulture, out var ceiling)
-            || controller.GrantRealEntry(name, district.TerritoryTypeId, ward, plot, ceiling) is not { } grant)
-        {
-            Print(Loc.T(L.Dev.GrantRefused));
-            return;
-        }
-
-        Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Dev.GrantWarning, grant.CharacterName, PlotNames.Address(grant.Plot), Loc.Gil(grant.MaxDeposit))}");
-    }
-
-    // settle <receipt id or its first characters | district ward plot> [claim] [real]: a settlement visit for the
-    // logged-in character's entry there. Without the word real it is a dry run whatever is permitted.
+    // settle <receipt id or its first characters | district ward plot> [claim]: a settlement visit for the logged-in
+    // character's entry there.
     private static void Settle(string[] tokens, RunController controller, HousingContext housing)
     {
         var claim = HasOption(tokens, ClaimWord, 1);
-        var real = HasOption(tokens, RealEntryWord, 1);
         if (!Svc.PlayerState.IsLoaded || FindSettlement(tokens, housing, Svc.PlayerState.ContentId) is not { } found)
         {
             Print(Loc.T(L.Dev.SettleNotFound));
@@ -150,14 +92,14 @@ internal static class DevCommands
         }
 
         var mode = claim ? SettlementMode.Claim : SettlementMode.Refund;
-        var refusal = controller.StartSettlement(found.Id, mode, SettlementOrigin.Command, dryRun: !real);
+        var refusal = controller.StartSettlement(found.Id, mode, SettlementOrigin.Command);
         if (refusal != SettlementRefusal.None)
         {
             Print(Loc.T(L.Dev.SettleRefused, SettlementText.Refusal(refusal)));
             return;
         }
 
-        Print(Loc.T(real ? L.Dev.SettleRealStarted : L.Dev.SettleStarted, SettlementText.Title(mode), found.Shown));
+        Print(Loc.T(L.Dev.SettleStarted, SettlementText.Title(mode), found.Shown));
     }
 
     // A receipt, or an earlier cycle's uncertain entry attempt, of the logged-in character: by its id's first characters,
@@ -203,23 +145,6 @@ internal static class DevCommands
         }
 
         return null;
-    }
-
-    private static void GrantSettlement(string[] tokens, ActionKind kind, RunController controller)
-    {
-        var placeStart = tokens.Length - SettlementGrantPlaceArgumentCount;
-        var name = string.Join(' ', tokens, 1, placeStart - 1);
-        if (!ResidentialDistricts.TryFindByKeyword(tokens[placeStart], out var district)
-            || !int.TryParse(tokens[placeStart + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var ward)
-            || !int.TryParse(tokens[placeStart + 2], NumberStyles.None, CultureInfo.InvariantCulture, out var plot)
-            || controller.GrantRealSettlement(kind, name, district.TerritoryTypeId, ward, plot) is not { } grant)
-        {
-            Print(Loc.T(L.Dev.SettlementGrantRefused));
-            return;
-        }
-
-        var warning = kind == ActionKind.Refund ? L.Dev.RefundGrantWarning : L.Dev.ClaimGrantWarning;
-        Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {Loc.T(warning, grant.CharacterName, PlotNames.Address(grant.Plot))}");
     }
 
     private static bool HasOption(string[] tokens, string option, int from = RunArgumentCount)

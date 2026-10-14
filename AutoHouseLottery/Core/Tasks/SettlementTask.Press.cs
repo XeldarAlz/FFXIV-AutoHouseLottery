@@ -20,8 +20,8 @@ internal sealed partial class SettlementTask
     private const int SecondLookDelayMs = 60_000;
     private const int PlacardCloseWaitMs = 5_000;
 
-    // A refund the dialog offers on row 7124 or 7123: the gate, the durable intent, one Yes, then the gil and the same
-    // placard read again. An offer the recorded deposit does not explain is left to the player.
+    // A refund the dialog offers on row 7124 or 7123: the durable intent, one Yes, then the gil and the same placard read
+    // again. An offer the recorded deposit does not explain is left to the player.
     private async Task CollectRefund(ActionJournal journal, ResultKind kind, HousingText row, long offered)
     {
         var entry = receipt!;
@@ -31,15 +31,6 @@ internal sealed partial class SettlementTask
         {
             await CloseResult(HousingDialogs.ReadResultDialog());
             End(SettlementResult.NeedsPlayer, SettlementFailure.RefundDiffersFromDeposit);
-            return;
-        }
-
-        if (!MayPress(ActionKind.Refund))
-        {
-            await CloseResult(HousingDialogs.ReadResultDialog());
-            RunLog.Info($"{Label}: DRY RUN. The refund of {offered} gil for {plot} would have been collected with Yes on Addon row {HousingTextRows.Of(row).RowId}; "
-                      + "the dialog was closed instead and nothing was pressed.");
-            End(SettlementResult.DryRun);
             return;
         }
 
@@ -54,8 +45,8 @@ internal sealed partial class SettlementTask
         await AwaitRefund(journal, offered);
     }
 
-    // A win on row 7122 or 7128, only for the player's own click or the dev command: the claim rules, the gate, the
-    // durable intent, one Yes, then the character's estate list. Nothing that follows Yes is pressed.
+    // A win on row 7122 or 7128, only for the player's own click or the dev command: the claim rules, the durable intent,
+    // one Yes, then the character's estate list. Nothing that follows Yes is pressed.
     private async Task Claim(ActionJournal journal, HousingText row)
     {
         var entry = receipt!;
@@ -80,14 +71,6 @@ internal sealed partial class SettlementTask
         {
             await CloseResult(HousingDialogs.ReadResultDialog());
             End(SettlementResult.NeedsPlayer, SettlementFailure.DepositUnknown);
-            return;
-        }
-
-        if (!MayPress(ActionKind.Claim))
-        {
-            await CloseResult(HousingDialogs.ReadResultDialog());
-            RunLog.Info($"{Label}: DRY RUN. {plot} would have been claimed ({effect}) with Yes on Addon row {HousingTextRows.Of(row).RowId}; the dialog was closed instead and nothing was pressed.");
-            End(SettlementResult.DryRun);
             return;
         }
 
@@ -150,7 +133,7 @@ internal sealed partial class SettlementTask
         ownAttempt = intent;
         Move(SettlementStep.PersistIntent);
         submission = new EntrySubmission(journal);
-        var outcome = await submission.Submit(intent, MayPress(kind), ReturnToGame, () => PressYes(kind, row, amount), static () => DateTime.UtcNow);
+        var outcome = await submission.Submit(intent, ReturnToGame, () => PressYes(kind, row, amount), static () => DateTime.UtcNow);
         attemptSettled = outcome is not (SubmissionOutcome.Dispatched or SubmissionOutcome.DispatchUnrecorded);
         RunLog.Info($"{Label}: {kind} attempt {intent.AttemptId} for {plot}, {amount} gil, cycle {entry.Cycle}: {outcome}.");
         return outcome;
@@ -160,15 +143,14 @@ internal sealed partial class SettlementTask
 
     // The dialog and the character are read once more on this frame: still this character, still exactly the expected
     // row and, for a refund, the same amount. The press counts as made from the moment it is sent, so a fault after it can
-    // never release the intent; the grant is used up only by a press that was sent.
+    // never release the intent.
     private DialogActionResult PressYes(ActionKind kind, HousingText row, long amount)
     {
         Move(SettlementStep.Press);
         if (Svc.PlayerState.ContentId != Progress.ContentId
             || HousingDialogs.ReadResultDialog() is not { Row: { } shown } reading
             || shown != row
-            || (kind == ActionKind.Refund && reading.Refund != amount)
-            || !MayPress(kind))
+            || (kind == ActionKind.Refund && reading.Refund != amount))
         {
             return DialogActionResult.IdentityMismatch;
         }
@@ -183,10 +165,8 @@ internal sealed partial class SettlementTask
         if (result != DialogActionResult.Pressed)
         {
             pressed = false;
-            return result;
         }
 
-        services.ConsumeGrant(kind);
         return result;
     }
 

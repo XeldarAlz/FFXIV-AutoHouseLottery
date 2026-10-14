@@ -30,7 +30,6 @@ internal enum EntryFailure : byte
     GilUnknown,
     CheckboxNotTicked,
     ConfirmRefused,
-    RealEntryNotCovered,
     AutoAnswerPlugin,
 
     // About the character or the run rather than the plot.
@@ -38,7 +37,6 @@ internal enum EntryFailure : byte
     CharacterIneligible,
     AlreadyEntered,
     CollectRefundFirst,
-    RefundDryRun,
     UnclaimedWin,
     CycleChanged,
     JournalUnavailable,
@@ -97,7 +95,6 @@ internal static class FallbackRules
             or EntryFailure.CharacterIneligible
             or EntryFailure.AlreadyEntered
             or EntryFailure.CollectRefundFirst
-            or EntryFailure.RefundDryRun
             or EntryFailure.UnclaimedWin
             or EntryFailure.CycleChanged
             or EntryFailure.CharacterChanged

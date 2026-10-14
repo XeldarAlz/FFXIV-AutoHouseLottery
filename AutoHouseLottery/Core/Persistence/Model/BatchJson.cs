@@ -32,8 +32,6 @@ internal readonly struct BatchJson
 
     public DateTime? UpdatedUtc { get; init; }
 
-    public bool? DryRun { get; init; }
-
     public BatchPhase? Phase { get; init; }
 
     public BatchHalt? Halt { get; init; }

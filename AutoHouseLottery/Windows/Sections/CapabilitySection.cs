@@ -33,7 +33,6 @@ internal sealed class CapabilitySection
         (L.Diagnostics.GroupBasics, CapabilityKind.Listings, CapabilityKind.Journal),
         (L.Diagnostics.GroupHelpers, CapabilityKind.Lifestream, CapabilityKind.AutoAnswer),
         (L.Diagnostics.GroupReadings, CapabilityKind.LotteryRecord, CapabilityKind.WardPackets),
-        (L.Diagnostics.GroupActions, CapabilityKind.EntryConfirm, CapabilityKind.AbsenceSettlement),
     ];
 
     private readonly Capability[] rows = new Capability[CapabilityRules.Count];
@@ -181,8 +180,7 @@ internal sealed class CapabilitySection
     private static Vector4 Accent(CapabilityState state) => state switch
     {
         CapabilityState.Ready => Styling.AccentMint,
-        CapabilityState.Fallback or CapabilityState.DryRunOnly => Styling.AccentAmber,
-        CapabilityState.PermittedOnce or CapabilityState.PermittedThisSession => Styling.AccentRose,
+        CapabilityState.Fallback => Styling.AccentAmber,
         CapabilityState.NotChecked => Styling.AccentBlue,
         _ => Styling.AccentRose,
     };

@@ -12,6 +12,14 @@ internal static class StatusMarks
     private const float RingWidth = 2.2f;
     private const float RingGap = 3f;
     private const float TriangleLift = 0.15f;
+    private const float BeaconPlateScale = 1.45f;
+    private const float BeaconHaloScale = 1.9f;
+    private const float BeaconHaloGrowth = 0.7f;
+    private const float BeaconHaloAlpha = 0.45f;
+    private const float BeaconShadowDrop = 2f;
+    private const float BeaconShadowAlpha = 0.5f;
+    private const float BeaconRimAlpha = 0.95f;
+    private const float BeaconPlateAlpha = 0.92f;
 
     public static Vector4 Color(PlotStatus? status) => status switch
     {
@@ -58,6 +66,21 @@ internal static class StatusMarks
                 break;
         }
     }
+
+    // The plate a matching plot's mark sits on, so it stands out from the light map and its printed plot dots at any zoom:
+    // a pulsing halo in the status color, a drop shadow, and a dark disc with a light rim.
+    public static void Beacon(ImDrawListPtr drawList, Vector2 center, float radius, PlotStatus? status)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var pulse = Styling.Pulse(Styling.PulseBreath);
+        var plate = BeaconRadius(radius);
+        drawList.AddCircleFilled(center, radius * (BeaconHaloScale + BeaconHaloGrowth * pulse), Paint.Col(Styling.WithAlpha(Color(status), BeaconHaloAlpha * (1f - pulse))));
+        drawList.AddCircleFilled(center + new Vector2(0f, BeaconShadowDrop * scale), plate, Paint.Col(new Vector4(0f, 0f, 0f, BeaconShadowAlpha)));
+        drawList.AddCircleFilled(center, plate, Paint.Col(Styling.WithAlpha(Styling.Surface0, BeaconPlateAlpha)));
+        drawList.AddCircle(center, plate, Paint.Col(Styling.WithAlpha(Styling.TextStrong, BeaconRimAlpha)), 0, RingWidth * scale);
+    }
+
+    public static float BeaconRadius(float radius) => radius * BeaconPlateScale;
 
     public static void Shortlisted(ImDrawListPtr drawList, Vector2 center, float radius, float alpha = 1f)
     {

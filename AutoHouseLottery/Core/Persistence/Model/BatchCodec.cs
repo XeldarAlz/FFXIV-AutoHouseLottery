@@ -14,7 +14,7 @@ namespace AutoHouseLottery.Core.Persistence.Model;
 // nothing else, and a batch that is read back can always be acted on.
 internal static class BatchCodec
 {
-    public const int Schema = 1;
+    public const int Schema = 2;
 
     private static readonly EligibilityReason knownReasons = KnownReasons();
 
@@ -38,7 +38,6 @@ internal static class BatchCodec
             Id = checkpoint.BatchId,
             CreatedUtc = checkpoint.CreatedUtc,
             UpdatedUtc = checkpoint.UpdatedUtc,
-            DryRun = checkpoint.DryRunRequested,
             Phase = checkpoint.Phase,
             Halt = checkpoint.Halt,
             SwitchTarget = checkpoint.SwitchTarget,
@@ -67,7 +66,6 @@ internal static class BatchCodec
             || batch.Id is not { } id
             || batch.CreatedUtc is not { } created
             || batch.UpdatedUtc is not { } updated
-            || batch.DryRun is not { } dryRun
             || batch.Phase is not { } phase
             || !Enum.IsDefined(phase)
             || batch.Halt is not { } halt
@@ -86,7 +84,6 @@ internal static class BatchCodec
             BatchId = id,
             Policy = policy,
             Ranking = ranking,
-            DryRunRequested = dryRun,
             Members = members,
             Phase = phase,
             Halt = halt,

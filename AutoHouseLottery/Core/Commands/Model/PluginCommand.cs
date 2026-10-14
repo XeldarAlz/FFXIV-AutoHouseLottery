@@ -19,7 +19,7 @@ internal enum PluginCommand : byte
 }
 
 // Player commands are the ones the command help and the README's Commands table list. Testing commands are the probe
-// and the maintainer's tools, listed only in the README's testing section.
+// and the maintainer's tools, listed only in docs/testing-commands.md.
 internal enum CommandAudience : byte
 {
     Player,

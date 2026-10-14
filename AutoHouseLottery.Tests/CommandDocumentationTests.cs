@@ -6,13 +6,13 @@ using System.Text.RegularExpressions;
 
 namespace AutoHouseLottery.Tests;
 
-// The README's two command sections and the command help in every catalog are checked against the plugin's command
-// table, so a command that is added, renamed or removed cannot leave the documentation behind.
+// The README's Commands table, the testing commands document and the command help in every catalog are checked against
+// the plugin's command table, so a command that is added, renamed or removed cannot leave the documentation behind.
 public sealed partial class CommandDocumentationTests
 {
     private const string ReadmePath = "README.md";
+    private const string TestingCommandsPath = "docs/testing-commands.md";
     private const string CommandsHeading = "## Commands";
-    private const string TestingHeading = "## Testing and debug commands";
     private const string SectionPrefix = "## ";
     private const string HelpKey = "plugin.commandHelp";
     private const char HelpSeparator = '|';
@@ -54,29 +54,29 @@ public sealed partial class CommandDocumentationTests
     }
 
     [Fact]
-    public void ReadmeTestingSectionListsEveryTestingCommandAndItsWords()
+    public void TestingCommandsDocumentListsEveryTestingCommandAndItsWords()
     {
-        var section = Section(TestingHeading);
+        var document = Document(TestingCommandsPath);
         for (var index = 0; index < PluginCommands.All.Length; index++)
         {
             var verb = PluginCommands.All[index];
             if (verb.Audience == CommandAudience.Testing)
             {
-                Assert.True(section.Contains($"`{PluginCommands.Primary} {verb.Verb}", StringComparison.Ordinal), $"The README's testing section does not list {verb.Verb}.");
+                Assert.True(document.Contains($"`{PluginCommands.Primary} {verb.Verb}", StringComparison.Ordinal), $"The testing commands document does not list {verb.Verb}.");
             }
         }
 
-        AssertListed(section, "probe", ProbeVerbs.All);
-        AssertListed(section, "dev", DevVerbs.All);
+        AssertListed(document, "probe", ProbeVerbs.All);
+        AssertListed(document, "dev", DevVerbs.All);
         var pressTargets = $"{ProbeVerbs.Press} <{string.Join(TableCellSeparator, ProbeVerbs.PressTargets)}>";
-        Assert.True(section.Contains(pressTargets, StringComparison.Ordinal), $"The README's testing section does not show {pressTargets}.");
+        Assert.True(document.Contains(pressTargets, StringComparison.Ordinal), $"The testing commands document does not show {pressTargets}.");
     }
 
     [Fact]
-    public void ReadmeNamesOnlyCommandsThePluginHasInTheRightSection()
+    public void DocumentationNamesOnlyCommandsThePluginHasInTheRightPlace()
     {
         AssertKnown(Section(CommandsHeading), CommandAudience.Player);
-        AssertKnown(Section(TestingHeading), CommandAudience.Testing);
+        AssertKnown(Document(TestingCommandsPath), CommandAudience.Testing);
     }
 
     [Theory]
@@ -141,17 +141,17 @@ public sealed partial class CommandDocumentationTests
         Assert.Equal(string.Empty, empty);
     }
 
-    private static void AssertListed(string section, string command, System.Collections.Immutable.ImmutableArray<string> words)
+    private static void AssertListed(string text, string command, System.Collections.Immutable.ImmutableArray<string> words)
     {
         for (var index = 0; index < words.Length; index++)
         {
-            Assert.True(section.Contains($"`{PluginCommands.Primary} {command} {words[index]}", StringComparison.Ordinal), $"The README's testing section does not list {command} {words[index]}.");
+            Assert.True(text.Contains($"`{PluginCommands.Primary} {command} {words[index]}", StringComparison.Ordinal), $"The testing commands document does not list {command} {words[index]}.");
         }
     }
 
-    private static void AssertKnown(string section, CommandAudience audience)
+    private static void AssertKnown(string text, CommandAudience audience)
     {
-        var mentions = MentionPattern().Matches(section);
+        var mentions = MentionPattern().Matches(text);
         for (var index = 0; index < mentions.Count; index++)
         {
             var word = mentions[index].Groups[1].Value;
@@ -162,7 +162,7 @@ public sealed partial class CommandDocumentationTests
                 found |= verb.Audience == audience && verb.Answers(word);
             }
 
-            Assert.True(found, $"The README's {audience} section names {PluginCommands.Primary} {word}, which is not a {audience} command of the plugin.");
+            Assert.True(found, $"The {audience} documentation names {PluginCommands.Primary} {word}, which is not a {audience} command of the plugin.");
             var subword = mentions[index].Groups[2].Value;
             if (subword.Length == 0)
             {
@@ -170,7 +170,7 @@ public sealed partial class CommandDocumentationTests
             }
 
             var words = word == "probe" ? ProbeVerbs.All : word == "dev" ? DevVerbs.All : [];
-            Assert.True(words.Contains(subword), $"The README names {PluginCommands.Primary} {word} {subword}, which the plugin does not have.");
+            Assert.True(words.Contains(subword), $"The documentation names {PluginCommands.Primary} {word} {subword}, which the plugin does not have.");
         }
     }
 
@@ -204,9 +204,14 @@ public sealed partial class CommandDocumentationTests
         return verbs;
     }
 
+    private static string Document(string path)
+    {
+        return File.ReadAllText(Path.Combine(RepositoryFiles.Root, path)).ReplaceLineEndings("\n");
+    }
+
     private static string Section(string heading)
     {
-        var readme = File.ReadAllText(Path.Combine(RepositoryFiles.Root, ReadmePath)).ReplaceLineEndings("\n");
+        var readme = Document(ReadmePath);
         var start = readme.IndexOf(string.Concat("\n", heading, "\n"), StringComparison.Ordinal);
         Assert.True(start >= 0, $"The README has no '{heading}' section.");
         var end = readme.IndexOf(string.Concat("\n", SectionPrefix), start + heading.Length + 1, StringComparison.Ordinal);

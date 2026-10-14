@@ -1,46 +1,5 @@
 namespace AutoHouseLottery.Core.Travel.Model;
 
-internal static class SwitchCapabilities
-{
-    // True only once supervised batch and refund runs have shown, on the supported build, that Lifestream's ChangeCharacter
-    // logs out and logs in exactly the requested character, that a failed login, a cancel and a plugin reload on the title
-    // screen end where these rules say, and that nothing of the previous character's state leaks into the next one. Until
-    // then only a maintainer's session grant lets a batch or the refund queue switch characters; otherwise each character
-    // is processed at its own normal login.
-    public const bool CharacterSwitchValidated = false;
-}
-
-internal enum SwitchScope : byte { Batch, RefundQueue }
-
-// A maintainer's permission to switch characters, kept in memory only. Switching logs out by design, so it outlives a
-// logout. A batch grant serves one batch only (BatchId): the batch not finished yet when it is issued, or else the next one
-// started or switching; a refund grant serves the refund queue. Each ends after two hours, when revoked, or at unload.
-internal sealed record SwitchGrant(SwitchScope Scope, DateTime IssuedUtc)
-{
-    public static readonly TimeSpan Lifetime = TimeSpan.FromHours(2);
-
-    public Guid? BatchId { get; init; }
-
-    // Issued, or issued again, while a batch is not finished: it serves that batch from the start, so it ends with it.
-    public static SwitchGrant ForBatch(Guid? unfinishedBatch, DateTime nowUtc) => new(SwitchScope.Batch, nowUtc) { BatchId = unfinishedBatch };
-
-    // An unbound grant now serves this batch; a bound one keeps its own.
-    public SwitchGrant BoundTo(Guid batchId) => BatchId is null ? this with { BatchId = batchId } : this;
-
-    public bool Expired(DateTime nowUtc) => nowUtc - IssuedUtc >= Lifetime;
-}
-
-internal static class SwitchGate
-{
-    // BatchId is the batch asking, or null for a batch not started yet; a grant already bound to another batch is not its.
-    public static bool AllowsBatch(bool validated, SwitchGrant? grant, Guid? batchId, bool dependencyCanSwitch, DateTime nowUtc)
-        => dependencyCanSwitch
-        && (validated || (grant is { Scope: SwitchScope.Batch } batchGrant && !batchGrant.Expired(nowUtc) && (batchGrant.BatchId is null || batchGrant.BatchId == batchId)));
-
-    public static bool AllowsRefundQueue(bool validated, SwitchGrant? grant, bool dependencyCanSwitch, DateTime nowUtc)
-        => dependencyCanSwitch && (validated || (grant is { Scope: SwitchScope.RefundQueue } refundGrant && !refundGrant.Expired(nowUtc)));
-}
-
 // What else may be using the game right before a switch would log out. Null: the helper is loaded but could not answer,
 // which counts as busy; a helper that is not loaded is never busy.
 internal readonly record struct SwitchSafetyFacts(bool InQueue, bool? NavigationRunning, bool? MultiModeEnabled);

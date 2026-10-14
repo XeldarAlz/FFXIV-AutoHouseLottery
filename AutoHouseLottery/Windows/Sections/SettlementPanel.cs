@@ -89,7 +89,7 @@ internal sealed class SettlementPanelText
             };
             Accent = Styling.AccentBlue;
             Title = SettlementText.Title(status.Mode);
-            Body = status.Real || status.Mode == SettlementMode.Inspect ? StepLine : string.Concat(StepLine, Separator, Loc.T(L.Settlement.DryRunNote));
+            Body = StepLine;
             return this;
         }
 
@@ -105,8 +105,6 @@ internal sealed class SettlementPanelText
                 return (FontAwesomeIcon.CheckCircle, Styling.AccentMint, Loc.T(L.Settlement.RefundedTitle), Loc.T(L.Settlement.RefundedBody, Loc.Gil(status.Received ?? 0), address));
             case SettlementResult.Claimed:
                 return (FontAwesomeIcon.Home, Styling.AccentMint, Loc.T(L.Settlement.ClaimedTitle), Loc.T(L.Settlement.ClaimedBody, address));
-            case SettlementResult.DryRun:
-                return (FontAwesomeIcon.Flask, Styling.AccentBlue, Loc.T(L.Settlement.DryRunTitle), Loc.T(L.Settlement.DryRunBody, SettlementText.Outcome(status, address)));
             case SettlementResult.Classified:
                 return (FontAwesomeIcon.Search, Styling.AccentBlue, Loc.T(L.Settlement.CheckedTitle), SettlementText.Outcome(status, address));
             case SettlementResult.NeedsReconciliation:

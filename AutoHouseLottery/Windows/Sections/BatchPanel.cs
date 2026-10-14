@@ -113,14 +113,14 @@ internal sealed class BatchPanelText
         builtRefusal = refusal;
         builtLanguage = Loc.Current;
         var report = BatchRules.Report(batch);
-        var summary = Loc.T(L.Batch.Summary, report.Entered, report.DryRun, report.Queued + report.Running, report.NotEntered + report.Excluded);
+        var summary = Loc.T(L.Batch.Summary, report.Entered, report.Queued + report.Running, report.NotEntered + report.Excluded);
         (Icon, Accent, Title, Body) = batch.Phase switch
         {
             BatchPhase.Running => (FontAwesomeIcon.Users, Styling.AccentBlue, Loc.T(L.Batch.TitleRunning), summary),
             BatchPhase.Switching => (FontAwesomeIcon.ExchangeAlt, Styling.AccentBlue, Loc.T(L.Batch.TitleSwitching, NameOf(batch, batch.SwitchTarget)), Loc.T(L.Batch.SwitchingBody)),
             BatchPhase.WaitingForLogin => (FontAwesomeIcon.HourglassHalf, Styling.AccentAmber, Loc.T(L.Batch.TitleWaiting), string.Concat(Loc.T(L.Batch.WaitingBody), " ", summary)),
             BatchPhase.Halted => (FontAwesomeIcon.PauseCircle, Styling.AccentAmber, Loc.T(L.Batch.TitleHalted), string.Concat(HaltText(batch.Halt), " ", summary)),
-            _ => (FontAwesomeIcon.CheckCircle, report.Entered + report.DryRun > 0 ? Styling.AccentMint : Styling.AccentAmber, Loc.T(L.Batch.TitleFinished),
+            _ => (FontAwesomeIcon.CheckCircle, report.Entered > 0 ? Styling.AccentMint : Styling.AccentAmber, Loc.T(L.Batch.TitleFinished),
                 batch.Halt == BatchHalt.None ? summary : string.Concat(HaltText(batch.Halt), " ", summary)),
         };
         if (refusal != StartRefusal.None && !(batch.Phase == BatchPhase.WaitingForLogin && refusal == StartRefusal.CharacterNotInPolicy))
@@ -168,7 +168,6 @@ internal sealed class BatchPanelText
         return member.State switch
         {
             BatchMemberState.Entered => Loc.T(L.Batch.MemberEntered, name, address, deposit),
-            BatchMemberState.DryRun => Loc.T(L.Batch.MemberDryRun, name, address, deposit),
             BatchMemberState.Running => Loc.T(L.Batch.MemberRunning, name),
             BatchMemberState.Uncertain => Loc.T(L.Batch.MemberUncertain, name),
             BatchMemberState.NotEntered when member.Failure != EntryFailure.None => Loc.T(L.Batch.MemberNotEntered, name, RunText.Failure(member.Failure, null)),

@@ -30,7 +30,7 @@ public sealed class BatchRulesTests
     public void WithoutSwitchingTheOthersWaitForTheirOwnLogin()
     {
         var batch = Batch(out _);
-        batch = Done(batch, 1, BatchMemberState.DryRun);
+        batch = Done(batch, 1, BatchMemberState.Entered);
 
         var step = BatchRules.Next(batch, loggedIn: 1, switchingAllowed: false);
 
@@ -41,7 +41,7 @@ public sealed class BatchRulesTests
     [Fact]
     public void WithSwitchingTheNextWaitingMemberIsLoggedIn()
     {
-        var batch = Done(Batch(out _), 1, BatchMemberState.DryRun);
+        var batch = Done(Batch(out _), 1, BatchMemberState.Entered);
 
         var step = BatchRules.Next(batch, loggedIn: 1, switchingAllowed: true);
 
@@ -67,28 +67,27 @@ public sealed class BatchRulesTests
         var keys = Ward(2);
         var roster = new[] { Character(1), Character(2) with { AccountOwnsLandOnHomeWorld = true } };
         var policy = Policy(keys, Settings(1), Settings(2));
-        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, dryRunRequested: true, now);
-        batch = Done(batch, 1, BatchMemberState.DryRun);
+        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, now);
+        batch = Done(batch, 1, BatchMemberState.Entered);
 
         Assert.Equal(BatchMemberState.Excluded, batch.Members[batch.IndexOf(2)].State);
         Assert.Equal(BatchStepKind.Finished, BatchRules.Next(batch, 2, switchingAllowed: true).Kind);
     }
 
     [Theory]
-    [InlineData((byte)EntryStep.Completed, (byte)EntryFailure.None, (byte)BatchEnd.Finished, true, (byte)BatchMemberState.DryRun, (byte)BatchHalt.None)]
-    [InlineData((byte)EntryStep.Completed, (byte)EntryFailure.None, (byte)BatchEnd.Finished, false, (byte)BatchMemberState.Entered, (byte)BatchHalt.None)]
-    [InlineData((byte)EntryStep.Completed, (byte)EntryFailure.None, (byte)BatchEnd.StoppedByPlayer, false, (byte)BatchMemberState.Entered, (byte)BatchHalt.StoppedByPlayer)]
-    [InlineData((byte)EntryStep.CompletedPartial, (byte)EntryFailure.InspectionsExhausted, (byte)BatchEnd.Finished, false, (byte)BatchMemberState.NotEntered, (byte)BatchHalt.None)]
-    [InlineData((byte)EntryStep.NeedsReconciliation, (byte)EntryFailure.SubmissionUncertain, (byte)BatchEnd.Finished, false, (byte)BatchMemberState.Uncertain, (byte)BatchHalt.NeedsReconciliation)]
-    [InlineData((byte)EntryStep.NeedsReconciliation, (byte)EntryFailure.None, (byte)BatchEnd.Interrupted, false, (byte)BatchMemberState.Uncertain, (byte)BatchHalt.NeedsReconciliation)]
-    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.TravelFailed, (byte)BatchEnd.StoppedByPlayer, false, (byte)BatchMemberState.Queued, (byte)BatchHalt.StoppedByPlayer)]
-    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.TravelFailed, (byte)BatchEnd.Interrupted, false, (byte)BatchMemberState.Queued, (byte)BatchHalt.Interrupted)]
-    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.CharacterChanged, (byte)BatchEnd.Finished, false, (byte)BatchMemberState.Queued, (byte)BatchHalt.CharacterChanged)]
-    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.AutoAnswerPlugin, (byte)BatchEnd.Finished, false, (byte)BatchMemberState.Queued, (byte)BatchHalt.AutoAnswerPlugin)]
-    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.Rejected, (byte)BatchEnd.Finished, false, (byte)BatchMemberState.NotEntered, (byte)BatchHalt.None)]
-    public void ARunsEndDecidesTheMemberAndWhetherTheBatchGoesOn(byte step, byte failure, byte end, bool traced, byte state, byte halt)
+    [InlineData((byte)EntryStep.Completed, (byte)EntryFailure.None, (byte)BatchEnd.Finished, (byte)BatchMemberState.Entered, (byte)BatchHalt.None)]
+    [InlineData((byte)EntryStep.Completed, (byte)EntryFailure.None, (byte)BatchEnd.StoppedByPlayer, (byte)BatchMemberState.Entered, (byte)BatchHalt.StoppedByPlayer)]
+    [InlineData((byte)EntryStep.CompletedPartial, (byte)EntryFailure.InspectionsExhausted, (byte)BatchEnd.Finished, (byte)BatchMemberState.NotEntered, (byte)BatchHalt.None)]
+    [InlineData((byte)EntryStep.NeedsReconciliation, (byte)EntryFailure.SubmissionUncertain, (byte)BatchEnd.Finished, (byte)BatchMemberState.Uncertain, (byte)BatchHalt.NeedsReconciliation)]
+    [InlineData((byte)EntryStep.NeedsReconciliation, (byte)EntryFailure.None, (byte)BatchEnd.Interrupted, (byte)BatchMemberState.Uncertain, (byte)BatchHalt.NeedsReconciliation)]
+    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.TravelFailed, (byte)BatchEnd.StoppedByPlayer, (byte)BatchMemberState.Queued, (byte)BatchHalt.StoppedByPlayer)]
+    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.TravelFailed, (byte)BatchEnd.Interrupted, (byte)BatchMemberState.Queued, (byte)BatchHalt.Interrupted)]
+    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.CharacterChanged, (byte)BatchEnd.Finished, (byte)BatchMemberState.Queued, (byte)BatchHalt.CharacterChanged)]
+    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.AutoAnswerPlugin, (byte)BatchEnd.Finished, (byte)BatchMemberState.Queued, (byte)BatchHalt.AutoAnswerPlugin)]
+    [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.Rejected, (byte)BatchEnd.Finished, (byte)BatchMemberState.NotEntered, (byte)BatchHalt.None)]
+    public void ARunsEndDecidesTheMemberAndWhetherTheBatchGoesOn(byte step, byte failure, byte end, byte state, byte halt)
     {
-        Assert.Equal(((BatchMemberState)state, (BatchHalt)halt), BatchRules.Classify((EntryStep)step, (EntryFailure)failure, (BatchEnd)end, traced));
+        Assert.Equal(((BatchMemberState)state, (BatchHalt)halt), BatchRules.Classify((EntryStep)step, (EntryFailure)failure, (BatchEnd)end));
     }
 
     [Fact]
@@ -113,7 +112,7 @@ public sealed class BatchRulesTests
         var before = batch.Members[batch.IndexOf(2)].Assignment;
         var fallback = batch.Members[0].Assignment!.Value.TargetOrder[1];
 
-        var recorded = BatchRules.Record(batch, 0, BatchMemberState.DryRun, EntryFailure.None, fallback, Deposit, now);
+        var recorded = BatchRules.Record(batch, 0, BatchMemberState.Entered, EntryFailure.None, fallback, Deposit, now);
 
         Assert.Equal(before, recorded.Members[recorded.IndexOf(2)].Assignment);
     }
@@ -124,7 +123,7 @@ public sealed class BatchRulesTests
         var keys = Ward(4);
         var roster = new[] { Character(1, accountGroup: 1), Character(2, accountGroup: 2) };
         var policy = Policy(keys, Settings(1), Settings(2)) with { Placement = PlacementChoice.Spread };
-        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, true, now);
+        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, now);
         var before = batch.Members[1].Assignment;
 
         var recorded = BatchRules.Record(batch, 0, BatchMemberState.Entered, EntryFailure.None, batch.Members[0].Assignment!.Value.TargetOrder[0], Deposit, now);
@@ -147,7 +146,7 @@ public sealed class BatchRulesTests
     [Fact]
     public void AReloadNeverResumesARunningOrSwitchingBatchOnItsOwn()
     {
-        var switching = BatchRules.BeginSwitch(Done(Batch(out _), 1, BatchMemberState.DryRun), 2, now);
+        var switching = BatchRules.BeginSwitch(Done(Batch(out _), 1, BatchMemberState.Entered), 2, now);
         var waiting = BatchRules.Wait(switching, now);
 
         var restored = BatchRules.Restore(switching, now);
@@ -177,7 +176,7 @@ public sealed class BatchRulesTests
     [Fact]
     public void OnlyTheRequestedCharacterOnItsHomeWorldCountsAfterASwitch()
     {
-        var switching = BatchRules.BeginSwitch(Done(Batch(out _), 1, BatchMemberState.DryRun), 2, now);
+        var switching = BatchRules.BeginSwitch(Done(Batch(out _), 1, BatchMemberState.Entered), 2, now);
 
         Assert.Equal(LoginVerdict.RequestedCharacter, BatchRules.OnLogin(switching, 2, HomeWorld));
         Assert.Equal(LoginVerdict.WrongCharacter, BatchRules.OnLogin(switching, 3, HomeWorld));
@@ -188,7 +187,7 @@ public sealed class BatchRulesTests
     [Fact]
     public void ANormalLoginOfAWaitingMemberIsRecognised()
     {
-        var waiting = BatchRules.Wait(Done(Batch(out _), 1, BatchMemberState.DryRun), now);
+        var waiting = BatchRules.Wait(Done(Batch(out _), 1, BatchMemberState.Entered), now);
 
         Assert.Equal(LoginVerdict.QueuedCharacter, BatchRules.OnLogin(waiting, 3, HomeWorld));
         Assert.Equal(LoginVerdict.NotInBatch, BatchRules.OnLogin(waiting, 1, HomeWorld));
@@ -207,13 +206,13 @@ public sealed class BatchRulesTests
             Character(4, accountGroup: 4) with { AccountOwnsLandOnHomeWorld = true },
         };
         var policy = Policy(keys, Settings(1), Settings(2), Settings(3), Settings(4));
-        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, false, now);
+        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, now);
         batch = BatchRules.Record(batch, batch.IndexOf(1), BatchMemberState.Entered, EntryFailure.None, keys[0], Deposit, now);
         batch = BatchRules.Skip(batch, batch.IndexOf(2), EligibilityReason.InsufficientGil, EntryFailure.OverBudget, null, now);
 
         var report = BatchRules.Report(batch);
 
-        Assert.Equal(new BatchReport(1, 0, 1, 1, 0, 1, 0, Deposit), report);
+        Assert.Equal(new BatchReport(1, 1, 1, 0, 1, 0, Deposit), report);
         Assert.True(BatchRules.DisplayRank(BatchMemberState.Entered) < BatchRules.DisplayRank(BatchMemberState.NotEntered));
         Assert.True(BatchRules.DisplayRank(BatchMemberState.Entered) < BatchRules.DisplayRank(BatchMemberState.Excluded));
     }
@@ -224,7 +223,7 @@ public sealed class BatchRulesTests
         var keys = Ward(2);
         var roster = new[] { Character(1, accountGroup: 1), Character(2, accountGroup: 2) };
         var policy = Policy(keys, Settings(1), Settings(2));
-        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, true, now);
+        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, now);
         var first = batch.Members[batch.IndexOf(1)];
         var second = batch.Members[batch.IndexOf(2)];
         var firstBudget = new CharacterBudget(first.Settings.DepositCap, first.Settings.GilReserve, 0);
@@ -276,13 +275,13 @@ public sealed class BatchRulesTests
         var keys = Ward(5);
         var roster = new[] { Character(1), Character(2), Character(3) };
         var policy = Policy(keys, Settings(1) with { Target = keys[3] }, Settings(2), Settings(3));
-        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, true, now);
+        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, now);
 
         var first = BatchRules.Next(batch, loggedIn: 2, switchingAllowed: true);
         Assert.Equal(2UL, batch.Members[first.MemberIndex].ContentId);
         Assert.Equal<PlotKey>([keys[3]], batch.Members[first.MemberIndex].Assignment!.Value.TargetOrder);
         batch = BatchRules.Record(batch, first.MemberIndex, BatchMemberState.NotEntered, EntryFailure.ChangedPrice, null, null, now);
-        batch = BatchRules.Record(batch, batch.IndexOf(3), BatchMemberState.DryRun, EntryFailure.None, keys[3], Deposit, now);
+        batch = BatchRules.Record(batch, batch.IndexOf(3), BatchMemberState.Entered, EntryFailure.None, keys[3], Deposit, now);
 
         var exact = batch.Members[batch.IndexOf(1)];
         Assert.Equal(BatchMemberState.Queued, exact.State);
@@ -379,7 +378,7 @@ public sealed class BatchRulesTests
         var targets = batch.Members[0].Assignment!.Value.TargetOrder;
         batch = batch with { Members = batch.Members.SetItem(0, batch.Members[0] with { Assignment = batch.Members[0].Assignment!.Value with { TargetOrder = [targets[0]] } }) };
         batch = BatchRules.Record(batch, 0, BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
-        batch = BatchRules.Record(batch, 1, BatchMemberState.DryRun, EntryFailure.None, targets[1], Deposit, now);
+        batch = BatchRules.Record(batch, 1, BatchMemberState.Entered, EntryFailure.None, targets[1], Deposit, now);
 
         var reevaluated = BatchRules.Reevaluate(batch, emptyJournal, now);
 
@@ -403,7 +402,7 @@ public sealed class BatchRulesTests
         Assert.Equal(BatchStepKind.WaitForLogin, mateWaitsForLogin.Kind);
         Assert.Equal(3UL, batch.Members[mateWaitsForLogin.MemberIndex].ContentId);
 
-        batch = Done(batch, 3, BatchMemberState.DryRun);
+        batch = Done(batch, 3, BatchMemberState.Entered);
         var onlyHeld = BatchRules.Next(batch, loggedIn: 2, switchingAllowed: true);
 
         Assert.Equal(BatchStepKind.Held, onlyHeld.Kind);
@@ -493,7 +492,7 @@ public sealed class BatchRulesTests
         var keys = Ward(5);
         var roster = new[] { Character(1), Character(2), Character(3) };
         policy = Policy(keys, Settings(1), Settings(2), Settings(3));
-        return BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, dryRunRequested: true, now);
+        return BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, now);
     }
 
     // Characters 1 and 2 share an ownership group; character 3 is alone in another.
@@ -502,7 +501,7 @@ public sealed class BatchRulesTests
         var keys = Ward(5);
         var roster = new[] { Character(1, accountGroup: 1), Character(2, accountGroup: 1), Character(3, accountGroup: 2) };
         var policy = Policy(keys, Settings(1), Settings(2), Settings(3));
-        return BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, dryRunRequested: true, now);
+        return BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, now);
     }
 
     private static EntryReceipt Receipt(ulong contentId, CycleKey cycle, PlotKey plot) => new()
@@ -518,11 +517,11 @@ public sealed class BatchRulesTests
         EnteredUtc = ObservedAt,
     };
 
-    // An entry or a dry run always knows its plot: the member's first target here.
+    // An entry always knows its plot: the member's first target here.
     private static BatchCheckpoint Done(BatchCheckpoint batch, ulong contentId, BatchMemberState state)
     {
         var index = batch.IndexOf(contentId);
-        var plot = state is BatchMemberState.Entered or BatchMemberState.DryRun ? batch.Members[index].Assignment!.Value.TargetOrder[0] : (PlotKey?)null;
+        var plot = state == BatchMemberState.Entered ? batch.Members[index].Assignment!.Value.TargetOrder[0] : (PlotKey?)null;
         return BatchRules.Record(batch, index, state, state == BatchMemberState.NotEntered ? EntryFailure.Sold : EntryFailure.None, plot, null, now);
     }
 }

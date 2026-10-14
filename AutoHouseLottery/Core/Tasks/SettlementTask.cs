@@ -16,10 +16,9 @@ using ECommons.DalamudServices;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-// One visit's orders. Id is a receipt, or an earlier cycle's entry attempt still in question. DryRun: never press Yes,
-// whatever is permitted. TravelAllowance: what this visit may spend travelling, null for no session cap (the player's
-// own click), with the reserve kept either way.
-internal sealed record SettlementRequest(Guid Id, SettlementMode Mode, SettlementOrigin Origin, bool DryRun, long? TravelAllowance, long GilReserve);
+// One visit's orders. Id is a receipt, or an earlier cycle's entry attempt still in question. TravelAllowance: what this
+// visit may spend travelling, null for no session cap (the player's own click), with the reserve kept either way.
+internal sealed record SettlementRequest(Guid Id, SettlementMode Mode, SettlementOrigin Origin, long? TravelAllowance, long GilReserve);
 
 // SessionId names this login session, so a placard without a result seen in two different sessions can be told apart
 // from one seen twice in a row.
@@ -27,14 +26,12 @@ internal sealed record SettlementServices(
     HousingContext Housing,
     HousingObservers Observers,
     Configuration Configuration,
-    Func<ActionKind, SettlementGrant?> Grant,
-    Action<ActionKind> ConsumeGrant,
     Action<ulong, long> TravelSpent,
     Func<Guid> SessionId);
 
 // The settlement driver of TECHNICAL_DESIGN sections 12 and 13: it travels to an entered plot, reads its result through
-// View Lottery Results, records what the result row says, and then either closes the dialog or, for a refund or a claim
-// the gate permits, presses Yes once on that row. The intent is on disk before the press, and after it nothing is
+// View Lottery Results, records what the result row says, and then either closes the dialog or, for a refund or a claim,
+// presses Yes once on that row. The intent is on disk before the press, and after it nothing is
 // pressed again: the outcome is confirmed from the gil and the same placard read again, or the estate list for a claim,
 // or left for reconciliation. Before the intent the controller may stop it; from the intent to the recorded outcome only
 // a logout, an unload or a GM alert ends it, and then a press that may have gone through is left for reconciliation.
@@ -118,7 +115,7 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
         }
 
         plot = resolved;
-        Publish(Progress with { Plot = plot, Real = request.Mode != SettlementMode.Inspect && MayPress(SettlementGate.ActionOf(request.Mode)) });
+        Publish(Progress with { Plot = plot });
         if (request.Mode == SettlementMode.Claim && receipt is { } claimed && SettlementLookups.OpenAttempt(services.Housing.JournalSnapshot, claimed.ReceiptId) is { Kind: ActionKind.Claim })
         {
             await ReadBackClaim(claimed);
@@ -181,7 +178,7 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
         }
 
         Diag($"{Label}: {request.Mode} for {(receipt is { } found ? $"receipt {found.ReceiptId} (cycle {found.Cycle})" : $"the uncertain entry attempt {request.Id}")}, "
-           + $"asked by {request.Origin}{(request.DryRun ? ", dry run requested" : string.Empty)}; gil {gil}, reserve {request.GilReserve}, "
+           + $"asked by {request.Origin}; gil {gil}, reserve {request.GilReserve}, "
            + $"travel allowance {request.TravelAllowance?.ToString() ?? "no session cap"}.");
         return gil <= request.GilReserve ? SettlementFailure.BelowReserve : null;
     }
@@ -254,11 +251,6 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
             await Write(() => journal.AddTravel(entry.ReceiptId, spent, DateTime.UtcNow), $"travel of {spent} gil");
         }
     }
-
-    // Only a grant for this very receipt, character and plot opens a real press while the action is not validated.
-    private bool MayPress(ActionKind kind)
-        => Svc.PlayerState.ContentId == Progress.ContentId
-        && SettlementGate.MayPress(kind, SettlementGate.Validated(kind), request.DryRun, services.Grant(kind), Progress.ContentId, plot, receipt?.ReceiptId ?? request.Id);
 
     private static ActionAttempt? FindUncertainEntry(in JournalSnapshot snapshot, Guid attemptId, CycleKey current)
     {

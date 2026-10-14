@@ -17,8 +17,6 @@ internal sealed class EntryRunSession
     public EntryRunSession(
         Guid runId,
         RunMode mode,
-        EntryMode entryMode,
-        bool dryRunRequested,
         RunPolicy policy,
         RunAssignment assignment,
         CharacterRunSettings settings,
@@ -29,8 +27,6 @@ internal sealed class EntryRunSession
     {
         RunId = runId;
         Mode = mode;
-        EntryMode = entryMode;
-        DryRunRequested = dryRunRequested;
         Policy = policy;
         Assignment = assignment;
         Settings = settings;
@@ -45,10 +41,6 @@ internal sealed class EntryRunSession
     public Guid RunId { get; }
 
     public RunMode Mode { get; }
-
-    public EntryMode EntryMode { get; }
-
-    public bool DryRunRequested { get; }
 
     public RunPolicy Policy { get; }
 
@@ -86,8 +78,6 @@ internal sealed class EntryRunSession
     public CycleKey? LiveCycle { get; set; }
 
     public ActionAttempt? Attempt { get; set; }
-
-    public DryRunTrace? Trace { get; private set; }
 
     public bool PauseRequested { get; set; }
 
@@ -183,12 +173,6 @@ internal sealed class EntryRunSession
         Publish();
     }
 
-    public void RecordTrace(DryRunTrace trace)
-    {
-        Trace = trace;
-        Publish();
-    }
-
     public void Publish()
     {
         Status = new RunStatus
@@ -196,7 +180,6 @@ internal sealed class EntryRunSession
             Active = !EntrySteps.IsTerminal(Step),
             RunId = RunId,
             Mode = Mode,
-            EntryMode = EntryMode,
             Step = Step,
             ContentId = Settings.ContentId,
             CharacterName = CharacterName,
@@ -213,7 +196,6 @@ internal sealed class EntryRunSession
             Rejection = Rejection,
             PauseRequested = PauseRequested,
             StopRequested = StopRequested,
-            Trace = Trace,
             StartedUtc = StartedUtc,
         };
     }

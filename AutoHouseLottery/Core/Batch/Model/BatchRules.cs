@@ -20,7 +20,7 @@ internal readonly record struct BatchStep(BatchStepKind Kind, int MemberIndex);
 // another home world than the batch recorded.
 internal enum LoginVerdict : byte { NotInBatch, RequestedCharacter, QueuedCharacter, WrongCharacter, WrongHomeWorld }
 
-internal readonly record struct BatchReport(int Entered, int DryRun, int NotEntered, int Excluded, int Uncertain, int Queued, int Running, long Deposited);
+internal readonly record struct BatchReport(int Entered, int NotEntered, int Excluded, int Uncertain, int Queued, int Running, long Deposited);
 
 // The batch of TECHNICAL_DESIGN sections 10 and 14 as plain data: each selected character makes at most one entry, one
 // after another, through the same entry run as a single character; nothing is pooled between them, and every step that
@@ -32,8 +32,10 @@ internal static class BatchRules
     private const int RecordPass = 1;
     private const int ReevaluationPasses = 2;
 
+    public static RunMode ModeOf(in RunAssignment assignment) => assignment.Exact ? RunMode.Exact : RunMode.BestMatch;
+
     // The preview's assignments in their planned order, exact targets first, then the characters the plan left out.
-    public static BatchCheckpoint Create(Guid batchId, RunPolicy policy, RunPreview preview, ReadOnlySpan<CharacterProfile> roster, bool dryRunRequested, DateTime nowUtc)
+    public static BatchCheckpoint Create(Guid batchId, RunPolicy policy, RunPreview preview, ReadOnlySpan<CharacterProfile> roster, DateTime nowUtc)
     {
         var members = ImmutableArray.CreateBuilder<BatchMember>(preview.Assignments.Length + preview.Exclusions.Length);
         for (var index = 0; index < preview.Assignments.Length; index++)
@@ -53,7 +55,6 @@ internal static class BatchRules
             BatchId = batchId,
             Policy = policy,
             Ranking = preview.Ranking,
-            DryRunRequested = dryRunRequested,
             Members = members.MoveToImmutable(),
             Phase = BatchPhase.Running,
             CreatedUtc = nowUtc,
@@ -146,7 +147,7 @@ internal static class BatchRules
     // How a member's run ended, for the batch. A run that ended before anything was entered leaves the member waiting
     // when the player stopped it or something cut it short, so a resume starts it again from a fresh check. A press that
     // may have reached the game halts the batch: no switch happens while an entry is in question.
-    public static (BatchMemberState State, BatchHalt Halt) Classify(EntryStep step, EntryFailure failure, BatchEnd end, bool dryRunTraced)
+    public static (BatchMemberState State, BatchHalt Halt) Classify(EntryStep step, EntryFailure failure, BatchEnd end)
     {
         var halt = end switch
         {
@@ -157,7 +158,7 @@ internal static class BatchRules
         switch (step)
         {
             case EntryStep.Completed:
-                return (dryRunTraced ? BatchMemberState.DryRun : BatchMemberState.Entered, halt);
+                return (BatchMemberState.Entered, halt);
             case EntryStep.CompletedPartial:
                 return (BatchMemberState.NotEntered, halt);
             case EntryStep.NeedsReconciliation:
@@ -179,15 +180,15 @@ internal static class BatchRules
         };
     }
 
-    // Records a member's outcome. An entry, a dry run that reached its confirmation, or a member its own run found already
-    // entered keeps its ownership group on that plot (Same plot and By group placement): members still waiting whose own
+    // Records a member's outcome. An entry, or a member its own run found already entered, keeps its ownership group on that
+    // plot (Same plot and By group placement): members still waiting whose own
     // targets hold it are pinned to it, and every other one, an exact member included, is left out rather than entering a
     // second plot the group could not claim with the first.
     public static BatchCheckpoint Record(BatchCheckpoint checkpoint, int index, BatchMemberState state, EntryFailure failure, PlotKey? plot, long? deposit, DateTime nowUtc)
         => Settle(checkpoint, index, checkpoint.Members[index] with
         {
             State = state,
-            Failure = state is BatchMemberState.Entered or BatchMemberState.DryRun ? EntryFailure.None : failure,
+            Failure = state == BatchMemberState.Entered ? EntryFailure.None : failure,
             Plot = plot,
             Deposit = deposit,
             UpdatedUtc = nowUtc,
@@ -307,18 +308,13 @@ internal static class BatchRules
     }
 
     private static bool HoldsPlot(BatchMember member)
-        => member.State is BatchMemberState.Entered or BatchMemberState.DryRun
+        => member.State == BatchMemberState.Entered
         || (member.State == BatchMemberState.NotEntered && member.Failure == EntryFailure.AlreadyEntered);
 
-    // A switch that did not start because something else is using the game, or Lifestream is busy, is only blocked: the
-    // batch keeps its switching grant for a Continue. Anything else that kept it from starting is a failed switch.
+    // A switch that did not start because something else is using the game, or Lifestream is busy, is only blocked and
+    // waits for a Continue. Anything else that kept it from starting is a failed switch.
     public static BatchHalt SwitchNotStarted(SwitchStartResult result)
         => result is SwitchStartResult.OtherWork or SwitchStartResult.DependencyBusy or SwitchStartResult.AlreadySwitching ? BatchHalt.SwitchBlocked : BatchHalt.SwitchFailed;
-
-    // A maintainer's batch switching grant serves one batch: it ends when that batch is finished or dropped, or when a
-    // switch of it failed.
-    public static bool EndsSwitchGrant(BatchCheckpoint? checkpoint)
-        => checkpoint is null || checkpoint.Phase == BatchPhase.Finished || checkpoint.Halt is BatchHalt.WrongCharacter or BatchHalt.SwitchFailed;
 
     public static BatchCheckpoint Halt(BatchCheckpoint checkpoint, BatchHalt halt, DateTime nowUtc)
         => checkpoint with { Members = Requeue(checkpoint.Members, nowUtc), Phase = BatchPhase.Halted, Halt = halt, SwitchTarget = null, UpdatedUtc = nowUtc };
@@ -388,7 +384,6 @@ internal static class BatchRules
     public static BatchReport Report(BatchCheckpoint checkpoint)
     {
         var entered = 0;
-        var dryRun = 0;
         var notEntered = 0;
         var excluded = 0;
         var uncertain = 0;
@@ -403,9 +398,6 @@ internal static class BatchRules
                 case BatchMemberState.Entered:
                     entered++;
                     deposited = Gil.SaturatingAdd(deposited, member.Deposit ?? 0);
-                    break;
-                case BatchMemberState.DryRun:
-                    dryRun++;
                     break;
                 case BatchMemberState.NotEntered:
                     notEntered++;
@@ -425,7 +417,7 @@ internal static class BatchRules
             }
         }
 
-        return new BatchReport(entered, dryRun, notEntered, excluded, uncertain, queued, running, deposited);
+        return new BatchReport(entered, notEntered, excluded, uncertain, queued, running, deposited);
     }
 
     // The order the summary lists members in: what was entered first, then what is in question, then what still waits,
@@ -433,12 +425,11 @@ internal static class BatchRules
     public static int DisplayRank(BatchMemberState state) => state switch
     {
         BatchMemberState.Entered => 0,
-        BatchMemberState.DryRun => 1,
-        BatchMemberState.Running => 2,
-        BatchMemberState.Uncertain => 3,
-        BatchMemberState.Queued => 4,
-        BatchMemberState.NotEntered => 5,
-        _ => 6,
+        BatchMemberState.Running => 1,
+        BatchMemberState.Uncertain => 2,
+        BatchMemberState.Queued => 3,
+        BatchMemberState.NotEntered => 4,
+        _ => 5,
     };
 
     // A plot that could not be read leaves every waiting member of the group out: any plot it entered might be a second.

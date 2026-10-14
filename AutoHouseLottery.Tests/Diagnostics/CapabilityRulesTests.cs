@@ -19,43 +19,6 @@ public sealed class CapabilityRulesTests
     }
 
     [Fact]
-    public void AnUnvalidatedActionIsReportedAsDryRunOnly()
-    {
-        var rows = Evaluate(Ready() with { EntryConfirmValidated = false, RefundValidated = false, ClaimValidated = false, AbsenceSettlementValidated = false });
-        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.EntryConfirm].State);
-        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.Refund].State);
-        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.Claim].State);
-        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.AbsenceSettlement].State);
-        Assert.Equal(CapabilityReason.RefundDryRunOnly, rows[(int)CapabilityKind.Refund].Reason);
-    }
-
-    [Fact]
-    public void EachValidationFlagTurnsOnlyItsOwnAction()
-    {
-        var rows = Evaluate(Ready() with { EntryConfirmValidated = false, RefundValidated = true, ClaimValidated = false, AbsenceSettlementValidated = false });
-        Assert.Equal(CapabilityState.Ready, rows[(int)CapabilityKind.Refund].State);
-        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.EntryConfirm].State);
-        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.Claim].State);
-    }
-
-    [Fact]
-    public void ASessionPermissionShowsOnTheActionItAllows()
-    {
-        var rows = Evaluate(Ready() with { EntryConfirmValidated = false, RefundValidated = false, ClaimValidated = false, EntryPermitted = true, ClaimPermitted = true });
-        Assert.Equal(CapabilityState.PermittedOnce, rows[(int)CapabilityKind.EntryConfirm].State);
-        Assert.Equal(CapabilityReason.EntryPermittedOnce, rows[(int)CapabilityKind.EntryConfirm].Reason);
-        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.Refund].State);
-        Assert.Equal(CapabilityReason.ClaimPermittedOnce, rows[(int)CapabilityKind.Claim].Reason);
-    }
-
-    [Fact]
-    public void AValidatedActionIsReadyWhetherOrNotAPermissionIsOpen()
-    {
-        var rows = Evaluate(Ready() with { RefundPermitted = true });
-        Assert.Equal(CapabilityState.Ready, rows[(int)CapabilityKind.Refund].State);
-    }
-
-    [Fact]
     public void LifestreamThatCannotAnswerTravelIsMissingNotPartial()
     {
         var withoutBusy = Evaluate(Ready() with { Lifestream = fullLifestream with { IsBusy = false } });
@@ -75,6 +38,14 @@ public sealed class CapabilityRulesTests
         var rows = Evaluate(Ready() with { AutoAnswerPlugin = "YesAlready", JournalWritable = false });
         Assert.Equal(CapabilityState.Blocked, rows[(int)CapabilityKind.AutoAnswer].State);
         Assert.Equal(CapabilityState.Blocked, rows[(int)CapabilityKind.Journal].State);
+    }
+
+    [Fact]
+    public void ADialogAnsweringPluginThePluginCanPauseIsReady()
+    {
+        var row = Evaluate(Ready() with { AutoAnswerPlugin = "YesAlready", AutoAnswerPausable = true })[(int)CapabilityKind.AutoAnswer];
+        Assert.Equal(CapabilityState.Ready, row.State);
+        Assert.Equal(CapabilityReason.AutoAnswerPaused, row.Reason);
     }
 
     [Fact]
@@ -111,32 +82,14 @@ public sealed class CapabilityRulesTests
     }
 
     [Fact]
-    public void ABatchIsDryRunOnlyUntilTheEntryAndTheBatchAreBothValidatedAndHasNoPermittedState()
-    {
-        var entryOnly = Evaluate(Ready() with { EntryConfirmValidated = true, BatchEntryValidated = false, EntryPermitted = true });
-        var both = Evaluate(Ready() with { EntryConfirmValidated = true, BatchEntryValidated = true });
-
-        Assert.Equal(new Capability(CapabilityKind.BatchEntry, CapabilityState.DryRunOnly, CapabilityReason.BatchDryRunOnly), entryOnly[(int)CapabilityKind.BatchEntry]);
-        Assert.Equal(CapabilityState.Ready, both[(int)CapabilityKind.BatchEntry].State);
-    }
-
-    [Fact]
-    public void SwitchingIsOffUntilValidatedAndShowsTheSessionPermissionsThatAreOpen()
+    public void SwitchingIsReadyOnlyWhenLifestreamOffersItsCharacterChange()
     {
         var withChange = fullLifestream with { ChangeCharacter = true };
-        var off = Evaluate(Ready() with { Lifestream = withChange });
-        var batch = Evaluate(Ready() with { Lifestream = withChange, BatchSwitchPermitted = true });
-        var refunds = Evaluate(Ready() with { Lifestream = withChange, RefundSwitchPermitted = true });
-        var bothGrants = Evaluate(Ready() with { Lifestream = withChange, BatchSwitchPermitted = true, RefundSwitchPermitted = true });
-        var noChange = Evaluate(Ready() with { Lifestream = withChange with { ChangeCharacter = false }, BatchSwitchPermitted = true });
-        var validated = Evaluate(Ready() with { Lifestream = withChange, CharacterSwitchValidated = true });
+        var ready = Evaluate(Ready() with { Lifestream = withChange });
+        var noChange = Evaluate(Ready() with { Lifestream = withChange with { ChangeCharacter = false } });
 
-        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.DryRunOnly, CapabilityReason.SwitchOffUntilValidated), off[(int)CapabilityKind.CharacterSwitch]);
-        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.PermittedThisSession, CapabilityReason.SwitchPermittedBatch), batch[(int)CapabilityKind.CharacterSwitch]);
-        Assert.Equal(CapabilityReason.SwitchPermittedRefunds, refunds[(int)CapabilityKind.CharacterSwitch].Reason);
-        Assert.Equal(CapabilityReason.SwitchPermittedBoth, bothGrants[(int)CapabilityKind.CharacterSwitch].Reason);
+        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.Ready, CapabilityReason.SwitchReady), ready[(int)CapabilityKind.CharacterSwitch]);
         Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.Missing, CapabilityReason.SwitchLifestreamMissing), noChange[(int)CapabilityKind.CharacterSwitch]);
-        Assert.Equal(CapabilityState.Ready, validated[(int)CapabilityKind.CharacterSwitch].State);
     }
 
     private static Capability[] Evaluate(in CapabilityFacts facts)
@@ -160,9 +113,5 @@ public sealed class CapabilityRulesTests
         PlacardSale = PlacardSaleFact.Active,
         WardList = WardListFact.Read,
         WardPacketsActive = true,
-        EntryConfirmValidated = true,
-        RefundValidated = true,
-        ClaimValidated = true,
-        AbsenceSettlementValidated = true,
     };
 }

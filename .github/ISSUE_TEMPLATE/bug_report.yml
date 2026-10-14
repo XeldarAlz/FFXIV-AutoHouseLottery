@@ -122,18 +122,6 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: dry-run
-    attributes:
-      label: Was it a dry run?
-      description: A dry run goes all the way to the lottery confirmation and presses Cancel, so it spends nothing.
-      options:
-        - Yes, it was a dry run (nothing spent)
-        - No, it entered, collected a refund or claimed for real
-        - Not sure
-    validations:
-      required: true
-
   - type: input
     id: lifestream-version
     attributes:

@@ -90,16 +90,10 @@ These are read or pressed exactly as the community sources describe them, behind
 | AutoRetainer `GetMultiModeEnabled` gate | `Core/Ipc/AutoRetainerIpc.cs` | AutoRetainer `Modules/IPC.cs` (cc020df) |
 | The Korean data center region row (6) | `Core/Housing/Model/WorldRegion.cs` | Assumed; refused either way |
 
-## Actions and their validation flags
+## Readings and their validation
 
-| Action | Flag | Current state |
+| Reading | Flag | Current state |
 | --- | --- | --- |
-| Entering the lottery | `EntryCapabilities.EntryConfirmValidated` | false: dry run only until validated |
-| Collecting refunds | `SettlementCapabilities.RefundConfirmValidated` | false: dry run only until validated |
-| Claiming a house | `SettlementCapabilities.ClaimConfirmValidated` | false: dry run only until validated |
-| Placards without a result | `SettlementCapabilities.AbsenceSettlementValidated` | false: dry run only until validated |
 | Direct lottery record read | `LotteryRecordAccess.ValidatedGameVersions` | empty: the Timers window is read instead |
-| Entering for several characters (1.1) | `BatchCapabilities.BatchEntryValidated`, together with `EntryCapabilities.EntryConfirmValidated` | false: every batch is a dry run; a one-plot real-entry permission never makes a batch real |
-| Switching characters (1.1) | `SwitchCapabilities.CharacterSwitchValidated` | false: each character is processed at its own login; `/ahl dev allow-switching` (one batch, the one not finished yet or else the next one started, until it ends or for two hours) and `/ahl dev allow-refund-switching` (the refund queue, two hours) allow it for the validation |
 
-A flag is set only after the matching step of the in-game validation ladder (VALIDATION_PLAN section 10) has passed on the game version above, with its report attached here.
+A game version is added only after the record has been read correctly in game on that version, with its report attached here.

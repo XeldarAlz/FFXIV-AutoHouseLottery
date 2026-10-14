@@ -15,10 +15,10 @@ using ECommons.DalamudServices;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-// A batch (Version 1.1): one entry per selected character, each through the same entry run and the same gates as a single
-// run, one character after another, and a dry run until BatchCapabilities.BatchEntryValidated. Between characters it
-// either switches through Lifestream, when a maintainer's batch grant or the validated contract allows it, after its
-// checkpoint is on disk; or it waits, without the lease, for the next member's own login and the player's Continue. Only
+// A batch (Version 1.1): one entry per selected character, each through the same entry run as a single run, one character
+// after another. Between characters it either switches through Lifestream, when Lifestream offers its character change,
+// after its checkpoint is on disk; or it waits, without the lease, for the next member's own login and the player's
+// Continue. Only
 // the logged-in character is ever acted for, and only after its content ID and home world match the member, with its
 // gil, Free Company and estates read again; its run then reads its lottery record before anything else.
 internal sealed partial class RunController
@@ -31,24 +31,18 @@ internal sealed partial class RunController
     private long batchSwitchToken;
     private int switchMember = -1;
     private System.Threading.Tasks.Task<bool>? switchCheckpoint;
-    private SwitchGrant? batchSwitchGrant;
     private bool switchCapable;
 
     public BatchCheckpoint? Batch => batch;
 
     public bool BatchActive => batch is { Active: true };
 
-    // A maintainer's batch switching permission is open, for the Plugins page.
-    public bool BatchSwitchGranted => batchSwitchGrant is { } open && !open.Expired(DateTime.UtcNow);
-
-    // For the batch that waits or runs, or for the next one when none does.
-    public bool BatchSwitchingAllowed
-        => SwitchGate.AllowsBatch(SwitchCapabilities.CharacterSwitchValidated, batchSwitchGrant, batch is { Phase: not BatchPhase.Finished } current ? current.BatchId : null, switchCapable, DateTime.UtcNow);
+    public bool BatchSwitchingAllowed => switchCapable;
 
     // What StartBatch would say now, without starting anything: Find a home shows it under Enter for N characters.
     public StartRefusal CheckBatch(RunPolicy policy) => PlanBatch(policy).Refusal;
 
-    public StartRefusal StartBatch(RunPolicy policy, bool dryRun = true)
+    public StartRefusal StartBatch(RunPolicy policy)
     {
         var plan = PlanBatch(policy);
         if (plan is not { Refusal: StartRefusal.None, Preview: { } preview })
@@ -64,14 +58,12 @@ internal sealed partial class RunController
 
         owner = leaseGrant.Owner;
         var now = DateTime.UtcNow;
-        batch = BatchRules.Create(Guid.NewGuid(), policy, preview, plan.Roster, dryRun, now);
-        BindBatchGrant(batch.BatchId);
+        batch = BatchRules.Create(Guid.NewGuid(), policy, preview, plan.Roster, now);
         finished = RunStatus.Idle;
         PauseReason = PauseReason.None;
         RunLog.Info($"Batch {batch.BatchId} authorized: {preview.Assignments.Length} entr(ies) for {policy.Characters.Length} selected character(s), policy revision {policy.Revision}, "
                   + $"cycle {policy.Cycle.Cycle} ({policy.Cycle.Evidence}), placement {policy.Placement}, "
-                  + $"{(BatchGate.MemberDryRun(EntryCapabilities.EntryConfirmValidated, BatchCapabilities.BatchEntryValidated, dryRun) ? "every member a dry run" : "real entries")}, "
-                  + $"switching {(BatchSwitchingAllowed ? "allowed for this batch" : "not allowed, so each character waits for its own login")}.");
+                  + $"switching {(BatchSwitchingAllowed ? "through Lifestream" : "not available, so each character waits for its own login")}.");
         for (var index = 0; index < batch.Members.Length; index++)
         {
             RunLog.Info($"Batch {batch.BatchId}: {DescribeMember(batch.Members[index])}.");
@@ -155,7 +147,6 @@ internal sealed partial class RunController
         }
 
         owner = leaseGrant.Owner;
-        BindBatchGrant(waiting.BatchId);
         batch = BatchRules.Resume(BatchRules.Reevaluate(waiting, housing.JournalSnapshot, now), now);
         finished = RunStatus.Idle;
         RunLog.Info($"Batch {waiting.BatchId}: continued by the player from {waiting.Phase}{(waiting.Halt == BatchHalt.None ? string.Empty : $" ({waiting.Halt})")}; "
@@ -176,31 +167,6 @@ internal sealed partial class RunController
         RunLog.Info($"Batch {done.BatchId}: dismissed at {done.Phase}; {DescribeReport(BatchRules.Report(done))}.");
         batch = null;
         SaveBatch();
-    }
-
-    // A maintainer's permission to switch characters for one batch: the one not finished yet, bound to it at once, or else
-    // the next one started.
-    public SwitchGrant AllowBatchSwitching()
-    {
-        var unfinished = batch is { Phase: not BatchPhase.Finished } current ? current.BatchId : (Guid?)null;
-        batchSwitchGrant = SwitchGrant.ForBatch(unfinished, DateTime.UtcNow);
-        RunLog.Warning($"CHARACTER SWITCHING ALLOWED for {(unfinished is { } served ? $"batch {served}, which has not finished," : "the next batch")} only: it may log out and log in its own characters "
-                     + "through Lifestream. It ends when that batch finishes, is discarded or fails a switch, or after two hours. Batch entries stay dry runs.");
-        return batchSwitchGrant;
-    }
-
-    // Revokes both switching grants and stops any switch they started that is still going.
-    public void RevokeSwitching()
-    {
-        batchSwitchGrant = null;
-        refundSwitchGrant = null;
-        if (batch is { Phase: BatchPhase.Switching })
-        {
-            HaltBatch(BatchHalt.StoppedByPlayer, "the switching permission was revoked");
-        }
-
-        StopRefundSwitch("the switching permission was revoked");
-        RunLog.Warning("Character switching permissions revoked; batches wait for each character's own login and refunds are collected at each character's own login.");
     }
 
     private BatchPlan PlanBatch(RunPolicy policy)
@@ -229,22 +195,9 @@ internal sealed partial class RunController
         return new BatchPlan(BatchStartRules.Check(facts), preview, roster);
     }
 
-    // Once a second, logged in or not: an expired grant, a pending switch checkpoint, then the switch the batch asked for.
+    // Once a second, logged in or not: a pending switch checkpoint, then the switch the batch asked for.
     private void TickBatchSwitch()
     {
-        var now = DateTime.UtcNow;
-        if (batchSwitchGrant is { } batchGrant && batchGrant.Expired(now))
-        {
-            batchSwitchGrant = null;
-            RunLog.Warning("The batch switching permission expired after two hours.");
-        }
-
-        if (refundSwitchGrant is { } refundGrant && refundGrant.Expired(now))
-        {
-            refundSwitchGrant = null;
-            RunLog.Warning("The refund switching permission expired after two hours.");
-        }
-
         if (switchCheckpoint is { } saving)
         {
             if (!saving.IsCompleted)
@@ -309,7 +262,7 @@ internal sealed partial class RunController
             case BatchStepKind.WaitForLogin:
                 batch = BatchRules.Wait(running, now);
                 ReleaseBatchLease();
-                RunLog.Info($"Batch {running.BatchId}: switching is not allowed, so {running.Members[step.MemberIndex].Name} and the others still queued wait for their own login and a Continue; "
+                RunLog.Info($"Batch {running.BatchId}: switching is not available, so {running.Members[step.MemberIndex].Name} and the others still queued wait for their own login and a Continue; "
                           + $"{DescribeReport(BatchRules.Report(batch))}.");
                 SaveBatch();
                 return;
@@ -362,17 +315,15 @@ internal sealed partial class RunController
         }
 
         var (number, count) = Position(running);
-        var dryRun = BatchGate.MemberDryRun(EntryCapabilities.EntryConfirmValidated, BatchCapabilities.BatchEntryValidated, running.DryRunRequested);
-        var mode = BatchGate.ModeOf(assignment);
-        var entryMode = BatchGate.EntryModeFor(EntryCapabilities.EntryConfirmValidated, BatchCapabilities.BatchEntryValidated, running.DryRunRequested);
-        var active = new EntryRunSession(Guid.NewGuid(), mode, entryMode, dryRun, running.Policy, assignment, member.Settings, context.Name, running.Ranking, number, count);
+        var mode = BatchRules.ModeOf(assignment);
+        var active = new EntryRunSession(Guid.NewGuid(), mode, running.Policy, assignment, member.Settings, context.Name, running.Ranking, number, count);
         batch = BatchRules.Begin(running, index, now);
         session = active;
         memberEnd = BatchEnd.Finished;
         deferredHalt = null;
         finished = RunStatus.Idle;
         PauseReason = PauseReason.None;
-        RunLog.Info($"Batch {running.BatchId}: character {number} of {count}, {context.Name}, run {active.RunId} ({mode}, {entryMode}), gil {context.Gil?.ToString() ?? "unknown"}, "
+        RunLog.Info($"Batch {running.BatchId}: character {number} of {count}, {context.Name}, run {active.RunId} ({mode}), gil {context.Gil?.ToString() ?? "unknown"}, "
                   + $"targets {Describe(assignment.TargetOrder)}, up to {assignment.MaximumDeposit} gil.");
         SaveBatch();
         Launch(active);
@@ -383,15 +334,10 @@ internal sealed partial class RunController
     private void MemberEnded(BatchCheckpoint running, int index, EntryRunSession ended)
     {
         var now = DateTime.UtcNow;
-        var (state, halt) = BatchRules.Classify(ended.Step, ended.Failure, memberEnd, ended.Trace is not null);
+        var (state, halt) = BatchRules.Classify(ended.Step, ended.Failure, memberEnd);
         PlotKey? plot = null;
         long? deposit = null;
-        if (state == BatchMemberState.DryRun && ended.Trace is { } trace)
-        {
-            plot = trace.Plot;
-            deposit = trace.Deposit;
-        }
-        else if (state == BatchMemberState.Entered)
+        if (state == BatchMemberState.Entered)
         {
             plot = ended.Target;
             deposit = ended.Ledger.GrossSubmitted;
@@ -434,7 +380,6 @@ internal sealed partial class RunController
         }
 
         var member = running.Members[index];
-        BindBatchGrant(running.BatchId);
         batch = BatchRules.BeginSwitch(running, member.ContentId, now);
         switchMember = index;
         switchCheckpoint = batchFile.Save(batch);
@@ -566,25 +511,7 @@ internal sealed partial class RunController
         owner = null;
     }
 
-    // Every change of the batch is written, and a batch grant ends with the batch it serves.
-    private void SaveBatch()
-    {
-        batchFile.Save(batch);
-        if (batchSwitchGrant is { BatchId: { } servedBatch } && (batch is null || batch.BatchId == servedBatch) && BatchRules.EndsSwitchGrant(batch))
-        {
-            batchSwitchGrant = null;
-            RunLog.Warning($"The batch switching permission ended with batch {servedBatch} ({batch?.Phase.ToString() ?? "discarded"}{(batch is { Halt: not BatchHalt.None } halted ? $", {halted.Halt}" : string.Empty)}).");
-        }
-    }
-
-    private void BindBatchGrant(Guid batchId)
-    {
-        if (batchSwitchGrant is { BatchId: null } unbound)
-        {
-            batchSwitchGrant = unbound.BoundTo(batchId);
-            RunLog.Warning($"The batch switching permission now serves batch {batchId} only.");
-        }
-    }
+    private void SaveBatch() => batchFile.Save(batch);
 
     // Read back at load. A batch that was running or switching lost its run and its switch with the reload, so it waits
     // for the player's Continue.
@@ -667,7 +594,7 @@ internal sealed partial class RunController
          + (member.Plot is { } plot ? $", {plot} for {member.Deposit?.ToString() ?? "unknown"} gil" : string.Empty);
 
     private static string DescribeReport(in BatchReport report)
-        => $"{report.Entered} entered ({report.Deposited} gil), {report.DryRun} dry run(s), {report.Uncertain} in question, {report.Queued} waiting, "
+        => $"{report.Entered} entered ({report.Deposited} gil), {report.Uncertain} in question, {report.Queued} waiting, "
          + $"{report.NotEntered} not entered, {report.Excluded} excluded";
 
     private static BatchCheckpointFile CreateBatchFile(string directory)

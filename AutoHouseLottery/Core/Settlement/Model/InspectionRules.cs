@@ -51,7 +51,7 @@ internal enum AttemptVerdict : byte { Unknown, Entered, NotEntered }
 internal static class InspectionRules
 {
     // Any result row shown to this character at the attempted plot, or the plot in its estate list, proves the entry was
-    // made. Only the validated absence rule can prove it was not; until then the attempt stays in question.
+    // made. Only the absence rule can prove it was not; until then the attempt stays in question.
     public static AttemptVerdict DecideAttempt(PlacardIdentityVerdict identity, bool resultsOffered, ResultKind result, bool ownsPlot, in AbsenceEvidence absence)
     {
         if (identity != PlacardIdentityVerdict.Confirmed)

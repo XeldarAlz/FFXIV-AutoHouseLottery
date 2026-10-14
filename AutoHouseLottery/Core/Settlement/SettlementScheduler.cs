@@ -80,7 +80,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     }
 
     // The work to start now, or null with Block saying why not.
-    public SettlementWork? Tick(long nowMs, bool ownWorkActive, bool busy, bool ownVisitRunning, Func<Guid, PlotKey, bool> collectable)
+    public SettlementWork? Tick(long nowMs, bool ownWorkActive, bool busy, bool ownVisitRunning)
     {
         input.Sample(nowMs, ownWorkActive);
         if (heldAfterAlert && SchedulerRules.HoldReleased(heldAtMs, input.IdleMs(nowMs), nowMs))
@@ -101,7 +101,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             ReconcileEstates(context);
         }
 
-        var due = SettlementSchedule.Due(housing.JournalSnapshot, context.ContentId, housing.CurrentPosition(DateTime.UtcNow), collectable, Parked);
+        var due = SettlementSchedule.Due(housing.JournalSnapshot, context.ContentId, housing.CurrentPosition(DateTime.UtcNow));
         DueCount = due.Length;
         var next = queue.Next(due, nowMs);
         var facts = new SchedulerFacts(
@@ -149,14 +149,8 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
         return null;
     }
 
-    // The work due for a character that is not logged in, from the journal alone. Only a refund the validated contract
-    // could collect counts, since a grant names the logged-in character only.
-    public int DueCountFor(ulong contentId, in CyclePosition position)
-        => SettlementSchedule.Due(housing.JournalSnapshot, contentId, position, static (_, _) => SettlementGate.Validated(ActionKind.Refund), Parked).Length;
-
-    // While a placard without a result cannot settle anything, revisiting one already found that way in full only costs
-    // travel. A weaker sighting (a placard not fully read) is visited again.
-    private bool Parked(Guid id) => !SettlementCapabilities.AbsenceSettlementValidated && configuration.AbsenceSighting(id) is { Strong: true };
+    // The work due for a character that is not logged in, from the journal alone.
+    public int DueCountFor(ulong contentId, in CyclePosition position) => SettlementSchedule.Due(housing.JournalSnapshot, contentId, position).Length;
 
     // A win the character's estate list now holds was claimed, by this plugin's press or in game; it is recorded as
     // claimed without a visit. A refund or claim of this plugin that was confirmed while its receipt was left behind (the

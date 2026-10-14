@@ -7,8 +7,6 @@ namespace AutoHouseLottery.Core.Tasks.Model;
 
 internal enum SubmissionOutcome : byte
 {
-    // The gate is closed: nothing was written and nothing pressed.
-    GateClosed,
     // The character's entry slot for the cycle is already held; nothing pressed.
     SlotTaken,
     // The journal refused the intent as malformed; nothing pressed.
@@ -23,20 +21,15 @@ internal enum SubmissionOutcome : byte
     DispatchUnrecorded,
 }
 
-// The irreversible part of an entry in its only allowed order: the gate, the durable intent, one press, the dispatch.
+// The irreversible part of an entry in its only allowed order: the durable intent, one press, the dispatch.
 // Disk work runs off the game thread; returnToGame brings the caller back to it before the press.
 internal sealed class EntrySubmission(ActionJournal journal)
 {
     // The journal write under way, so a caller ending the submission from outside can order its own write after it.
     public Task InFlight { get; private set; } = Task.CompletedTask;
 
-    public async Task<SubmissionOutcome> Submit(ActionAttempt intent, bool gateOpen, Func<Task> returnToGame, Func<DialogActionResult> pressConfirm, Func<DateTime> utcNow)
+    public async Task<SubmissionOutcome> Submit(ActionAttempt intent, Func<Task> returnToGame, Func<DialogActionResult> pressConfirm, Func<DateTime> utcNow)
     {
-        if (!gateOpen)
-        {
-            return SubmissionOutcome.GateClosed;
-        }
-
         var preparing = Task.Run(() => journal.Prepare(intent));
         InFlight = preparing;
         var prepared = await preparing;

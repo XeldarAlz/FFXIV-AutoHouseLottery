@@ -16,8 +16,8 @@ namespace AutoHouseLottery.Windows.Pages;
 
 internal sealed partial class FindHomePage
 {
-    private const float MarkerRadius = 9f;
-    private const float DimmedMarkerScale = 0.7f;
+    private const float MarkerRadius = 11f;
+    private const float DimmedMarkerScale = 0.55f;
     private const float DimmedAlpha = 0.45f;
     private const float HoverReach = 4f;
     private const float ClickSlop = 4f;
@@ -295,15 +295,22 @@ internal sealed partial class FindHomePage
             var center = imageMin + point.Position * side;
             var radius = MarkerRadius * scale * (matching ? 1f : DimmedMarkerScale);
             var alpha = matching ? 1f : DimmedAlpha;
+            var outer = radius;
+            if (matching)
+            {
+                StatusMarks.Beacon(drawList, center, radius, status);
+                outer = StatusMarks.BeaconRadius(radius);
+            }
+
             StatusMarks.Draw(drawList, center, radius, status, alpha);
             if (State.Shortlist.Contains(key))
             {
-                StatusMarks.Shortlisted(drawList, center, radius, alpha);
+                StatusMarks.Shortlisted(drawList, center, outer, alpha);
             }
 
             if (Discovery.Saved.Library.IsSaved(key))
             {
-                TextDraw.IconCentered(FontAwesomeIcon.Star, center + new Vector2(radius, -radius), Styling.WithAlpha(Styling.AccentAmber, alpha));
+                TextDraw.IconCentered(FontAwesomeIcon.Star, center + new Vector2(outer, -outer), Styling.WithAlpha(Styling.AccentAmber, alpha));
             }
 
             if (matching)
@@ -313,7 +320,7 @@ internal sealed partial class FindHomePage
             }
 
             var distance = Vector2.Distance(mouse, center);
-            if (distance <= radius + HoverReach * scale && distance < closest)
+            if (distance <= outer + HoverReach * scale && distance < closest)
             {
                 closest = distance;
                 hoveredKey = key;

@@ -329,7 +329,7 @@ internal sealed class HousingContext : IDisposable
     // entry of this character that was recorded as settled without its result being read (its placard offered none, or
     // the player said it was settled in game) goes back to an open outcome, so it is checked again and its deposit is not
     // lost from view. The journal writes run off the framework thread; the task is returned so an unload can wait for it.
-    // Its sightings are forgotten too, so once the absence rule is validated the same evidence cannot settle it again.
+    // Its sightings are forgotten too, so the same evidence cannot settle it again.
     public Task ReopenAbsenceSettlements(ulong contentId)
     {
         var reopened = ManualSettlement.ReopenedBy6100(JournalSnapshot, contentId);

@@ -19,11 +19,9 @@ namespace AutoHouseLottery.Core.Tasks;
 internal sealed record RunServices(
     HousingContext Housing,
     HousingObservers Observers,
-    Func<RealEntryGrant?> Grant,
-    Action ConsumeGrant,
     Action CloseConfirmationLater,
     Func<ulong, bool> AutomaticRefunds,
-    Func<Guid, bool, SettlementTask> Collect,
+    Func<Guid, SettlementTask> Collect,
     Action<Task> TrackJournalWrite);
 
 // Drives one character's entry through the steps of TECHNICAL_DESIGN section 11. Each await does at most one validated
@@ -152,7 +150,7 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
 
         var participation = services.Housing.Participation(context.ContentId, context.HomeWorldId, reading, session.Policy.Cycle);
         Diag($"Entry run {session.RunId}: preflight for {session.CharacterName}, gil {context.Gil?.ToString() ?? "unknown"}, cycle {session.Policy.Cycle.Cycle} "
-           + $"({session.Policy.Cycle.Evidence}), entry slot {participation.State}, mode {session.Mode}, {session.EntryMode}, {session.Assignment.TargetOrder.Length} target(s).");
+           + $"({session.Policy.Cycle.Evidence}), entry slot {participation.State}, mode {session.Mode}, {session.Assignment.TargetOrder.Length} target(s).");
         switch (participation.State)
         {
             case EntrySlotState.Entered:
@@ -167,8 +165,8 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
     }
 
     // The game refuses a new entry while a refund or a won plot from an earlier entry waits (LogMessage 6100). With
-    // automatic refunds on, the refund driver visits that entry first, in this run's own lease and with this run's own
-    // dry-run choice; a dry run cannot free the slot, so the run stops there and says so. A win stops for the player.
+    // automatic refunds on, the refund driver visits that entry first, in this run's own lease. A win stops for the
+    // player.
     private async Task<bool> SettleOutstanding()
     {
         Move(EntryStep.SettleOutstanding);
@@ -178,14 +176,14 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
         Diag($"Entry run {session.RunId}: outstanding earlier entry {outstanding.Kind}{(outstanding.ReceiptId is { } held ? $" ({held})" : string.Empty)}; {step}.");
         if (step == OutstandingStep.CollectFirst && outstanding.ReceiptId is { } receiptId)
         {
-            var result = await CollectOutstanding(receiptId);
+            await CollectOutstanding(receiptId);
             if (session.StopRequested || session.PauseRequested)
             {
                 return false;
             }
 
             var remaining = services.Housing.Outstanding(contentId, session.Policy.Cycle.Cycle);
-            step = OutstandingPlan.AfterCollection(result, remaining.Kind);
+            step = OutstandingPlan.AfterCollection(remaining.Kind);
             Diag($"Entry run {session.RunId}: after the visit the outstanding earlier entry is {remaining.Kind}; {step}.");
         }
 
@@ -193,14 +191,13 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
         {
             OutstandingStep.Proceed => true,
             OutstandingStep.StopUnclaimedWin => FinishWith(EntryFailure.UnclaimedWin),
-            OutstandingStep.StopDryRunCollection => FinishWith(EntryFailure.RefundDryRun),
             _ => FinishWith(EntryFailure.CollectRefundFirst),
         };
     }
 
-    private async Task<SettlementResult> CollectOutstanding(Guid receiptId)
+    private async Task CollectOutstanding(Guid receiptId)
     {
-        var collect = services.Collect(receiptId, session.DryRunRequested);
+        var collect = services.Collect(receiptId);
         session.Collecting = collect;
         try
         {
@@ -215,7 +212,6 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
         var visit = collect.Progress;
         Diag($"Entry run {session.RunId}: the earlier entry's visit ended {visit.Result}{(visit.Failure == SettlementFailure.None ? string.Empty : $" ({visit.Failure})")}"
            + $"{(visit.Outcome is { } outcome ? $", outcome {outcome}" : string.Empty)}.");
-        return visit.Result;
     }
 
     private bool ReserveFunds()

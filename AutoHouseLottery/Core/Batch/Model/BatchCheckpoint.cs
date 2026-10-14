@@ -30,8 +30,8 @@ internal enum BatchHalt : byte
 // unload or an alert.
 internal enum BatchEnd : byte { Finished, StoppedByPlayer, Interrupted }
 
-// A batch as written to disk before every character switch: the frozen policy and ranking it was started with, the dry-run
-// choice, every selected character in processing order with its assignment and outcome, and where the batch stands. It
+// A batch as written to disk before every character switch: the frozen policy and ranking it was started with, every
+// selected character in processing order with its assignment and outcome, and where the batch stands. It
 // holds no pointer and no game context, so whatever reads it back after a login rebuilds the character's state from the
 // journal and fresh reads.
 internal sealed record BatchCheckpoint
@@ -41,8 +41,6 @@ internal sealed record BatchCheckpoint
     public required RunPolicy Policy { get; init; }
 
     public required ImmutableArray<RankedPlot> Ranking { get; init; }
-
-    public required bool DryRunRequested { get; init; }
 
     public required ImmutableArray<BatchMember> Members { get; init; }
 
