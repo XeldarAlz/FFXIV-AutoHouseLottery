@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "无法读取告示牌上的出售信息。",
   "runFailure.entryButtonUnavailable": "告示牌没有为此角色提供抽签参与。",
   "runFailure.confirmationNotShown": "抽签确认窗口没有出现。",
+  "runFailure.confirmationNotReady": "在按下“确认”之前，抽签确认窗口发生了变化。没有提交任何内容。",
   "runFailure.depositUnreadable": "无法读取抽签确认窗口中的保证金。",
   "runFailure.gilUnknown": "无法读取此角色的金币。",
   "runFailure.checkboxNotTicked": "无法勾选确认窗口中的复选框。没有提交任何内容。",

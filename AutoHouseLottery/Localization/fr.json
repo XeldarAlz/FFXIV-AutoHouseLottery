@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "Les informations de vente du panneau n'ont pas pu être lues.",
   "runFailure.entryButtonUnavailable": "Le panneau ne propose pas de participation à ce personnage.",
   "runFailure.confirmationNotShown": "La confirmation de la loterie n'est pas apparue.",
+  "runFailure.confirmationNotReady": "La confirmation de la loterie a changé avant que Confirmer puisse être pressé. Rien n'a été envoyé.",
   "runFailure.depositUnreadable": "Le dépôt de la confirmation de la loterie n'a pas pu être lu.",
   "runFailure.gilUnknown": "Les gils de ce personnage n'ont pas pu être lus.",
   "runFailure.checkboxNotTicked": "La case de la confirmation n'a pas pu être cochée. Rien n'a été envoyé.",

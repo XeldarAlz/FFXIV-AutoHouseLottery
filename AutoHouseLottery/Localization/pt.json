@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "Não foi possível ler os dados de venda da placa.",
   "runFailure.entryButtonUnavailable": "A placa não oferece inscrição na loteria a este personagem.",
   "runFailure.confirmationNotShown": "A confirmação da loteria não apareceu.",
+  "runFailure.confirmationNotReady": "A confirmação da loteria mudou antes de Confirmar poder ser pressionado. Nada foi enviado.",
   "runFailure.depositUnreadable": "Não foi possível ler o depósito na confirmação da loteria.",
   "runFailure.gilUnknown": "Não foi possível ler o gil deste personagem.",
   "runFailure.checkboxNotTicked": "Não foi possível marcar a caixa da confirmação. Nada foi enviado.",

@@ -19,6 +19,8 @@ internal sealed partial class EntryRunTask
     private const int ConfirmationWaitMs = 30_000;
     private const int ConfirmationCloseWaitMs = 10_000;
     private const int CheckboxWaitMs = 10_000;
+    private const int TickAttempts = 3;
+    private const int ClickWindowWaitMs = 5_000;
     private const int ReceiptGilWaitMs = 30_000;
 
     private long dispatchSequence;
@@ -173,22 +175,29 @@ internal sealed partial class EntryRunTask
             return EntryFailure.CheckboxNotTicked;
         }
 
-        if (HousingDialogs.ReadEntryConfirmation() is not { Identified: true, ConfirmEnabled: true } again || again.Deposit != deposit)
+        if (HousingDialogs.ReadEntryConfirmation() is not { Identified: true, ConfirmEnabled: true } again)
+        {
+            await CloseConfirmation();
+            return EntryFailure.ConfirmationNotReady;
+        }
+
+        if (again.Deposit != deposit)
         {
             await CloseConfirmation();
             return EntryFailure.ChangedPrice;
-        }
-
-        if (services.Housing.Journal is not { } journal)
-        {
-            await CloseConfirmation();
-            return EntryFailure.JournalUnavailable;
         }
 
         if (CharacterContextReader.ReadGil() is not { } gilBefore)
         {
             await CloseConfirmation();
             return EntryFailure.GilUnknown;
+        }
+
+        // Confirm is pressed once and never again, so the press window of the tick must be over before the intent.
+        if (!await WaitUntilTimed(HousingDialogs.ClickReady, ClickWindowWaitMs, "run-confirm-window", ObservePollFrames))
+        {
+            await CloseConfirmation();
+            return EntryFailure.ConfirmationNotReady;
         }
 
         var cycle = session.LiveCycle ?? session.Policy.Cycle.Cycle;
@@ -208,6 +217,7 @@ internal sealed partial class EntryRunTask
         };
         session.Attempt = intent;
         Move(EntryStep.PersistIntent);
+        var journal = services.Housing.Journal!;
         var outcome = await new EntrySubmission(journal).Submit(intent, MayConfirm(deposit), ReturnToGame, () => PressConfirm(deposit), static () => DateTime.UtcNow);
         RunLog.Info($"Entry run {session.RunId}: submission of attempt {intent.AttemptId} for {intent.Plot}, {deposit} gil, cycle {cycle}: {outcome}.");
         switch (outcome)
@@ -242,33 +252,51 @@ internal sealed partial class EntryRunTask
 
     private async Task ReturnToGame() => await NextFrame();
 
-    // The single press. The dialog is read once more on this frame: it must still be row 7046 showing the same amount.
+    // The single press. The character and the dialog are read once more on this frame: the same character, and still
+    // row 7046 showing the same amount. The grant is used up only by a press that was sent.
     private DialogActionResult PressConfirm(long deposit)
     {
         Move(EntryStep.SubmitOnce);
-        if (HousingDialogs.ReadEntryConfirmation() is not { Identified: true, ConfirmEnabled: true } shown || shown.Deposit != deposit || !MayConfirm(deposit))
+        if (Svc.PlayerState.ContentId != session.Settings.ContentId
+            || HousingDialogs.ReadEntryConfirmation() is not { Identified: true, ConfirmEnabled: true } shown
+            || shown.Deposit != deposit
+            || !MayConfirm(deposit))
         {
             return DialogActionResult.IdentityMismatch;
         }
 
-        services.ConsumeGrant();
         dispatchSequence = GameSequence.Next();
         dispatchedUtc = DateTime.UtcNow;
+        DialogActionResult pressed;
         using (NativeActionGate.Allow(NativeAction.ConfirmEntry))
         {
-            return HousingDialogs.ConfirmEntry();
+            pressed = HousingDialogs.ConfirmEntry();
         }
+
+        if (pressed == DialogActionResult.Pressed)
+        {
+            services.ConsumeGrant();
+        }
+
+        return pressed;
     }
 
+    // The tick follows the Enter Lottery press closely, so a throttled tick waits out the press window and tries again,
+    // a bounded number of times.
     private async Task<bool> TickCheckbox()
     {
-        DialogActionResult ticked;
-        using (NativeActionGate.Allow(NativeAction.TickEntryCheckbox))
+        var ticked = DialogActionResult.Throttled;
+        for (var attempt = 1; attempt <= TickAttempts && ticked == DialogActionResult.Throttled; attempt++)
         {
-            ticked = HousingDialogs.TickEntryCheckbox();
+            await WaitUntilTimed(HousingDialogs.ClickReady, ClickWindowWaitMs, "run-tick-window", ObservePollFrames);
+            using (NativeActionGate.Allow(NativeAction.TickEntryCheckbox))
+            {
+                ticked = HousingDialogs.TickEntryCheckbox();
+            }
+
+            Diag($"Entry run {session.RunId}: checkbox 'I understand and wish to proceed.' {ticked} (attempt {attempt}/{TickAttempts}).");
         }
 
-        Diag($"Entry run {session.RunId}: checkbox 'I understand and wish to proceed.' {ticked}.");
         if (ticked is not (DialogActionResult.Pressed or DialogActionResult.AlreadyChecked))
         {
             return false;

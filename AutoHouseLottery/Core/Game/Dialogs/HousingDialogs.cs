@@ -27,6 +27,10 @@ internal static unsafe class HousingDialogs
     private static readonly HousingText[] confirmLabel = [HousingText.ConfirmLabel];
     private static readonly HousingText[] proceedLabel = [HousingText.ProceedCheckbox];
 
+    // Every press shares one throttle, so a press right after another is refused as Throttled. A caller about to make
+    // a press that must not be refused waits until this is true.
+    public static bool ClickReady() => EzThrottler.Check(ClickThrottleKey);
+
     public static DialogIdentity? IdentifyEntryConfirmation()
     {
         if (!AddonReads.TryGetReady(EntryConfirmationAddon, out var addon))

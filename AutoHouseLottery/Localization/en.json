@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "The placard's sale details could not be read.",
   "runFailure.entryButtonUnavailable": "The placard offers no lottery entry to this character.",
   "runFailure.confirmationNotShown": "The lottery confirmation did not appear.",
+  "runFailure.confirmationNotReady": "The lottery confirmation changed before Confirm could be pressed. Nothing was submitted.",
   "runFailure.depositUnreadable": "The deposit on the lottery confirmation could not be read.",
   "runFailure.gilUnknown": "This character's gil could not be read.",
   "runFailure.checkboxNotTicked": "The confirmation's checkbox could not be ticked. Nothing was submitted.",

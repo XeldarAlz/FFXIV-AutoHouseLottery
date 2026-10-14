@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "Die Verkaufsangaben der Informationstafel konnten nicht gelesen werden.",
   "runFailure.entryButtonUnavailable": "Die Informationstafel bietet diesem Charakter keine Teilnahme an.",
   "runFailure.confirmationNotShown": "Die Bestätigung der Verlosung ist nicht erschienen.",
+  "runFailure.confirmationNotReady": "Die Bestätigung der Verlosung hat sich geändert, bevor Bestätigen gedrückt werden konnte. Nichts wurde eingereicht.",
   "runFailure.depositUnreadable": "Der Einsatz in der Bestätigung konnte nicht gelesen werden.",
   "runFailure.gilUnknown": "Das Gil dieses Charakters konnte nicht gelesen werden.",
   "runFailure.checkboxNotTicked": "Das Kästchen der Bestätigung konnte nicht angehakt werden. Nichts wurde eingereicht.",

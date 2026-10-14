@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "Не удалось прочитать сведения о продаже на табличке.",
   "runFailure.entryButtonUnavailable": "Табличка не предлагает этому персонажу участие в лотерее.",
   "runFailure.confirmationNotShown": "Подтверждение лотереи не появилось.",
+  "runFailure.confirmationNotReady": "Подтверждение лотереи изменилось до того, как удалось нажать «Подтвердить». Ничего не отправлено.",
   "runFailure.depositUnreadable": "Не удалось прочитать залог в подтверждении лотереи.",
   "runFailure.gilUnknown": "Не удалось прочитать гил этого персонажа.",
   "runFailure.checkboxNotTicked": "Не удалось отметить флажок в подтверждении. Ничего не отправлено.",

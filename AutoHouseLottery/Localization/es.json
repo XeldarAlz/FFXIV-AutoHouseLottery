@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "No se pudieron leer los datos de venta del cartel.",
   "runFailure.entryButtonUnavailable": "El cartel no ofrece participar en la lotería a este personaje.",
   "runFailure.confirmationNotShown": "No apareció la confirmación de la lotería.",
+  "runFailure.confirmationNotReady": "La confirmación de la lotería cambió antes de poder pulsar Confirmar. No se envió nada.",
   "runFailure.depositUnreadable": "No se pudo leer el depósito en la confirmación de la lotería.",
   "runFailure.gilUnknown": "No se pudieron leer los guiles de este personaje.",
   "runFailure.checkboxNotTicked": "No se pudo marcar la casilla de la confirmación. No se envió nada.",

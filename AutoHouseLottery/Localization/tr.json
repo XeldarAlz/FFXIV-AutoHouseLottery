@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "Tabeladaki satış bilgileri okunamadı.",
   "runFailure.entryButtonUnavailable": "Tabela bu karaktere çekiliş katılımı sunmuyor.",
   "runFailure.confirmationNotShown": "Çekiliş onay penceresi görünmedi.",
+  "runFailure.confirmationNotReady": "Onayla düğmesine basılamadan çekiliş onay penceresi değişti. Hiçbir şey gönderilmedi.",
   "runFailure.depositUnreadable": "Çekiliş onay penceresindeki depozito okunamadı.",
   "runFailure.gilUnknown": "Bu karakterin gil miktarı okunamadı.",
   "runFailure.checkboxNotTicked": "Onay penceresindeki kutu işaretlenemedi. Hiçbir şey gönderilmedi.",

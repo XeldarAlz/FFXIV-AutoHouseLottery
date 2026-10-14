@@ -510,6 +510,7 @@
   "runFailure.saleUnreadable": "サインボードの販売情報を読み取れませんでした。",
   "runFailure.entryButtonUnavailable": "サインボードにこのキャラクターの申し込みがありません。",
   "runFailure.confirmationNotShown": "抽選の確認画面が表示されませんでした。",
+  "runFailure.confirmationNotReady": "確定を押す前に抽選の確認画面が変わりました。何も送信していません。",
   "runFailure.depositUnreadable": "抽選の確認画面の支払い額を読み取れませんでした。",
   "runFailure.gilUnknown": "このキャラクターの所持ギルを読み取れませんでした。",
   "runFailure.checkboxNotTicked": "確認画面のチェックボックスにチェックを入れられませんでした。何も送信していません。",

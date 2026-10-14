@@ -62,6 +62,7 @@ internal static class RunText
             EntryFailure.SaleUnreadable => L.RunFailure.SaleUnreadable,
             EntryFailure.EntryButtonUnavailable => L.RunFailure.EntryButtonUnavailable,
             EntryFailure.ConfirmationNotShown => L.RunFailure.ConfirmationNotShown,
+            EntryFailure.ConfirmationNotReady => L.RunFailure.ConfirmationNotReady,
             EntryFailure.DepositUnreadable => L.RunFailure.DepositUnreadable,
             EntryFailure.GilUnknown => L.RunFailure.GilUnknown,
             EntryFailure.CheckboxNotTicked => L.RunFailure.CheckboxNotTicked,
