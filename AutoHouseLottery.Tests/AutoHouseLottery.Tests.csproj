@@ -16,6 +16,7 @@
     <Compile Include="..\AutoHouseLottery\Core\Eligibility\Model\**\*.cs" Link="Eligibility\Model\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Selection\Model\**\*.cs" Link="Selection\Model\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Persistence\**\*.cs" Link="Persistence\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Tasks\Model\**\*.cs" Link="Tasks\Model\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
