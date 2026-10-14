@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Threading.Tasks;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
@@ -172,10 +173,38 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
         _ = ApplyFixes(claimed, confirmed).ContinueWith(_ => fixing = false);
     }
 
-    private async System.Threading.Tasks.Task ApplyFixes(ImmutableArray<SettlementFix> claimed, ImmutableArray<SettlementFix> confirmed)
+    // A receipt both lists name is settled once, by the estate list.
+    private async Task ApplyFixes(ImmutableArray<SettlementFix> claimed, ImmutableArray<SettlementFix> confirmed)
     {
         await housing.ApplySettlementFixes(claimed, "the estate list holds the entered plot");
-        await housing.ApplySettlementFixes(confirmed, "the plugin's own press was confirmed before the plugin stopped");
+        await housing.ApplySettlementFixes(Without(confirmed, claimed), "the plugin's own press was confirmed before the plugin stopped");
+    }
+
+    private static ImmutableArray<SettlementFix> Without(ImmutableArray<SettlementFix> fixes, ImmutableArray<SettlementFix> already)
+    {
+        var kept = ImmutableArray.CreateBuilder<SettlementFix>(fixes.Length);
+        for (var index = 0; index < fixes.Length; index++)
+        {
+            if (!Names(already, fixes[index].ReceiptId))
+            {
+                kept.Add(fixes[index]);
+            }
+        }
+
+        return kept.ToImmutable();
+    }
+
+    private static bool Names(ImmutableArray<SettlementFix> fixes, Guid receiptId)
+    {
+        for (var index = 0; index < fixes.Length; index++)
+        {
+            if (fixes[index].ReceiptId == receiptId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private readonly record struct Estates(ulong? Personal, ulong? FreeCompany);

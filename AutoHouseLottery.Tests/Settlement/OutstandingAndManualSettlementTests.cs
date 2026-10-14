@@ -253,6 +253,18 @@ public sealed class OutstandingAndManualSettlementTests
         Assert.Empty(ManualSettlement.FromOwnConfirmations(journal, ContentId + 1));
     }
 
+    [Theory]
+    [InlineData((byte)ActionKind.Refund)]
+    [InlineData((byte)ActionKind.Claim)]
+    public void AReceiptReopenedAfterItsConfirmedPressIsNotSettledAgain(byte kind)
+    {
+        var reopened = Receipt(Plot(12, 5), FirstCycle);
+        var press = Attempt(Plot(12, 5), AttemptState.Confirmed) with { Kind = (ActionKind)kind, ReceiptId = reopened.ReceiptId };
+        var journal = Journal([press], (reopened, SettlementState.OutcomeUnknown));
+
+        Assert.Empty(ManualSettlement.FromOwnConfirmations(journal, ContentId));
+    }
+
     [Fact]
     public void OnlyAConfirmedPressOnAnOpenReceiptIsRepaired()
     {
