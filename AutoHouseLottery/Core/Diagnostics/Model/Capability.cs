@@ -16,6 +16,7 @@ internal enum CapabilityKind : byte
     PlacardSale,
     WardList,
     WardPackets,
+    CharacterSwitch,
 }
 
 // Fallback: it works through a slower or less direct path. NotChecked: nothing has told yet, such as a window not opened
@@ -60,6 +61,8 @@ internal enum CapabilityReason : byte
     WardListMismatch,
     WardPacketsActive,
     WardPacketsOff,
+    SwitchReady,
+    SwitchLifestreamMissing,
 }
 
 internal readonly record struct Capability(CapabilityKind Kind, CapabilityState State, CapabilityReason Reason);

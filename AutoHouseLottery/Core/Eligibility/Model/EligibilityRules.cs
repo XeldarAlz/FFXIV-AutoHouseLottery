@@ -6,7 +6,7 @@ internal static class EligibilityRules
 {
     public static EligibilityResult EvaluateCharacter(in CharacterProfile character, BuyerType buyer, CycleKey cycle, bool collectRefundFirst)
     {
-        var blockers = EligibilityReason.None;
+        var blockers = character.RegionUnsupported ? EligibilityReason.UnsupportedRegion : EligibilityReason.None;
         var unresolved = EligibilityReason.None;
         switch (character.Participation.StateIn(cycle))
         {
@@ -78,7 +78,13 @@ internal static class EligibilityRules
                 break;
         }
 
-        switch (BudgetRules.Check(budget, ledger, candidate.Deposit, character.ObservedGil))
+        var funds = BudgetRules.Check(budget, ledger, candidate.Deposit, character.ObservedGil);
+        if (character.GilIsEstimate && funds is BudgetCheck.Fits or BudgetCheck.BelowReserve)
+        {
+            funds = BudgetCheck.BalanceUnknown;
+        }
+
+        switch (funds)
         {
             case BudgetCheck.Fits:
                 break;

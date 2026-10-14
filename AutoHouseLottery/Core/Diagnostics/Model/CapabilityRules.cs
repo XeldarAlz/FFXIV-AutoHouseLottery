@@ -6,7 +6,7 @@ namespace AutoHouseLottery.Core.Diagnostics.Model;
 // support report say the same thing.
 internal static class CapabilityRules
 {
-    public const int Count = (int)CapabilityKind.WardPackets + 1;
+    public const int Count = (int)CapabilityKind.CharacterSwitch + 1;
 
     public static void Evaluate(in CapabilityFacts facts, Span<Capability> destination)
     {
@@ -40,6 +40,9 @@ internal static class CapabilityRules
         destination[(int)CapabilityKind.WardPackets] = facts.WardPacketsActive
             ? new(CapabilityKind.WardPackets, CapabilityState.Ready, CapabilityReason.WardPacketsActive)
             : new(CapabilityKind.WardPackets, CapabilityState.Fallback, CapabilityReason.WardPacketsOff);
+        destination[(int)CapabilityKind.CharacterSwitch] = facts.Lifestream.CanSwitchCharacters
+            ? new(CapabilityKind.CharacterSwitch, CapabilityState.Ready, CapabilityReason.SwitchReady)
+            : new(CapabilityKind.CharacterSwitch, CapabilityState.Missing, CapabilityReason.SwitchLifestreamMissing);
     }
 
     private static Capability Listings(ListingsFact listings) => listings switch

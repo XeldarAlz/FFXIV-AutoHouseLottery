@@ -81,6 +81,17 @@ public sealed class CapabilityRulesTests
         Assert.Equal(CapabilityState.Fallback, Evaluate(Ready() with { Listings = ListingsFact.SavedCopy })[(int)CapabilityKind.Listings].State);
     }
 
+    [Fact]
+    public void SwitchingIsReadyOnlyWhenLifestreamOffersItsCharacterChange()
+    {
+        var withChange = fullLifestream with { ChangeCharacter = true };
+        var ready = Evaluate(Ready() with { Lifestream = withChange });
+        var noChange = Evaluate(Ready() with { Lifestream = withChange with { ChangeCharacter = false } });
+
+        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.Ready, CapabilityReason.SwitchReady), ready[(int)CapabilityKind.CharacterSwitch]);
+        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.Missing, CapabilityReason.SwitchLifestreamMissing), noChange[(int)CapabilityKind.CharacterSwitch]);
+    }
+
     private static Capability[] Evaluate(in CapabilityFacts facts)
     {
         var rows = new Capability[CapabilityRules.Count];

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.IO;
 using System.Threading.Tasks;
@@ -33,6 +34,8 @@ internal sealed class HousingContext : IDisposable
     private readonly Configuration configuration;
     private readonly HousingFeedService feed;
     private LotterySnapshot? lastReading;
+    private PlanningJournal? planningJournal;
+    private int planningSightings;
 
     public HousingContext(Configuration configuration, string directory, HousingFeedService feed)
     {
@@ -131,6 +134,32 @@ internal sealed class HousingContext : IDisposable
 
     public OutstandingEntry Outstanding(ulong contentId, CycleKey cycle) => OutstandingRules.Find(JournalSnapshot, contentId, cycle, LeftToTheGame);
 
+    // The journal for planning characters that are not logged in, worked out again only when the journal or the absence
+    // sightings change. Framework thread only.
+    public PlanningJournal PlanningJournal()
+    {
+        var journal = JournalSnapshot;
+        var sightings = configuration.AbsenceSightings.Count;
+        if (planningJournal is { } cached && cached.Snapshot == journal && planningSightings == sightings)
+        {
+            return cached;
+        }
+
+        var left = new List<Guid>();
+        for (var index = 0; index < journal.Receipts.Length; index++)
+        {
+            var receipt = journal.Receipts[index];
+            if (JournalLookups.TryFindSettlement(journal, receipt.ReceiptId, out var settlement) && LeftToTheGame(receipt, settlement))
+            {
+                left.Add(receipt.ReceiptId);
+            }
+        }
+
+        planningSightings = sightings;
+        planningJournal = new PlanningJournal(journal, left.ToFrozenSet());
+        return planningJournal.Value;
+    }
+
     // An entry nothing here can settle is left to the game: no result was offered at its placard, its outcome could not
     // be read, or its imported address names no single plot.
     private bool LeftToTheGame(EntryReceipt receipt, EntrySettlement settlement)
@@ -176,29 +205,51 @@ internal sealed class HousingContext : IDisposable
     {
         var accountGroup = AccountGroup(context.ContentId);
         var outstanding = OutstandingRules.ToSettlement(Outstanding(context.ContentId, position.Cycle).Kind);
-        return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position));
+        return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position)) with
+        {
+            RegionUnsupported = !WorldRegions.Supported(WorldRegionReader.Of(context.HomeWorldId)),
+        };
+    }
+
+    // What the last login of a known character showed. Framework thread only, since the settings are changed there.
+    public RosterFacts? Facts(ulong contentId)
+        => configuration.Characters.TryGetValue(contentId, out var known) ? FactsOf(contentId, known) : null;
+
+    public static RosterFacts FactsOf(ulong contentId, KnownCharacter known)
+        => new(contentId, known.Name, known.HomeWorldId, known.AccountGroup, known.FreeCompanyId, known.OwnsLand, known.Gil, known.GilSeenUtc, known.SeenUtc)
+        {
+            RegionUnsupported = !WorldRegions.Supported(WorldRegionReader.Of(known.HomeWorldId)),
+        };
+
+    public OwnerFacts Owner(ulong contentId)
+        => configuration.Characters.TryGetValue(contentId, out var known) ? new OwnerFacts(known.AccountGroup, known.FreeCompanyId) : default;
+
+    // Every character of a policy as the planner sees it: the logged-in one from its live context, the others from their
+    // last login and the journal. A character the plugin never saw is left out, and the planner reports it unavailable.
+    public CharacterProfile[] Roster(ReadOnlySpan<ulong> contentIds, CharacterContext? loggedIn, in CyclePosition position)
+    {
+        var profiles = new List<CharacterProfile>(contentIds.Length);
+        var journal = PlanningJournal();
+        for (var index = 0; index < contentIds.Length; index++)
+        {
+            var contentId = contentIds[index];
+            if (loggedIn is { } context && context.ContentId == contentId)
+            {
+                profiles.Add(Profile(context, LastReading(contentId), position));
+            }
+            else if (Facts(contentId) is { } facts)
+            {
+                profiles.Add(RosterProfiles.Offline(facts, Region, journal, position));
+            }
+        }
+
+        return [.. profiles];
     }
 
     // An entry attempt in question for this cycle holds its entry slot. One from an earlier cycle cannot hold this cycle's
     // slot; it waits for a result check instead (ResultChecks). A refund or claim in question is the settlement's to read
     // back, not the entry run's.
-    public bool HasPendingAttempt(ulong contentId, CycleKey cycle)
-    {
-        var attempts = JournalSnapshot.Attempts;
-        for (var index = 0; index < attempts.Length; index++)
-        {
-            var attempt = attempts[index];
-            if (attempt.Kind == ActionKind.Entry
-                && attempt.CharacterContentId == contentId
-                && attempt.Cycle == cycle
-                && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public bool HasPendingAttempt(ulong contentId, CycleKey cycle) => JournalLookups.HasPendingEntry(JournalSnapshot, contentId, cycle);
 
     // An entry the reading shows that no attempt or receipt of this plugin holds is kept as an imported receipt, and a
     // refund the reading proves collected outside the plugin is recorded as settled.

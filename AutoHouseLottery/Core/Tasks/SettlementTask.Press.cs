@@ -53,11 +53,13 @@ internal sealed partial class SettlementTask
         var snapshot = journal.Snapshot();
         var context = CharacterContextReader.Read();
         var effect = context is { } shown ? ClaimRules.EffectOf(entry.Buyer, shown.FreeCompanyId is not null, shown.PersonalEstate, shown.FreeCompanyEstate) : ClaimEffect.Unknown;
+        var group = ClaimGroups.Of(snapshot, entry, services.Housing.Owner);
         var refusal = context is null
             ? ClaimRefusal.NotTheEntrant
             : ClaimRules.Check(new ClaimFacts(context.ContentId, entry, SettlementLookups.Settlement(snapshot, entry.ReceiptId)!.Value.State, context.FreeCompanyId is not null,
-                context.PersonalEstate, context.FreeCompanyEstate, ClaimRules.GroupClaimOpen(snapshot, entry)));
-        Diag($"{Label}: claiming {plot} as {entry.Buyer} would {effect}{(effect == ClaimEffect.Relocate ? " the estate held now" : string.Empty)} ({DescribeEstate(context)}); {refusal}.");
+                context.PersonalEstate, context.FreeCompanyEstate, ClaimRules.GroupClaimOpen(snapshot, entry)) { GroupAlreadyClaimed = group.Claimed });
+        Diag($"{Label}: claiming {plot} as {entry.Buyer} would {effect}{(effect == ClaimEffect.Relocate ? " the estate held now" : string.Empty)} ({DescribeEstate(context)}); "
+           + $"{group.Wins} unclaimed win(s) in its ownership group{(group.Claimed ? ", another already claimed" : string.Empty)}; {refusal}.");
         if (refusal != ClaimRefusal.None)
         {
             await CloseResult(HousingDialogs.ReadResultDialog());

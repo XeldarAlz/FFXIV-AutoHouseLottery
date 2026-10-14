@@ -5,6 +5,7 @@ using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Watchers;
+using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Settlement.Model;
@@ -32,6 +33,9 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     private volatile bool fixing;
 
     public SchedulerBlock Block { get; private set; } = SchedulerBlock.NotLoggedIn;
+
+    // The session as the last tick saw it, for the refund queue's decision to switch to another character.
+    public SchedulerFacts Facts { get; private set; }
 
     public int DueCount { get; private set; }
 
@@ -88,6 +92,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
         if (CharacterContextReader.Read() is not { } context)
         {
             Block = SchedulerBlock.NotLoggedIn;
+            Facts = default;
             return null;
         }
 
@@ -117,6 +122,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             TravelAllowance: TravelAllowance(context.ContentId, context.Gil),
             Gil: context.Gil,
             Reserve: configuration.Find.GilReserve);
+        Facts = facts;
         var block = SchedulerRules.Check(facts);
         if (block != Block)
         {
@@ -142,6 +148,9 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
         return null;
     }
+
+    // The work due for a character that is not logged in, from the journal alone.
+    public int DueCountFor(ulong contentId, in CyclePosition position) => SettlementSchedule.Due(housing.JournalSnapshot, contentId, position).Length;
 
     // A win the character's estate list now holds was claimed, by this plugin's press or in game; it is recorded as
     // claimed without a visit. A refund or claim of this plugin that was confirmed while its receipt was left behind (the

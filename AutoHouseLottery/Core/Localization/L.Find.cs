@@ -175,6 +175,8 @@ internal static partial class L
         public static readonly LocString ReasonUnavailable = new("findHome.reason.unavailable", "the plot is not open for entry");
         public static readonly LocString ReasonProfile = new("findHome.reason.profile", "character details");
         public static readonly LocString ReasonVerification = new("findHome.reason.verification", "sources disagree about the plot");
+        public static readonly LocString ReasonGroupPlot = new("findHome.reason.groupPlot", "its ownership group goes on another plot");
+        public static readonly LocString ReasonRegion = new("findHome.reason.region", "housing on its home world is not supported");
         public static readonly LocString BlockerCycle = new("findHome.blockerCycle", "The listings have not confirmed the lottery cycle yet.");
         public static readonly LocString BlockerClosed = new("findHome.blockerClosed", "The entry period is not open.");
         public static readonly LocString BlockerExpired = new("findHome.blockerExpired", "This lottery phase has ended.");

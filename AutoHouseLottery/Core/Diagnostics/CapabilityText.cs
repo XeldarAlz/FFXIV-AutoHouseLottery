@@ -53,7 +53,8 @@ internal static class CapabilityText
         CapabilityKind.LotteryRecord => L.Diagnostics.NameLotteryRecord,
         CapabilityKind.PlacardSale => L.Diagnostics.NamePlacardSale,
         CapabilityKind.WardList => L.Diagnostics.NameWardList,
-        _ => L.Diagnostics.NameWardPackets,
+        CapabilityKind.WardPackets => L.Diagnostics.NameWardPackets,
+        _ => L.Diagnostics.NameCharacterSwitch,
     };
 
     private static LocString ReasonOf(CapabilityReason reason) => reason switch
@@ -86,6 +87,8 @@ internal static class CapabilityText
         CapabilityReason.WardListNotSeen => L.Diagnostics.WardListNotSeen,
         CapabilityReason.WardListMismatch => L.Diagnostics.WardListMismatch,
         CapabilityReason.WardPacketsActive => L.Diagnostics.WardPacketsActive,
-        _ => L.Diagnostics.WardPacketsOff,
+        CapabilityReason.WardPacketsOff => L.Diagnostics.WardPacketsOff,
+        CapabilityReason.SwitchReady => L.Diagnostics.SwitchReady,
+        _ => L.Diagnostics.SwitchLifestreamMissing,
     };
 }

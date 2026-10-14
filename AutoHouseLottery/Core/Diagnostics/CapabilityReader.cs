@@ -1,4 +1,5 @@
 using System.Globalization;
+using AutoHouseLottery.Core.Batch.Model;
 using AutoHouseLottery.Core.Diagnostics.Model;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;

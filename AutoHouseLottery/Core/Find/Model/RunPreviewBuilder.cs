@@ -32,6 +32,48 @@ internal static class RunPreviewBuilder
             Exact = new ExactTarget(plot, deposit),
         };
 
+    // Ticking any character on the Characters list plans a batch for exactly the ticked ones, with their own settings.
+    // With none ticked, the shortlist drawer keeps the single-character plan for the logged-in character from the filters.
+    public static bool IsBatch(ReadOnlySpan<RosterEntry> selected) => !selected.IsEmpty;
+
+    // The batch plan: the frozen shortlist and one settings row per selected character, each taking the filters' buyer,
+    // the price ceiling and the shared reserve unless the player set its own, and its own automatic refund setting, as its
+    // run will. Revision follows the shortlist, so a changed shortlist is a new plan.
+    public static RunPolicy BatchPolicy(
+        ReadOnlySpan<RosterEntry> selected,
+        BuyerType filterBuyer,
+        long priceCeiling,
+        long sharedReserve,
+        in ShortlistSnapshot shortlist,
+        in CyclePosition position,
+        PlacementChoice placement,
+        bool multipleWinRiskAccepted)
+    {
+        var characters = new CharacterRunSettings[selected.Length];
+        for (var index = 0; index < characters.Length; index++)
+        {
+            var choice = selected[index].Selection;
+            var buyer = choice.Buyer == BuyerType.Unknown ? filterBuyer : choice.Buyer;
+            var cap = choice.DepositCap > 0 ? choice.DepositCap : priceCeiling;
+            characters[index] = new CharacterRunSettings(selected[index].ContentId, buyer, cap, choice.Reserve ?? sharedReserve)
+            {
+                Target = choice.Target,
+                ManualRefunds = selected[index].ManualRefunds,
+            };
+        }
+
+        return new RunPolicy
+        {
+            Revision = shortlist.Revision,
+            Cycle = position,
+            Characters = [.. characters],
+            TravelAllowance = PreviewTravelAllowance,
+            Shortlist = shortlist,
+            Placement = placement,
+            MultipleWinRiskAccepted = multipleWinRiskAccepted,
+        };
+    }
+
     // The buyer is the player's own choice in the filters. A plot sold to one buyer type only confirms that choice:
     // no choice, or a choice the plot does not take, gives no buyer. A plot whose buyers are not reported takes the
     // choice, and the placard checks it before anything is pressed.

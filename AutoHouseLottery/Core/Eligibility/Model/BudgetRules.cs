@@ -35,4 +35,13 @@ internal static class BudgetRules
 
         return required <= gil ? BudgetCheck.Fits : BudgetCheck.BelowReserve;
     }
+
+    // What the character must hold for one deposit: the deposit, its travel allowance and its reserve. False on overflow.
+    public static bool TryRequired(in CharacterBudget budget, long deposit, out long required)
+    {
+        required = 0;
+        return deposit > 0
+            && Gil.TryAdd(deposit, budget.TravelAllowance, out var outgoing)
+            && Gil.TryAdd(outgoing, budget.GilReserve, out required);
+    }
 }

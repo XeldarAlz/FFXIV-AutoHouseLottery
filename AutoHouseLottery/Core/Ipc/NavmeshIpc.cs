@@ -55,6 +55,19 @@ internal sealed class NavmeshIpc
     public bool IsRunning()
         => IpcGate.Invoke(pathIsRunning.HasFunction, isRunningCall, false, IsRunningFailed);
 
+    // For a decision that must not run over somebody else's path: false only when vnavmesh is not loaded or says it is
+    // neither moving nor pathfinding; null when it is loaded but cannot say.
+    public bool? MovingOrUnknown()
+    {
+        if (!Available)
+        {
+            return false;
+        }
+
+        var moving = IpcGate.Invoke<bool?>(pathIsRunning.HasFunction, () => isRunningCall(), null, IsRunningFailed);
+        return moving is null ? null : moving.Value || IsPathfinding();
+    }
+
     public bool IsPathfinding()
         => IpcGate.Invoke(simpleMovePathfindInProgress.HasFunction, simpleMovePathfindInProgressCall, false, SimpleMovePathfindFailed)
         || IpcGate.Invoke(navPathfindInProgress.HasFunction, navPathfindInProgressCall, false, NavPathfindFailed);

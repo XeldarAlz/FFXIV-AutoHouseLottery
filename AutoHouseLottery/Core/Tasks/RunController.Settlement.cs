@@ -222,8 +222,14 @@ internal sealed partial class RunController
             return;
         }
 
-        if (next is not { } due || Busy || otherWork)
+        if (Busy || otherWork)
         {
+            return;
+        }
+
+        if (next is not { } due)
+        {
+            TryStartRefundSwitch(DateTime.UtcNow);
             return;
         }
 

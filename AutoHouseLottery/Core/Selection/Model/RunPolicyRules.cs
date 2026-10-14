@@ -71,6 +71,12 @@ internal static class RunPolicyRules
                 return RunPolicyError.NegativeReserve;
             }
 
+            var targetError = ValidateTarget(policy, settings.Target);
+            if (targetError != RunPolicyError.None)
+            {
+                return targetError;
+            }
+
             for (var earlierIndex = 0; earlierIndex < index; earlierIndex++)
             {
                 if (characters[earlierIndex].ContentId == settings.ContentId)
@@ -81,5 +87,21 @@ internal static class RunPolicyRules
         }
 
         return RunPolicyError.None;
+    }
+
+    // A character's own target is a plot of the frozen shortlist; an exact-plot policy already names the one plot.
+    private static RunPolicyError ValidateTarget(RunPolicy policy, PlotKey? target)
+    {
+        if (target is not { } plot)
+        {
+            return RunPolicyError.None;
+        }
+
+        if (policy.Exact is not null)
+        {
+            return RunPolicyError.AmbiguousTarget;
+        }
+
+        return plot.IsValid && policy.Shortlist is { } shortlist && shortlist.Plots.IndexOf(plot) >= 0 ? RunPolicyError.None : RunPolicyError.InvalidExactTarget;
     }
 }

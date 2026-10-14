@@ -27,7 +27,8 @@ internal static class RunPanel
 
     private static bool detailsOpen;
 
-    public static bool Visible(RunController controller) => controller.Busy || controller.Status.RunId != Guid.Empty || SettlementPanel.Visible(controller);
+    public static bool Visible(RunController controller)
+        => controller.Busy || controller.Status.RunId != Guid.Empty || SettlementPanel.Visible(controller) || BatchPanel.Visible(controller);
 
     // On the run's own page the dock below holds Pause and Stop, so the card leaves them out and keeps the page's room
     // for the results.
@@ -35,6 +36,12 @@ internal static class RunPanel
     {
         var controller = plugin.Controller;
         var status = controller.Status;
+        if (BatchPanel.Visible(controller))
+        {
+            BatchPanel.Draw(plugin);
+            Styling.VSpace(SectionGap);
+        }
+
         if (SettlementPanel.Visible(controller) && !controller.Running)
         {
             SettlementPanel.Draw(plugin);

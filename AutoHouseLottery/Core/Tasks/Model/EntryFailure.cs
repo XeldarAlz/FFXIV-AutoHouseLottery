@@ -43,6 +43,10 @@ internal enum EntryFailure : byte
     CharacterChanged,
     InspectionsExhausted,
 
+    // A batch member left out because another character of its ownership group entered a plot it cannot follow: a different
+    // plot, or one that could not be read.
+    GroupEnteredElsewhere,
+
     // A press may have reached the game.
     SubmissionUncertain,
 }

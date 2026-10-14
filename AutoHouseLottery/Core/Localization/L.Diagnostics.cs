@@ -22,6 +22,7 @@ internal static partial class L
         public static readonly LocString NamePlacardSale = new("diagnostics.name.placardSale", "Placard sale details");
         public static readonly LocString NameWardList = new("diagnostics.name.wardList", "Ward list window");
         public static readonly LocString NameWardPackets = new("diagnostics.name.wardPackets", "Ward list data");
+        public static readonly LocString NameCharacterSwitch = new("diagnostics.name.characterSwitch", "Switching characters");
 
         public static readonly LocString StateReady = new("diagnostics.state.ready", "Ready");
         public static readonly LocString StateFallback = new("diagnostics.state.fallback", "Fallback");
@@ -58,5 +59,7 @@ internal static partial class L
         public static readonly LocString WardListMismatch = new("diagnostics.reason.wardListMismatch", "The ward list window does not match the layout the plugin expects on this game build, so ward lists are not read. Entries still read each plot's placard.");
         public static readonly LocString WardPacketsActive = new("diagnostics.reason.wardPacketsActive", "The plot data the game sends with each ward list is copied as it arrives.");
         public static readonly LocString WardPacketsOff = new("diagnostics.reason.wardPacketsOff", "Not available on this game build. Ward lists are read from their window alone.");
+        public static readonly LocString SwitchReady = new("diagnostics.reason.switchReady", "Batches and, when its option is on, the refund queue log in each character through Lifestream.");
+        public static readonly LocString SwitchLifestreamMissing = new("diagnostics.reason.switchLifestreamMissing", "Lifestream does not offer its character change to other plugins, so characters are never switched. Update Lifestream.");
     }
 }

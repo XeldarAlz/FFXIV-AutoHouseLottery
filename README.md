@@ -31,10 +31,29 @@ Pick a plot and press **Enter**, or build a shortlist and press **Enter best mat
 - **Enter best match**: ranks your shortlist by open entry, fewest entries and lowest deposit, and enters the first plot that still passes the live checks.
 - **Run panel**: follow each step with Pause and Stop, in the window or a compact strip.
 - **My lottery**: your entries with deposit, lottery number and deadline, and one button each to check the result, claim the house or collect the refund.
-- **Automatic refunds**: once results are out and you are idle, visits your entered plots and reads their results, within a travel budget and your gil reserve.
+- **Several characters**: tick characters on the Characters list and press **Enter for N characters** to enter once for each, every one paying from its own gil. Characters that can claim only one plot between them are kept on the same plot, and Lifestream logs in each character in turn.
+- **Automatic refunds**: once results are out and you are idle, visits your entered plots and reads their results, within a travel budget and your gil reserve. With **Switch characters to collect refunds** on, it then logs in your other ticked characters that have a result waiting.
 - **Saved**: named searches and plot lists, with notices when a plot opens for entry, is about to close, or has results.
 - **Safe by design**: checks the plot at the placard and again on the confirmation, records every press before making it, and never presses twice when an outcome is unclear.
 - **GM alert**: ends a run when a GM is near, with optional pop-up, beeps, or custom commands.
+
+## Multiple characters
+
+Tick characters on the Characters list in the shortlist drawer and the drawer plans exactly the ticked ones (with none ticked it plans the logged-in character as before). Each character makes at most one entry per lottery period and pays from its own gil; nothing is pooled.
+
+- **Characters list**: every character the plugin has seen logged in. Give each ticked character its own buyer type, target (the best match or one plot of the shortlist on its home world), deposit cap and reserve; anything left blank takes the filters' buyer type, the price ceiling and the shared reserve. A character that is not logged in shows the gil it had at its last login, marked as an estimate: that amount never proves or rules out that it can pay. Characters that already entered this period, or whose home world is not supported, say so.
+- **Ownership groups**: the game lets only one plot be claimed per Free Company for Free Company plots, and per service account and home world for private plots. Set each character's service account on the Characters list; until you do, private characters on one world count as one account, which can never produce a second win that cannot be claimed.
+- **Placement**: By group (the default) puts a group's characters on the same plot and spreads separate groups across the shortlist in rank order; Same plot puts every group on the top plot; Spread gives each character the next plot. A character's own target is entered exactly, with no fallback, and the rest of its group goes on that plot too, with no fallback; a member that cannot enter it, or whose own target is another plot, is left out with that reason. A character that already entered this period, or has an entry being checked, holds its group on its plot the same way, and one whose entered plot could not be read leaves the rest of its group out. When a member enters, or its own check finds it already entered, the members of its group still waiting are pinned to that plot, and any whose plan does not include it are left out, so under By group or Same plot a group never enters two plots. While a member's entry is being checked, the rest of its group waits, and the batch card says so, until a Continue reads it back from the journal; other groups go on meanwhile. Next to Placement the run preview shows the estimated chance of at least one win and, when Spread puts one group on several plots, of two or more wins, from the reported entry counts; it is hidden when any count is unknown. Spreading inside one group needs your explicit confirmation that only one of its wins can be claimed.
+- **Enter for N characters**: every character goes through exactly the same steps and checks as a single run, including the check for a plugin that answers dialogs on its own before each Enter Lottery, and pays its own deposit. The logged-in character goes first; right before its turn each character's gil is checked against its whole target order, and its run reads its lottery record before anything else. The batch then logs in each of the others in turn (see [Character switching](#character-switching)); when Lifestream cannot switch, they wait for their own login: log in with one of them and press **Continue** on the batch card (the chat reminds you); the card says why when Continue cannot go on. The batch card lists every character's outcome with the entries first, so characters that were left out, could not pay or have not logged in yet never hide the entries the others made. A new batch is refused while one still waits; continue it or discard it. The batch ends with the entry period.
+- **Several wins in one group**: My lottery asks you to choose which plot to claim (press Claim house twice on the one you want); a second claim in that group is always refused.
+
+### Character switching
+
+The plugin switches characters itself through Lifestream's character change, for batches and, with its option on, for collecting refunds. When Lifestream does not offer it, a batch processes only the logged-in character and every other character waits for its own login, and each character's results and refunds are handled at its own login. The Plugins page (`/ahl deps`) shows whether switching is available.
+
+Before a switch, a batch saves its progress to disk, asks Lifestream to log in the next character, and does nothing for it until the game shows exactly that character (content ID and home world) and Lifestream has finished; its gil, Free Company and estates are then read again and its run reads its lottery record before anything else. No switch starts during a duty, match or world visit queue, while vnavmesh is moving you, or while AutoRetainer's multi-mode is on. The switch has a five-minute deadline; a failed login, another character chosen at the character screen, a cancel, or a plugin reload on the title screen stops the batch, and a stopped or reloaded batch continues only from your Continue.
+
+**Switch characters to collect refunds** on My lottery (off by default) lets the refund queue, once the logged-in character has nothing left to settle and you have left the game alone, log in the next character ticked on the Characters list that has a result waiting and check it there. Each character is visited once until the plugin is unloaded, never an unticked character and never one whose home world is not supported. The plugin passes only a character name and world to Lifestream and stores no account credentials.
 
 ## Install
 
@@ -61,9 +80,9 @@ The plugin needs **Lifestream** to travel to plots, and optionally **vnavmesh** 
 | `/autohouselottery log` | Open the Console page (live plugin log, copy it for bug reports) |
 | `/autohouselottery changelog` | Open the Changelog page |
 | `/autohouselottery about` | Open the About page |
-| `/autohouselottery stop` | Stop the run before its next step |
+| `/autohouselottery stop` | Stop the run, a result visit or a batch before its next step |
 | `/autohouselottery pause` | Pause the run before its next step |
-| `/autohouselottery resume` | Resume a paused run |
+| `/autohouselottery resume` | Resume a paused run, or continue a waiting batch |
 | `/autohouselottery target` | Log the targeted object's BaseId (debug helper) |
 
 Testing and maintainer commands are in [docs/testing-commands.md](docs/testing-commands.md).

@@ -66,6 +66,7 @@ internal static class SettlementText
         SettlementFailure.BuyerUnknown => L.Settlement.FailureBuyerUnknown,
         SettlementFailure.ClaimEffectUnknown => L.Settlement.FailureEffectUnknown,
         SettlementFailure.GroupClaimOpen => L.Settlement.FailureGroupClaim,
+        SettlementFailure.GroupAlreadyClaimed => L.Settlement.FailureGroupClaimed,
         SettlementFailure.AlreadyOwned => L.Settlement.FailureAlreadyOwned,
         SettlementFailure.DepositUnknown => L.Settlement.FailureDepositUnknown,
         SettlementFailure.PausedForInput => L.Settlement.FailurePausedForInput,
