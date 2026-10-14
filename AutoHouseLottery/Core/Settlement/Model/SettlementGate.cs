@@ -49,6 +49,11 @@ internal static class SettlementGate
         _ => false,
     };
 
+    // A player's click asks for a dry run until the action it can lead to has been validated in game; a requested dry
+    // run always wins, so a grant never turns a click real. Real refunds and claims before that come only from the dev
+    // command with the word real.
+    public static bool PlayerDryRun(SettlementMode mode) => !Validated(ActionOf(mode));
+
     public static ActionKind ActionOf(SettlementMode mode) => mode switch
     {
         SettlementMode.Refund => ActionKind.Refund,

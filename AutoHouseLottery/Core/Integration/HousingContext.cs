@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.IO;
 using System.Threading.Tasks;
 using AutoHouseLottery.Core.Eligibility.Model;
@@ -8,6 +9,7 @@ using AutoHouseLottery.Core.Integration.Model;
 using AutoHouseLottery.Core.Persistence;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Providers;
+using AutoHouseLottery.Core.Settlement.Model;
 
 namespace AutoHouseLottery.Core.Integration;
 
@@ -18,6 +20,8 @@ namespace AutoHouseLottery.Core.Integration;
 internal sealed class HousingContext : IDisposable
 {
     public const string JournalFileName = "journal.jsonl";
+
+    private const int MaximumSettlementPath = 8;
 
     // An earlier build kept its own calendar file next to the feed's; the feed's lottery-schedules.json is the only one.
     private const string ObsoleteScheduleFileName = "lottery-schedule.json";
@@ -156,11 +160,18 @@ internal sealed class HousingContext : IDisposable
         return false;
     }
 
-    // An entry the reading shows that no attempt or receipt of this plugin holds is kept as an imported receipt.
+    // An entry the reading shows that no attempt or receipt of this plugin holds is kept as an imported receipt, and a
+    // refund the reading proves collected outside the plugin is recorded as settled.
     public async Task ImportFromReading(LotterySnapshot reading, ulong contentId, uint homeWorldId)
     {
         lastReading = reading;
         var position = CurrentPosition(reading.ReadAtUtc);
+        var fixes = ManualSettlement.FromReading(JournalSnapshot, reading, position);
+        if (!fixes.IsEmpty)
+        {
+            await ApplySettlementFixes(fixes, "the lottery reading shows no entry");
+        }
+
         if (Journal is not { } journal || ImportedEntries.From(Guid.NewGuid(), contentId, homeWorldId, reading, position) is not { } receipt)
         {
             return;
@@ -174,6 +185,49 @@ internal sealed class HousingContext : IDisposable
         var written = await Task.Run(() => journal.ImportReceipt(receipt, DateTime.UtcNow));
         RunLog.Info($"Journal: the lottery reading shows an entry made outside this plugin for cycle {receipt.Cycle} (number {receipt.EntryNumber?.ToString() ?? "unknown"}, "
                   + $"plot {receipt.Plot?.ToString() ?? "not named"}); import {written}.");
+    }
+
+    // Settlements recognised without a visit: the receipt reaches its target through the states the journal requires, and
+    // the plugin's own refund or claim still open on it is confirmed with it. Off the framework thread.
+    public async Task ApplySettlementFixes(ImmutableArray<SettlementFix> fixes, string evidence)
+    {
+        if (Journal is not { } journal)
+        {
+            return;
+        }
+
+        await Task.Run(() =>
+        {
+            for (var index = 0; index < fixes.Length; index++)
+            {
+                ApplySettlementFix(journal, fixes[index], evidence);
+            }
+        });
+    }
+
+    private static void ApplySettlementFix(ActionJournal journal, SettlementFix fix, string evidence)
+    {
+        if (fix.ConfirmAttempt is { } attemptId)
+        {
+            journal.RequireReconciliation(attemptId, DateTime.UtcNow);
+            var confirmed = journal.Confirm(attemptId, null, DateTime.UtcNow);
+            RunLog.Info($"Journal: {evidence}, so attempt {attemptId} went through ({confirmed}).");
+        }
+
+        if (!journal.TryGetSettlement(fix.ReceiptId, out var current))
+        {
+            return;
+        }
+
+        Span<SettlementState> steps = stackalloc SettlementState[MaximumSettlementPath];
+        var count = SettlementPath.Plan(current.State, fix.Target, steps);
+        var written = JournalWrite.IllegalTransition;
+        for (var stepIndex = 0; stepIndex < count; stepIndex++)
+        {
+            written = journal.AdvanceSettlement(fix.ReceiptId, steps[stepIndex], null, DateTime.UtcNow);
+        }
+
+        RunLog.Info($"Journal: {evidence}, so receipt {fix.ReceiptId} is settled as {fix.Target} outside a visit ({(count < 0 ? "no legal path from " + current.State : written.ToString())}).");
     }
 
     private static void DeleteObsoleteScheduleFile(string path)

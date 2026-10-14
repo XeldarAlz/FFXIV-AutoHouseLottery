@@ -12,6 +12,18 @@ public sealed class SettlementPathTests
         Assert.Equal([SettlementState.InspectingResult, SettlementState.WonUnclaimed], Plan(SettlementState.OutcomeUnknown, SettlementState.WonUnclaimed));
         Assert.Equal([SettlementState.InspectingResult, SettlementState.LostRefundDue], Plan(SettlementState.NeedsReconciliation, SettlementState.LostRefundDue));
         Assert.Equal([SettlementState.ForfeitRefundDue], Plan(SettlementState.WonUnclaimed, SettlementState.ForfeitRefundDue));
+        Assert.Equal([SettlementState.ForfeitRefundDue, SettlementState.Refunded], Plan(SettlementState.WonUnclaimed, SettlementState.Refunded));
+        Assert.Equal([SettlementState.InspectingResult, SettlementState.Refunded], Plan(SettlementState.ResultsPending, SettlementState.Refunded));
+    }
+
+    [Fact]
+    public void NoWalkInventsAPressOrAQuestionAboutOne()
+    {
+        Span<SettlementState> steps = stackalloc SettlementState[8];
+        Assert.Equal(SettlementPath.Unreachable, SettlementPath.Plan(SettlementState.Entered, SettlementState.RefundPending, steps));
+        Assert.Equal(SettlementPath.Unreachable, SettlementPath.Plan(SettlementState.Entered, SettlementState.ClaimPending, steps));
+        Assert.Equal(SettlementPath.Unreachable, SettlementPath.Plan(SettlementState.Entered, SettlementState.NeedsReconciliation, steps));
+        Assert.Equal(SettlementPath.Unreachable, SettlementPath.Plan(SettlementState.ClaimPending, SettlementState.Refunded, steps));
     }
 
     [Fact]

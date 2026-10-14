@@ -31,7 +31,6 @@ internal static partial class L
         public static readonly LocString CollectRefund = new("lottery.action.collectRefund", "Collect refund");
         public static readonly LocString VerifyOutcome = new("lottery.action.verifyOutcome", "Verify outcome");
         public static readonly LocString ViewReceipt = new("lottery.action.viewReceipt", "View receipt");
-        public static readonly LocString ArrivesLater = new("lottery.arrivesLater", "Arrives with the results update");
         public static readonly LocString LogInAs = new("lottery.logInAs", "Log in as {0} to check it.");
         public static readonly LocString EnteredAt = new("lottery.enteredAt", "Entered {0}");
         public static readonly LocString EvidenceConfirmation = new("lottery.evidence.confirmation", "Recorded from the entry confirmation and your lottery entry.");

@@ -9,6 +9,7 @@ using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Selection.Model;
+using AutoHouseLottery.Core.Settlement;
 using AutoHouseLottery.Core.Tasks.Model;
 using Dalamud.Plugin.Services;
 using ECommons;
@@ -19,8 +20,9 @@ namespace AutoHouseLottery.Core.Tasks;
 
 // The single owner of game-changing work. It holds the execution lease for the whole of an entry run or a
 // reconciliation, so nothing else drives the game meanwhile, and it is the only way a run starts, pauses, resumes or
-// stops. Find a home starts runs through StartExact and StartBestMatch with a frozen policy.
-internal sealed class RunController
+// stops. Find a home starts runs through StartExact and StartBestMatch with a frozen policy; My lottery, the settlement
+// scheduler and the dev commands start settlement visits through StartSettlement (RunController.Settlement.cs).
+internal sealed partial class RunController
 {
     private const int SchedulerPollMs = TimeUnits.MillisecondsPerSecond;
     private const int ConfirmationCloseRetryMs = 5_000;
@@ -45,7 +47,10 @@ internal sealed class RunController
     public RunController(HousingContext housing, HousingObservers observers)
     {
         this.housing = housing;
-        services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater);
+        services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater, AutomaticRefunds, CollectForEntry);
+        settlementServices = new SettlementServices(housing, observers, SettlementGrantFor, ConsumeSettlementGrant, RecordSettlementTravel);
+        scheduler = new SettlementScheduler(housing, Plugin.Instance.Configuration);
+        notices = new SettlementNoticeAnnouncer(housing, Plugin.Instance.Configuration);
         reconcileWanted = true;
         Svc.Framework.Update += OnUpdate;
     }
@@ -58,7 +63,7 @@ internal sealed class RunController
 
     public bool Reconciling => reconciling is not null;
 
-    public bool Busy => Running || Reconciling;
+    public bool Busy => Running || Reconciling || Settling;
 
     public RunStatus Status => session?.Status ?? finished;
 
@@ -86,7 +91,7 @@ internal sealed class RunController
             return;
         }
 
-        if (!RunTransitions.IsLegal(active.Step, EntryStep.Paused))
+        if (!RunTransitions.IsLegal(active.Step, EntryStep.Paused) || active.CollectingInPressWindow)
         {
             if (!active.PauseRequested && active.Step != EntryStep.NeedsPlayer)
             {
@@ -154,7 +159,7 @@ internal sealed class RunController
             return;
         }
 
-        if (EntrySteps.InSubmissionWindow(active.Step) || active.Step == EntryStep.PersistIntent)
+        if (EntrySteps.InSubmissionWindow(active.Step) || active.Step == EntryStep.PersistIntent || active.CollectingInPressWindow)
         {
             active.StopRequested = true;
             active.Publish();
@@ -171,18 +176,21 @@ internal sealed class RunController
     {
         Stop();
         CancelReconcile();
+        StopSettlement();
     }
 
     public void Interrupt()
     {
         grant = null;
         End("logged out");
+        EndSettlement("logged out");
     }
 
     // The journal is closed right after this, so the last attempt write is waited for, briefly, before it is.
     public void Shutdown()
     {
         End("the plugin is unloading");
+        EndSettlement("the plugin is unloading");
         Svc.Framework.Update -= OnUpdate;
         if (pendingJournalWrite is { IsCompleted: false } write && !write.Wait(JournalWriteWaitMs))
         {
@@ -359,6 +367,14 @@ internal sealed class RunController
             return;
         }
 
+        if (active.PauseRequested && RunTransitions.IsLegal(active.Step, EntryStep.Paused))
+        {
+            PauseReason = PauseReason.Manual;
+            active.MoveTo(EntryStep.Paused);
+            RunLog.Info($"Entry run {active.RunId}: paused after the earlier refund it was collecting; Resume starts again from a fresh check.");
+            return;
+        }
+
         RunLog.Info($"Entry run {active.RunId}: waiting at {active.Step}{(active.Failure == EntryFailure.None ? string.Empty : $" ({active.Failure})")}.");
     }
 
@@ -518,6 +534,7 @@ internal sealed class RunController
         }
 
         nextPollMs = now + SchedulerPollMs;
+        notices.Tick(now);
         if (!Svc.ClientState.IsLoggedIn || !Svc.PlayerState.IsLoaded)
         {
             return;
@@ -539,6 +556,7 @@ internal sealed class RunController
 
         if (!reconcileWanted || Busy || TaskStarter.Busy || DutyWatcher.InContent() || GenericHelpers.IsOccupied() || Svc.Objects.LocalPlayer is null)
         {
+            TickSettlement(now);
             return;
         }
 
@@ -547,7 +565,10 @@ internal sealed class RunController
         {
             RunLog.Info("Reconciliation: this character has an entry attempt in question; reading its lottery entry before any further entry.");
             Reconcile();
+            return;
         }
+
+        TickSettlement(now);
     }
 
     private static CharacterRunSettings? FindSettings(RunPolicy policy, ulong contentId)

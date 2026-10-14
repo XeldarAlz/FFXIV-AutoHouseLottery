@@ -3,7 +3,11 @@ using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Integration.Model;
 using AutoHouseLottery.Core.Localization;
+using AutoHouseLottery.Core.Game.Character;
+using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Persistence.Model;
+using AutoHouseLottery.Core.Settlement;
+using AutoHouseLottery.Core.Settlement.Model;
 using AutoHouseLottery.Core.Tasks;
 using AutoHouseLottery.Windows.Components;
 using AutoHouseLottery.Windows.Sections;
@@ -30,7 +34,7 @@ internal sealed class MyLotteryPage
     private const string Separator = " · ";
     private const string DateFormat = "g";
 
-    private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State, string LogInAs);
+    private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State, string LogInAs, string? SettleHint);
 
     private ImmutableArray<RowView> rows = [];
     private ImmutableArray<ActionAttempt> cachedAttempts;
@@ -44,6 +48,12 @@ internal sealed class MyLotteryPage
     private LanguageInfo? reconcileLanguage;
     private string? reconcileText;
     private Guid expandedReceipt;
+    private string summary = string.Empty;
+    private ulong? cachedEstates;
+    private SchedulerBlock statusFor;
+    private ulong statusCharacter;
+    private LanguageInfo? statusLanguage;
+    private string statusText = string.Empty;
 
     public void Draw(Plugin plugin)
     {
@@ -51,6 +61,7 @@ internal sealed class MyLotteryPage
         var housing = plugin.HousingData;
         DrawJournalState(housing);
         Refresh(plugin);
+        DrawAutomaticRefunds(plugin);
         if (rows.IsEmpty)
         {
             EmptyState.Draw(FontAwesomeIcon.Ticket, Loc.T(L.MyLottery.Empty));
@@ -90,12 +101,17 @@ internal sealed class MyLotteryPage
         var snapshot = housing.JournalSnapshot;
         var position = housing.CurrentPosition(DateTime.UtcNow);
         var characters = plugin.Configuration.Characters.Count;
+        var context = CharacterContextReader.Read();
+        var estates = context?.PersonalEstate?.RawId ^ context?.FreeCompanyEstate?.RawId ^ context?.ContentId;
         if (snapshot.Attempts == cachedAttempts && snapshot.Receipts == cachedReceipts && snapshot.Settlements == cachedSettlements
             && position.Cycle == cachedPosition.Cycle && position.Phase == cachedPosition.Phase
-            && ReferenceEquals(Loc.Culture, cachedCulture) && characters == cachedCharacterCount)
+            && ReferenceEquals(Loc.Culture, cachedCulture) && characters == cachedCharacterCount && estates == cachedEstates)
         {
             return;
         }
+
+        cachedEstates = estates;
+        summary = Summary(NetReturn.Of(snapshot));
 
         cachedAttempts = snapshot.Attempts;
         cachedReceipts = snapshot.Receipts;
@@ -109,7 +125,8 @@ internal sealed class MyLotteryPage
         {
             var row = built[index];
             var name = CharacterName(plugin, row.ContentId);
-            views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(name, Separator, Address(row)), Facts(row), Receipt(row), StateLabel(row.State), Loc.T(L.Lottery.LogInAs, name)));
+            views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(name, Separator, Address(row)), Facts(row), Receipt(row), StateLabel(row.State), Loc.T(L.Lottery.LogInAs, name),
+                SettleHint(snapshot, row, context)));
         }
 
         rows = views.MoveToImmutable();
@@ -190,6 +207,18 @@ internal sealed class MyLotteryPage
             case LotteryAction.ViewPlot:
                 plugin.ShowPage(AppWindow.Page.FindHome);
                 return;
+            case LotteryAction.CheckResult:
+                Settle(plugin, row, SettlementMode.Inspect);
+                return;
+            case LotteryAction.CollectRefund:
+                Settle(plugin, row, SettlementMode.Refund);
+                return;
+            case LotteryAction.ClaimHouse:
+                Settle(plugin, row, SettlementMode.Claim);
+                return;
+            case LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending:
+                Settle(plugin, row, SettlementMode.Inspect);
+                return;
             case LotteryAction.VerifyOutcome:
                 plugin.Controller.Reconcile();
                 return;
@@ -205,15 +234,113 @@ internal sealed class MyLotteryPage
         return row.Action switch
         {
         LotteryAction.ViewPlot => (Loc.T(L.Lottery.ViewPlot), true, null),
-        LotteryAction.CheckResult => (Loc.T(L.Lottery.CheckResult), false, Loc.T(L.Lottery.ArrivesLater)),
-        LotteryAction.ClaimHouse => (Loc.T(L.Lottery.ClaimHouse), false, Loc.T(L.Lottery.ArrivesLater)),
-        LotteryAction.CollectRefund => (Loc.T(L.Lottery.CollectRefund), false, Loc.T(L.Lottery.ArrivesLater)),
-        LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending => (Loc.T(L.Lottery.VerifyOutcome), false, Loc.T(L.Lottery.ArrivesLater)),
+        LotteryAction.CheckResult => SettleAction(plugin, view, Loc.T(L.Lottery.CheckResult)),
+        LotteryAction.ClaimHouse => SettleAction(plugin, view, Loc.T(L.Lottery.ClaimHouse)),
+        LotteryAction.CollectRefund => SettleAction(plugin, view, Loc.T(L.Lottery.CollectRefund)),
+        LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending => SettleAction(plugin, view, Loc.T(L.Lottery.VerifyOutcome)),
         LotteryAction.VerifyOutcome => (Loc.T(L.Lottery.VerifyOutcome), !plugin.Controller.Busy && row.ContentId == Svc.PlayerState.ContentId,
             row.ContentId != Svc.PlayerState.ContentId ? view.LogInAs : ReconcileText(plugin.Controller.LastReconcile)),
         LotteryAction.ViewReceipt => (Loc.T(L.Lottery.ViewReceipt), true, null),
         _ => (view.State, false, null),
         };
+    }
+
+    // A settlement action runs only for the logged-in entrant and while nothing else drives the game. Until a refund or
+    // claim has been validated in game, the player's own click is a dry run: it reads the result and closes it.
+    private static (string Label, bool Enabled, string? Tooltip) SettleAction(Plugin plugin, in RowView view, string label)
+    {
+        var mine = view.Row.ContentId == Svc.PlayerState.ContentId;
+        return (label, mine && !plugin.Controller.Busy && plugin.HousingData.JournalWritable, mine ? view.SettleHint : view.LogInAs);
+    }
+
+    private static void Settle(Plugin plugin, LotteryRow row, SettlementMode mode)
+    {
+        var refusal = plugin.Controller.StartSettlement(row.Id, mode, SettlementOrigin.Player, SettlementGate.PlayerDryRun(mode));
+        if (refusal != SettlementRefusal.None)
+        {
+            Svc.Chat.Print($"{Core.HouseLotteryConstants.LogPrefix} {SettlementText.Refusal(refusal)}");
+        }
+    }
+
+    // What the click will do: a dry run's limits, and for a claim whether it gives a first estate or moves the one held.
+    private static string? SettleHint(in JournalSnapshot snapshot, LotteryRow row, CharacterContext? context)
+    {
+        var mode = row.Action switch
+        {
+            LotteryAction.ClaimHouse => SettlementMode.Claim,
+            LotteryAction.CollectRefund => SettlementMode.Refund,
+            _ => SettlementMode.Inspect,
+        };
+        var dryRun = SettlementGate.PlayerDryRun(mode) && mode != SettlementMode.Inspect ? Loc.T(L.Settlement.DryRunHint) : null;
+        if (mode != SettlementMode.Claim || context is null || SettlementLookups.Receipt(snapshot, row.Id) is not { } receipt)
+        {
+            return dryRun;
+        }
+
+        var address = row.Plot is { } plot ? PlotNames.Address(plot) : Loc.T(L.Lottery.PlotNotNamed);
+        var effect = ClaimRules.EffectOf(receipt.Buyer, context.FreeCompanyId is not null, context.PersonalEstate, context.FreeCompanyEstate) switch
+        {
+            ClaimEffect.Acquire => Loc.T(L.Settlement.ClaimAcquires, address),
+            ClaimEffect.Relocate => Loc.T(L.Settlement.ClaimRelocates, address),
+            _ => Loc.T(L.Settlement.ClaimEffectUnknown, address),
+        };
+        return dryRun is null ? effect : string.Concat(effect, " ", dryRun);
+    }
+
+    // Automatically collect refunds for the logged-in character, what the scheduler waits on, and the net return.
+    private void DrawAutomaticRefunds(Plugin plugin)
+    {
+        var configuration = plugin.Configuration;
+        if (Svc.ClientState.IsLoggedIn && Svc.PlayerState.IsLoaded)
+        {
+            var contentId = Svc.PlayerState.ContentId;
+            var enabled = configuration.AutomaticRefunds(contentId);
+            if (ToggleSwitch.Draw("##ahl_lottery_auto_refunds", ref enabled))
+            {
+                configuration.SetAutomaticRefunds(contentId, enabled);
+                Core.RunLog.Info($"Automatic refunds turned {(enabled ? "on" : "off")} for {Svc.PlayerState.CharacterName}.");
+            }
+
+            ImGui.SameLine();
+            ImGui.TextUnformatted(Loc.T(L.Settlement.AutomaticRefunds));
+            if (ImGui.IsItemHovered())
+            {
+                Tooltip.Show(Loc.T(L.Settlement.AutomaticRefundsHelp));
+            }
+
+            ImGui.SameLine();
+            ImGui.TextColored(Styling.TextDim, SchedulerStatus(plugin.Controller.SchedulerBlock, contentId));
+        }
+
+        if (summary.Length > 0)
+        {
+            ImGui.TextColored(Styling.TextDim, summary);
+        }
+
+        Styling.VSpace(RowGap);
+    }
+
+    private string SchedulerStatus(SchedulerBlock block, ulong contentId)
+    {
+        if (block != statusFor || contentId != statusCharacter || !ReferenceEquals(Loc.Current, statusLanguage))
+        {
+            statusFor = block;
+            statusCharacter = contentId;
+            statusLanguage = Loc.Current;
+            statusText = SettlementText.Block(block);
+        }
+
+        return statusText;
+    }
+
+    private static string Summary(in NetReturnSummary net)
+    {
+        var line = string.Concat(
+            Loc.T(L.Settlement.SummaryReceived, Loc.Gil(net.RefundReceived)), Separator,
+            Loc.T(L.Settlement.SummaryTravel, Loc.Gil(net.TravelSpent)), Separator,
+            Loc.T(L.Settlement.SummaryNet, Loc.Gil(net.NetReturned)), Separator,
+            Loc.T(L.Settlement.SummaryPending, Loc.Gil(net.StillPending)));
+        return net.AmountsUnknown == 0 ? line : string.Concat(line, Separator, Loc.Plural(L.Settlement.SummaryUnknown, net.AmountsUnknown));
     }
 
     // The last read-back's result, formatted again only when it changes.

@@ -8,13 +8,21 @@ using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Integration.Model;
+using AutoHouseLottery.Core.Settlement.Model;
 using AutoHouseLottery.Core.Tasks.Model;
 using AutoHouseLottery.Core.Travel;
 using AutoHouseLottery.Core.Travel.Model;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-internal sealed record RunServices(HousingContext Housing, HousingObservers Observers, Func<RealEntryGrant?> Grant, Action ConsumeGrant, Action CloseConfirmationLater);
+internal sealed record RunServices(
+    HousingContext Housing,
+    HousingObservers Observers,
+    Func<RealEntryGrant?> Grant,
+    Action ConsumeGrant,
+    Action CloseConfirmationLater,
+    Func<ulong, bool> AutomaticRefunds,
+    Func<Guid, bool, SettlementTask> Collect);
 
 // Drives one character's entry through the steps of TECHNICAL_DESIGN section 11. Each await does at most one validated
 // operation and every wait has its own deadline. A pause or stop before the intent cancels this task and relaunches
@@ -23,6 +31,9 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
 {
     private const int ObservePollFrames = 15;
     private const int TimersPassWatchdogMs = 75_000;
+
+    // The refund driver's own waits bound the visit; this only catches a visit that never reports back.
+    private const int CollectWatchdogMs = 900_000;
 
     private LotterySnapshot? reading;
     private HousingText? rejection;
@@ -57,7 +68,7 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
 
     private async Task RunSteps()
     {
-        if (!await Preflight() || !SettleOutstanding() || !ReserveFunds())
+        if (!await Preflight() || !await SettleOutstanding() || !ReserveFunds())
         {
             return;
         }
@@ -146,19 +157,59 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
         }
     }
 
-    // The game refuses a new entry while a refund or a won plot from an earlier entry waits; collecting refunds
-    // arrives with the results update, so for now the run stops and says which.
-    private bool SettleOutstanding()
+    // The game refuses a new entry while a refund or a won plot from an earlier entry waits (LogMessage 6100). With
+    // automatic refunds on, the refund driver visits that entry first, in this run's own lease and with this run's own
+    // dry-run choice; a dry run cannot free the slot, so the run stops there and says so. A win stops for the player.
+    private async Task<bool> SettleOutstanding()
     {
         Move(EntryStep.SettleOutstanding);
-        var outstanding = services.Housing.Outstanding(session.Settings.ContentId, session.Policy.Cycle.Cycle);
-        return outstanding.Kind switch
+        var contentId = session.Settings.ContentId;
+        var outstanding = services.Housing.Outstanding(contentId, session.Policy.Cycle.Cycle);
+        var step = OutstandingPlan.Decide(outstanding.Kind, services.AutomaticRefunds(contentId));
+        Diag($"Entry run {session.RunId}: outstanding earlier entry {outstanding.Kind}{(outstanding.ReceiptId is { } held ? $" ({held})" : string.Empty)}; {step}.");
+        if (step == OutstandingStep.CollectFirst && outstanding.ReceiptId is { } receiptId)
         {
-            OutstandingKind.UnclaimedWin => FinishWith(EntryFailure.UnclaimedWin),
-            OutstandingKind.RefundDue => FinishWith(EntryFailure.CollectRefundFirst),
-            OutstandingKind.ResultUnchecked => FinishWith(EntryFailure.CheckEarlierResult),
-            _ => true,
+            step = await CollectOutstanding(receiptId);
+            if (session.StopRequested || session.PauseRequested)
+            {
+                return false;
+            }
+
+            if (step == OutstandingStep.Proceed)
+            {
+                var remaining = services.Housing.Outstanding(contentId, session.Policy.Cycle.Cycle);
+                step = remaining.Kind == OutstandingKind.None ? OutstandingStep.Proceed : OutstandingPlan.Decide(remaining.Kind, automaticRefunds: false);
+            }
+        }
+
+        return step switch
+        {
+            OutstandingStep.Proceed => true,
+            OutstandingStep.StopUnclaimedWin => FinishWith(EntryFailure.UnclaimedWin),
+            OutstandingStep.StopDryRunCollection => FinishWith(EntryFailure.RefundDryRun),
+            OutstandingStep.StopCheckEarlierResult => FinishWith(EntryFailure.CheckEarlierResult),
+            _ => FinishWith(EntryFailure.CollectRefundFirst),
         };
+    }
+
+    private async Task<OutstandingStep> CollectOutstanding(Guid receiptId)
+    {
+        var collect = services.Collect(receiptId, session.DryRunRequested);
+        session.Collecting = collect;
+        try
+        {
+            await RunCancellable(collect, CollectWatchdogMs, "run-collect-earlier-refund");
+        }
+        finally
+        {
+            session.Collecting = null;
+        }
+
+        CancelToken.ThrowIfCancellationRequested();
+        var visit = collect.Progress;
+        Diag($"Entry run {session.RunId}: the earlier entry's visit ended {visit.Result}{(visit.Failure == Settlement.Model.SettlementFailure.None ? string.Empty : $" ({visit.Failure})")}"
+           + $"{(visit.Outcome is { } outcome ? $", outcome {outcome}" : string.Empty)}.");
+        return OutstandingPlan.AfterCollection(visit.Result, visit.Outcome);
     }
 
     private bool ReserveFunds()

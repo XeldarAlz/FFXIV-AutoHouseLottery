@@ -76,6 +76,15 @@ internal sealed partial class SettlementTask
             return;
         }
 
+        var target = InspectionRules.StateOf(verdict.Outcome);
+        if (SettlementPath.Plan(recorded.State, target, new SettlementState[MaximumPath]) == SettlementPath.Unreachable)
+        {
+            Warn($"Settlement {visitId}: receipt {entry.ReceiptId} cannot go from {recorded.State} to {target}; nothing is recorded.");
+            await CloseResult(dialog);
+            End(SettlementResult.NeedsPlayer, SettlementFailure.ContradictsRecord);
+            return;
+        }
+
         if (!await Record(journal, entry, verdict, dialog, open))
         {
             await CloseResult(dialog);

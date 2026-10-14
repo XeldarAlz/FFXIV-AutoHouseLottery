@@ -93,6 +93,11 @@ internal static class MiniPlayer
             return Loc.T(L.Run.Checking);
         }
 
+        if (controller.Settling)
+        {
+            return SettlementPanelText.Shared.For(controller.Settlement).Title;
+        }
+
         if (status.Step == EntryStep.NeedsReconciliation)
         {
             return Loc.T(L.Run.UncertainTitle);

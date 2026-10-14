@@ -7,7 +7,7 @@ namespace AutoHouseLottery.Core.Settlement.Model;
 
 internal enum SettlementNoticeKind : byte { ResultsAvailable, ClaimDeadline, RefundDeadline }
 
-// Each notice belongs to one receipt, so it fires once for that entry however often the plugin reloads or catches up.
+// Each notice belongs to one receipt, so it fires once for that entry across reloads and catch-ups.
 internal readonly record struct SettlementNotice(SettlementNoticeKind Kind, Guid ReceiptId, ulong ContentId, PlotKey? Plot, string? AddressText, DateTime? DeadlineUtc)
 {
     public string Key => string.Create(CultureInfo.InvariantCulture, $"{Kind}:{ReceiptId:N}");

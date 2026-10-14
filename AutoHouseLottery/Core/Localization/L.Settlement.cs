@@ -1,0 +1,84 @@
+namespace AutoHouseLottery.Core.Localization;
+
+internal static partial class L
+{
+    internal static class Settlement
+    {
+        public static readonly LocString AutomaticRefunds = new("settlement.automaticRefunds", "Automatically collect refunds");
+        public static readonly LocString AutomaticRefundsHelp = new("settlement.automaticRefundsHelp", "When results are available, visit your entered plots and collect losing deposits while you are available. The game refuses a new entry until earlier refunds are collected, so with this off you collect them by hand before the next lottery.");
+        public static readonly LocString BlockOff = new("settlement.block.off", "Off for this character.");
+        public static readonly LocString BlockNothingDue = new("settlement.block.nothingDue", "Nothing to collect right now.");
+        public static readonly LocString BlockDuty = new("settlement.block.duty", "Waits until you leave the duty.");
+        public static readonly LocString BlockCombat = new("settlement.block.combat", "Waits until combat ends.");
+        public static readonly LocString BlockCutscene = new("settlement.block.cutscene", "Waits until the cutscene ends.");
+        public static readonly LocString BlockBusy = new("settlement.block.busy", "Waits for other work to finish.");
+        public static readonly LocString BlockOccupied = new("settlement.block.occupied", "Waits until the game's windows are closed.");
+        public static readonly LocString BlockTyping = new("settlement.block.typing", "Waits while you type.");
+        public static readonly LocString BlockNotIdle = new("settlement.block.notIdle", "Starts after 30 seconds without input from you.");
+        public static readonly LocString BlockStarting = new("settlement.block.starting", "Starting.");
+        public static readonly LocString SummaryReceived = new("settlement.summary.received", "Refund received {0}");
+        public static readonly LocString SummaryTravel = new("settlement.summary.travel", "Travel spent {0}");
+        public static readonly LocString SummaryNet = new("settlement.summary.net", "Net returned {0}");
+        public static readonly LocString SummaryPending = new("settlement.summary.pending", "Still pending {0}");
+        public static readonly LocPlural SummaryUnknown = new("settlement.summary.unknown", "{0} amount not seen", "{0} amounts not seen");
+        public static readonly LocString DryRunHint = new("settlement.dryRunHint", "Dry run: it reads the result and closes it. Nothing is collected or claimed.");
+        public static readonly LocString DryRunNote = new("settlement.dryRunNote", "dry run");
+        public static readonly LocString ClaimAcquires = new("settlement.claimAcquires", "Claims {0} as a new estate.");
+        public static readonly LocString ClaimRelocates = new("settlement.claimRelocates", "Claims {0} and moves the estate you hold now to it.");
+        public static readonly LocString ClaimEffectUnknown = new("settlement.claimEffectUnknown", "Claims {0}. Whether it moves an estate you hold is not known yet.");
+        public static readonly LocString TitleInspect = new("settlement.title.inspect", "Checking a lottery result");
+        public static readonly LocString TitleRefund = new("settlement.title.refund", "Collecting a refund");
+        public static readonly LocString TitleClaim = new("settlement.title.claim", "Claiming a house");
+        public static readonly LocString StepReading = new("settlement.step.reading", "Reading the result");
+        public static readonly LocString StepPressing = new("settlement.step.pressing", "Accepting the result");
+        public static readonly LocString CheckedTitle = new("settlement.checkedTitle", "Result checked");
+        public static readonly LocString DryRunTitle = new("settlement.dryRunTitle", "Dry run finished");
+        public static readonly LocString DryRunBody = new("settlement.dryRunBody", "{0} The result was closed instead of accepted, and nothing was collected or claimed.");
+        public static readonly LocString RefundedTitle = new("settlement.refundedTitle", "Refund collected");
+        public static readonly LocString RefundedBody = new("settlement.refundedBody", "{0} came back for {1}.");
+        public static readonly LocString RefundedDiffersBody = new("settlement.refundedDiffersBody", "{0} came back for {1}, not the {2} the game offered. The amount that came back is what is recorded.");
+        public static readonly LocString ClaimedTitle = new("settlement.claimedTitle", "House claimed");
+        public static readonly LocString ClaimedBody = new("settlement.claimedBody", "{0} is yours. Building the house is a separate step.");
+        public static readonly LocString UncertainTitle = new("settlement.uncertainTitle", "Checking whether it went through");
+        public static readonly LocString UncertainBody = new("settlement.uncertainBody", "The game may have accepted it, but the plugin could not confirm it. Nothing is pressed again; Verify outcome on My lottery reads it back.");
+        public static readonly LocString StoppedTitle = new("settlement.stoppedTitle", "Visit stopped");
+        public static readonly LocString NeedsPlayerTitle = new("settlement.needsPlayerTitle", "Waiting for you");
+        public static readonly LocString OutcomeWon = new("settlement.outcome.won", "You won {0}. Claim it on My lottery before the results period ends.");
+        public static readonly LocString OutcomeLost = new("settlement.outcome.lost", "{0} went to another entrant. A refund of {1} is due.");
+        public static readonly LocString OutcomeForfeit = new("settlement.outcome.forfeit", "The win on {0} was not claimed in time. A refund of {1} is due after the 50% fee.");
+        public static readonly LocString OutcomeExpired = new("settlement.outcome.expired", "The refund for {0} has expired.");
+        public static readonly LocString OutcomeClaimed = new("settlement.outcome.claimed", "{0} is claimed.");
+        public static readonly LocString OutcomeRefunded = new("settlement.outcome.refunded", "The deposit for {0} was already returned outside the plugin.");
+        public static readonly LocString OutcomeNotEntered = new("settlement.outcome.notEntered", "{0} shows no entry of this character, so the earlier attempt never entered.");
+        public static readonly LocString FailureCharacter = new("settlement.failure.character", "Log in as the character who entered.");
+        public static readonly LocString FailureNothing = new("settlement.failure.nothing", "There is nothing left to settle for this entry.");
+        public static readonly LocString FailureResultsNotOut = new("settlement.failure.resultsNotOut", "The results for this entry are not out yet.");
+        public static readonly LocString FailureInQuestion = new("settlement.failure.inQuestion", "An earlier refund or claim for this entry is still being checked.");
+        public static readonly LocString FailurePlotUnknown = new("settlement.failure.plotUnknown", "The plot of this entry could not be told from your Timers. Check its result at its placard yourself.");
+        public static readonly LocString FailureReserve = new("settlement.failure.reserve", "This character's gil is at its reserve.");
+        public static readonly LocString FailureTravelBudget = new("settlement.failure.travelBudget", "This session's travel budget is spent.");
+        public static readonly LocString FailureNoResult = new("settlement.failure.noResult", "The placard offers no result to this character and the lottery entry still shows. Check it in game.");
+        public static readonly LocString FailureResultNotShown = new("settlement.failure.resultNotShown", "View Lottery Results showed no result.");
+        public static readonly LocString FailureUnknownDialog = new("settlement.failure.unknownDialog", "The game showed a window the plugin does not recognise; it was left alone.");
+        public static readonly LocString FailureAmount = new("settlement.failure.amount", "The refund amount could not be read, so nothing was recorded.");
+        public static readonly LocString FailureContradicts = new("settlement.failure.contradicts", "The result does not match what was recorded earlier. Check it in game.");
+        public static readonly LocString FailureRefundDiffers = new("settlement.failure.refundDiffers", "The game offers a refund that differs from the recorded deposit. Collect it in game after checking it.");
+        public static readonly LocString FailurePressRefused = new("settlement.failure.pressRefused", "Yes could not be pressed. Nothing was collected or claimed.");
+        public static readonly LocString FailureNotEntrant = new("settlement.failure.notEntrant", "Only the character who entered can claim this plot.");
+        public static readonly LocString FailureBuyerUnknown = new("settlement.failure.buyerUnknown", "Whether this was a private or a free company entry is not known. Claim it in game.");
+        public static readonly LocString FailureEffectUnknown = new("settlement.failure.effectUnknown", "Whether the claim would move an estate you hold is not known yet. Open your free company window, then try again.");
+        public static readonly LocString FailureGroupClaim = new("settlement.failure.groupClaim", "Another claim on this world is still being checked. Only one claim goes through at a time.");
+        public static readonly LocString FailureAlreadyOwned = new("settlement.failure.alreadyOwned", "This plot is already yours.");
+        public static readonly LocString FailureDepositUnknown = new("settlement.failure.depositUnknown", "The deposit of this entry is not known. Claim it in game.");
+        public static readonly LocString FailurePausedForInput = new("settlement.failure.pausedForInput", "You came back, so the automatic visit stopped. It starts again when you are idle.");
+        public static readonly LocString FailureStopped = new("settlement.failure.stopped", "Stopped before anything was accepted.");
+        public static readonly LocString FailureInterrupted = new("settlement.failure.interrupted", "The visit was interrupted.");
+        public static readonly LocString NoticeResults = new("settlement.notice.results", "Results are out for {0} ({1}). Check the result on My lottery.");
+        public static readonly LocString NoticeClaimDeadline = new("settlement.notice.claimDeadline", "{1} won {0}. Claim it before {2}.");
+        public static readonly LocString NoticeRefundDeadline = new("settlement.notice.refundDeadline", "The refund for {0} ({1}) can be collected until about {2}.");
+        public static readonly LocPlural NoticeSummary = new("settlement.notice.summary", "{0} lottery notice", "{0} lottery notices");
+        public static readonly LocString NoticeSummaryBody = new("settlement.notice.summaryBody", "My lottery shows what needs your attention.");
+        public static readonly LocString ReadyTitle = new("settlement.ready.title", "Refund collection ready");
+        public static readonly LocPlural ReadyBody = new("settlement.ready.body", "{0} entry waits for its result or its refund. It starts when you are idle, or press its button on My lottery.", "{0} entries wait for their result or their refund. They start when you are idle, or press their buttons on My lottery.");
+    }
+}

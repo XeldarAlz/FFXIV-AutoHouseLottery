@@ -37,6 +37,7 @@ internal enum EntryFailure : byte
     CharacterIneligible,
     AlreadyEntered,
     CollectRefundFirst,
+    RefundDryRun,
     CheckEarlierResult,
     UnclaimedWin,
     CycleChanged,
@@ -92,6 +93,7 @@ internal static class FallbackRules
             or EntryFailure.CharacterIneligible
             or EntryFailure.AlreadyEntered
             or EntryFailure.CollectRefundFirst
+            or EntryFailure.RefundDryRun
             or EntryFailure.CheckEarlierResult
             or EntryFailure.UnclaimedWin
             or EntryFailure.CycleChanged

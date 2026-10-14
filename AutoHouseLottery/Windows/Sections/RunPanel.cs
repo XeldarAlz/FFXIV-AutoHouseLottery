@@ -25,12 +25,18 @@ internal static class RunPanel
 
     private static bool detailsOpen;
 
-    public static bool Visible(RunController controller) => controller.Busy || controller.Status.RunId != Guid.Empty;
+    public static bool Visible(RunController controller) => controller.Busy || controller.Status.RunId != Guid.Empty || SettlementPanel.Visible(controller);
 
     public static void Draw(Plugin plugin)
     {
         var controller = plugin.Controller;
         var status = controller.Status;
+        if (SettlementPanel.Visible(controller) && !controller.Running)
+        {
+            SettlementPanel.Draw(plugin);
+            Styling.VSpace(SectionGap);
+        }
+
         if (controller.Reconciling && !controller.Running)
         {
             DrawReconciling();

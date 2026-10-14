@@ -11,8 +11,9 @@ internal static class SettlementPath
 
     // The shortest walk of legal transitions from one recorded state to another, written into steps without the start;
     // the number of steps, 0 when already there, Unreachable when the journal's transitions do not lead there. So an
-    // inspection can record its outcome through the states the journal requires on the way. Only the inspection states
-    // may be passed through: a walk never invents a press (RefundPending, ClaimPending) or a question about one.
+    // inspection can record its outcome through the states the journal requires on the way. Only the inspection states,
+    // and a forfeited win's refund on the way to a settled state, may be passed through: a walk never invents a press
+    // (RefundPending, ClaimPending) or a question about one.
     public static int Plan(SettlementState from, SettlementState to, Span<SettlementState> steps)
     {
         if (from == to)
@@ -38,7 +39,7 @@ internal static class SettlementPath
                     continue;
                 }
 
-                if (next != to && !IsWaypoint(next))
+                if (next != to && !IsWaypoint(next, to))
                 {
                     continue;
                 }
@@ -56,7 +57,10 @@ internal static class SettlementPath
         return Unreachable;
     }
 
-    private static bool IsWaypoint(SettlementState state) => state is SettlementState.ResultsPending or SettlementState.InspectingResult;
+    // A forfeited win's refund is passed through only on the way to a settled state, never to a press.
+    private static bool IsWaypoint(SettlementState state, SettlementState to)
+        => state is SettlementState.ResultsPending or SettlementState.InspectingResult
+        || (state == SettlementState.ForfeitRefundDue && SettlementTransitions.IsSettled(to));
 
     private static int Unwind(SettlementState from, SettlementState to, ReadOnlySpan<sbyte> previous, Span<SettlementState> steps)
     {

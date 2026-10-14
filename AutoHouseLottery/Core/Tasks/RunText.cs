@@ -71,6 +71,7 @@ internal static class RunText
             EntryFailure.CharacterIneligible => L.RunFailure.CharacterIneligible,
             EntryFailure.AlreadyEntered => L.RunFailure.AlreadyEntered,
             EntryFailure.CollectRefundFirst => L.RunFailure.CollectRefundFirst,
+            EntryFailure.RefundDryRun => L.RunFailure.RefundDryRun,
             EntryFailure.CheckEarlierResult => L.RunFailure.CheckEarlierResult,
             EntryFailure.UnclaimedWin => L.RunFailure.UnclaimedWin,
             EntryFailure.CycleChanged => L.RunFailure.CycleChanged,

@@ -19,7 +19,12 @@ namespace AutoHouseLottery.Core.Tasks;
 // own click), with the reserve kept either way.
 internal sealed record SettlementRequest(Guid Id, SettlementMode Mode, SettlementOrigin Origin, bool DryRun, long? TravelAllowance, long GilReserve);
 
-internal sealed record SettlementServices(HousingContext Housing, HousingObservers Observers, Func<ActionKind, SettlementGrant?> Grant, Action<ActionKind> ConsumeGrant);
+internal sealed record SettlementServices(
+    HousingContext Housing,
+    HousingObservers Observers,
+    Func<ActionKind, SettlementGrant?> Grant,
+    Action<ActionKind> ConsumeGrant,
+    Action<ulong, long> TravelSpent);
 
 // The settlement driver of TECHNICAL_DESIGN sections 12 and 13: it travels to an entered plot, reads its result through
 // View Lottery Results, records what the result row says, and then either closes the dialog or, for a refund or a claim
@@ -102,7 +107,8 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
         }
 
         plot = resolved;
-        Publish(Progress with { Plot = plot });
+        var action = SettlementGate.ActionOf(request.Mode);
+        Publish(Progress with { Plot = plot, Real = SettlementGate.MayPress(action, SettlementGate.Validated(action), request.DryRun, services.Grant(action), Progress.ContentId, plot) });
         if (request.Mode == SettlementMode.Claim && receipt is { } claimed && SettlementLookups.OpenAttempt(services.Housing.JournalSnapshot, claimed.ReceiptId) is { Kind: ActionKind.Claim })
         {
             await ReadBackClaim(claimed);
@@ -222,6 +228,7 @@ internal sealed partial class SettlementTask(SettlementRequest request, Settleme
 
         var spent = before - after;
         Publish(Progress with { TravelSpent = Progress.TravelSpent + spent });
+        services.TravelSpent(Progress.ContentId, spent);
         if (receipt is { } entry && services.Housing.Journal is { } journal)
         {
             await Write(() => journal.AddTravel(entry.ReceiptId, spent, DateTime.UtcNow), $"travel of {spent} gil");
