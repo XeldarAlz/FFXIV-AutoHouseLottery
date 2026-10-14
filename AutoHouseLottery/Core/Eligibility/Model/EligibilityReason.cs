@@ -13,4 +13,6 @@ internal enum EligibilityReason : ushort
     BuyerTypeMismatch = 1 << 6,
     BuyerRequirementsNotMet = 1 << 7,
     PlotUnavailable = 1 << 8,
+    ProfileUnavailable = 1 << 9,
+    PlotNeedsVerification = 1 << 10,
 }

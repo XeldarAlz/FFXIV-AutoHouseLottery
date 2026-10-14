@@ -15,14 +15,15 @@ internal static class CharacterFixtures
             Region = GameRegion.Global,
             HomeWorldId = homeWorld,
             ObservedGil = gil,
+            GilObservedUtc = ObservedAt,
             PrivateBuyerQualified = true,
             FreeCompanyBuyerQualified = true,
             FreeCompanyId = 900,
             AccountGroup = accountGroup,
             AccountOwnsLandOnHomeWorld = false,
             Outstanding = OutstandingSettlement.None,
-            Participation = new CycleParticipation(FirstCycle, EntrySlotState.Open),
-            ObservedUtc = ObservedAt,
+            Participation = new CycleParticipation(FirstCycle, EntrySlotState.Open) { ObservedUtc = ObservedAt },
+            FactsObservedUtc = ObservedAt,
         };
     }
 }

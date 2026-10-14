@@ -56,6 +56,21 @@ public sealed class BestMatchRankingTests
         Assert.Null(ranking[1].Deposit);
     }
 
+    [Fact]
+    public void ListedPlotOutranksAnUnreportedPlotWithFewerEntries()
+    {
+        var unreported = ListedPlot(Plot(1, 1), 0) with
+        {
+            Sale = new Observed<SaleState>(new SaleState(PlotSale.NotReported, null), Seen(ObservationSource.PublicFeed, ObservedAt.AddHours(1))),
+        };
+        var plots = Store(unreported, ListedPlot(Plot(1, 2), 3));
+
+        var ranking = BestMatchRanking.Rank([Plot(1, 1), Plot(1, 2)], plots, VerifiedEntryPhase());
+
+        Assert.Equal([Plot(1, 2), Plot(1, 1)], Keys(ranking));
+        Assert.Equal(PlotAvailability.NotReported, ranking[1].Availability);
+    }
+
     private static Dictionary<PlotKey, PlotSnapshot> Store(params PlotSnapshot[] snapshots)
     {
         var plots = new Dictionary<PlotKey, PlotSnapshot>();

@@ -8,7 +8,7 @@ namespace AutoHouseLottery.Core.Selection.Model;
 
 internal static class AssignmentPlanner
 {
-    public static RunPreview Build(RunPolicy policy, ReadOnlySpan<CharacterProfile> roster, IReadOnlyDictionary<PlotKey, PlotSnapshot> plots)
+    public static RunPreview Build(RunPolicy policy, ReadOnlySpan<CharacterProfile> roster, IReadOnlyDictionary<PlotKey, PlotSnapshot> plots, DateTime nowUtc)
     {
         var policyError = RunPolicyRules.Validate(policy);
         if (policyError != RunPolicyError.None)
@@ -18,20 +18,13 @@ internal static class AssignmentPlanner
 
         var ranking = RankTargets(policy, plots);
         var exclusions = ImmutableArray.CreateBuilder<CharacterExclusion>();
-        var planned = PlanCharacters(policy, roster, plots, ranking, exclusions);
+        var selected = SelectCharacters(policy, roster, exclusions);
+        var planned = PlanCharacters(policy, selected, plots, ranking, exclusions);
         var units = BuildUnits(policy, planned, plots, ranking, exclusions);
         var assignments = Place(policy, planned, units, plots, ranking);
-        var blockers = RunBlocker.None;
-        if (!policy.Cycle.IsVerified)
-        {
-            blockers |= RunBlocker.CycleNotVerified;
-        }
-
-        if (policy.Cycle.Phase != LotteryPhase.Entry)
-        {
-            blockers |= RunBlocker.EntryPeriodClosed;
-        }
-
+        var odds = new OddsContext(roster, plots, ranking, selected, policy.Cycle.Cycle);
+        var groupOdds = EstimateGroupOdds(assignments, odds);
+        var blockers = CycleBlockers(policy.Cycle, nowUtc);
         if (assignments.IsEmpty)
         {
             blockers |= RunBlocker.NoAssignment;
@@ -42,7 +35,6 @@ internal static class AssignmentPlanner
             blockers |= RunBlocker.DepositTotalOverflow;
         }
 
-        var groupOdds = EstimateGroupOdds(assignments, ranking);
         if (!groupOdds.IsEmpty && !policy.MultipleWinRiskAccepted)
         {
             blockers |= RunBlocker.MultipleWinsNeedConfirmation;
@@ -58,7 +50,7 @@ internal static class AssignmentPlanner
             Assignments = assignments,
             Exclusions = exclusions.ToImmutable(),
             TotalMaximumDeposit = totalMaximumDeposit,
-            Odds = EstimateOdds(assignments, ranking, null),
+            Odds = EstimateOdds(assignments, odds, null),
             GroupOdds = groupOdds,
             Blockers = blockers,
         };
@@ -73,6 +65,11 @@ internal static class AssignmentPlanner
         }
 
         var lead = assignments[leadIndex];
+        if (lead.TargetOrder.IndexOf(confirmedPlot) < 0)
+        {
+            throw new ArgumentException("The confirmed plot is not one of the lead's planned targets.", nameof(confirmedPlot));
+        }
+
         if (lead.Placement != PlacementMode.SamePlot)
         {
             return assignments;
@@ -92,29 +89,82 @@ internal static class AssignmentPlanner
         return followed.ToImmutable();
     }
 
+    private static RunBlocker CycleBlockers(in CyclePosition cycle, DateTime nowUtc)
+    {
+        var blockers = RunBlocker.None;
+        if (!cycle.IsVerified)
+        {
+            blockers |= RunBlocker.CycleNotVerified;
+        }
+
+        if (cycle.Phase != LotteryPhase.Entry)
+        {
+            blockers |= RunBlocker.EntryPeriodClosed;
+        }
+
+        if (nowUtc < cycle.PhaseStartUtc || nowUtc >= cycle.PhaseEndUtc)
+        {
+            blockers |= RunBlocker.CycleExpired;
+        }
+
+        return blockers;
+    }
+
     private static ImmutableArray<RankedPlot> RankTargets(RunPolicy policy, IReadOnlyDictionary<PlotKey, PlotSnapshot> plots)
     {
         if (policy.Exact is { } exact)
         {
             plots.TryGetValue(exact.Plot, out var snapshot);
-            return [new RankedPlot(exact.Plot, snapshot?.EntryCountIn(policy.Cycle.Cycle), exact.Deposit)];
+            var availability = snapshot?.AvailabilityAt(policy.Cycle) ?? PlotAvailability.Unknown;
+            return [new RankedPlot(exact.Plot, snapshot?.EntryCountIn(policy.Cycle.Cycle), exact.Deposit) { Availability = availability }];
         }
 
-        return BestMatchRanking.Rank(policy.Shortlist.GetValueOrDefault().Plots.AsSpan(), plots, policy.Cycle.Cycle);
+        return BestMatchRanking.Rank(policy.Shortlist.GetValueOrDefault().Plots.AsSpan(), plots, policy.Cycle);
+    }
+
+    private static List<SelectedCharacter> SelectCharacters(
+        RunPolicy policy,
+        ReadOnlySpan<CharacterProfile> roster,
+        ImmutableArray<CharacterExclusion>.Builder exclusions)
+    {
+        var profiles = new List<CharacterProfile>(policy.Characters.Length);
+        var settings = new List<CharacterRunSettings>(policy.Characters.Length);
+        var buyers = new List<BuyerType>(policy.Characters.Length);
+        for (var characterIndex = 0; characterIndex < policy.Characters.Length; characterIndex++)
+        {
+            var characterSettings = policy.Characters[characterIndex];
+            if (!TryFindProfile(roster, characterSettings.ContentId, out var profile))
+            {
+                exclusions.Add(new CharacterExclusion(characterSettings.ContentId, EligibilityReason.ProfileUnavailable));
+                continue;
+            }
+
+            profiles.Add(profile);
+            settings.Add(characterSettings);
+            buyers.Add(characterSettings.Buyer);
+        }
+
+        var groups = OwnershipGroups.Assign(CollectionsMarshal.AsSpan(profiles), CollectionsMarshal.AsSpan(buyers));
+        var selected = new List<SelectedCharacter>(profiles.Count);
+        for (var index = 0; index < profiles.Count; index++)
+        {
+            selected.Add(new SelectedCharacter(settings[index], profiles[index], groups[index]));
+        }
+
+        return selected;
     }
 
     private static List<PlannedCharacter> PlanCharacters(
         RunPolicy policy,
-        ReadOnlySpan<CharacterProfile> roster,
+        List<SelectedCharacter> selected,
         IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
         ImmutableArray<RankedPlot> ranking,
         ImmutableArray<CharacterExclusion>.Builder exclusions)
     {
-        var planned = new List<PlannedCharacter>(policy.Characters.Length);
-        for (var characterIndex = 0; characterIndex < policy.Characters.Length; characterIndex++)
+        var planned = new List<PlannedCharacter>(selected.Count);
+        for (var characterIndex = 0; characterIndex < selected.Count; characterIndex++)
         {
-            var settings = policy.Characters[characterIndex];
-            var profile = FindProfile(roster, settings.ContentId);
+            var (settings, profile, group) = selected[characterIndex];
             var characterResult = EligibilityRules.EvaluateCharacter(profile, settings.Buyer, policy.Cycle.Cycle, policy.CollectRefundsFirst);
             if (characterResult.Blockers != EligibilityReason.None)
             {
@@ -122,7 +172,7 @@ internal static class AssignmentPlanner
                 continue;
             }
 
-            var character = new PlannedCharacter(settings, profile, OwnershipGroups.For(profile, settings.Buyer), characterResult);
+            var character = new PlannedCharacter(settings, profile, group, characterResult);
             var removed = EligibilityReason.None;
             for (var plotIndex = 0; plotIndex < ranking.Length; plotIndex++)
             {
@@ -299,7 +349,7 @@ internal static class AssignmentPlanner
         return true;
     }
 
-    private static OddsEstimate? EstimateOdds(ImmutableArray<RunAssignment> assignments, ImmutableArray<RankedPlot> ranking, OwnershipGroup? group)
+    private static OddsEstimate? EstimateOdds(ImmutableArray<RunAssignment> assignments, in OddsContext context, OwnershipGroup? group)
     {
         var draws = new List<PlotDraw>();
         var drawKeys = new List<PlotKey>();
@@ -316,7 +366,7 @@ internal static class AssignmentPlanner
             if (drawIndex < 0)
             {
                 drawKeys.Add(primary);
-                draws.Add(new PlotDraw(Ranked(ranking, primary).ReportedEntries, 0, 1));
+                draws.Add(new PlotDraw(Ranked(context.Ranking, primary).ReportedEntries, 0, 1));
                 continue;
             }
 
@@ -328,10 +378,69 @@ internal static class AssignmentPlanner
             return null;
         }
 
+        for (var drawIndex = 0; drawIndex < draws.Count; drawIndex++)
+        {
+            if (!TryCountOwnEntries(context, drawKeys[drawIndex], group, out var ownEntries, out var includedInReport))
+            {
+                return null;
+            }
+
+            var draw = draws[drawIndex];
+            draws[drawIndex] = draw with { OwnEntriesInReport = includedInReport, RunEntries = draw.RunEntries + ownEntries };
+        }
+
         return LotteryOdds.TryEstimate(CollectionsMarshal.AsSpan(draws), out var estimate) ? estimate : null;
     }
 
-    private static ImmutableArray<GroupOddsEstimate> EstimateGroupOdds(ImmutableArray<RunAssignment> assignments, ImmutableArray<RankedPlot> ranking)
+    private static bool TryCountOwnEntries(in OddsContext context, PlotKey plot, OwnershipGroup? group, out int ownEntries, out int includedInReport)
+    {
+        ownEntries = 0;
+        includedInReport = 0;
+        context.Plots.TryGetValue(plot, out var snapshot);
+        var countedUtc = snapshot?.EntryCountIn(context.Cycle) is not null ? snapshot.EntryCount?.Provenance.SourceTimeUtc : null;
+        for (var index = 0; index < context.Roster.Length; index++)
+        {
+            var character = context.Roster[index];
+            var participation = character.Participation;
+            if (participation.StateIn(context.Cycle) != EntrySlotState.Entered || participation.EnteredPlot != plot)
+            {
+                continue;
+            }
+
+            if (group is { } only && !BelongsTo(context.Selected, character.ContentId, only))
+            {
+                continue;
+            }
+
+            if (participation.EnteredUtc is not { } enteredUtc || countedUtc is not { } counted)
+            {
+                return false;
+            }
+
+            ownEntries++;
+            if (enteredUtc <= counted)
+            {
+                includedInReport++;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool BelongsTo(List<SelectedCharacter> selected, ulong contentId, OwnershipGroup group)
+    {
+        for (var index = 0; index < selected.Count; index++)
+        {
+            if (selected[index].Settings.ContentId == contentId)
+            {
+                return selected[index].Group == group;
+            }
+        }
+
+        return false;
+    }
+
+    private static ImmutableArray<GroupOddsEstimate> EstimateGroupOdds(ImmutableArray<RunAssignment> assignments, in OddsContext context)
     {
         var estimates = ImmutableArray.CreateBuilder<GroupOddsEstimate>();
         for (var index = 0; index < assignments.Length; index++)
@@ -342,7 +451,7 @@ internal static class AssignmentPlanner
                 continue;
             }
 
-            estimates.Add(new GroupOddsEstimate(group, EstimateOdds(assignments, ranking, group)));
+            estimates.Add(new GroupOddsEstimate(group, EstimateOdds(assignments, context, group)));
         }
 
         return estimates.ToImmutable();
@@ -390,11 +499,10 @@ internal static class AssignmentPlanner
     private static EligibilityResult EvaluatePlot(RunPolicy policy, PlannedCharacter character, in RankedPlot plot, IReadOnlyDictionary<PlotKey, PlotSnapshot> plots)
     {
         plots.TryGetValue(plot.Key, out var snapshot);
-        var candidate = new EntryCandidate(
-            plot.Key,
-            snapshot?.Buyers?.Value ?? PlotBuyers.Unknown,
-            snapshot?.AvailabilityAt(policy.Cycle) ?? PlotAvailability.Unknown,
-            plot.Deposit);
+        var candidate = new EntryCandidate(plot.Key, snapshot?.Buyers?.Value ?? PlotBuyers.Unknown, plot.Availability, plot.Deposit)
+        {
+            NeedsVerification = snapshot?.NeedsVerification ?? false,
+        };
         var budget = new CharacterBudget(character.Settings.DepositCap, character.Settings.GilReserve, policy.TravelAllowance);
         return EligibilityRules.EvaluatePlot(character.Profile, character.Settings.Buyer, candidate, budget, default);
     }
@@ -455,17 +563,19 @@ internal static class AssignmentPlanner
         return -1;
     }
 
-    private static CharacterProfile FindProfile(ReadOnlySpan<CharacterProfile> roster, ulong contentId)
+    private static bool TryFindProfile(ReadOnlySpan<CharacterProfile> roster, ulong contentId, out CharacterProfile profile)
     {
         for (var index = 0; index < roster.Length; index++)
         {
             if (roster[index].ContentId == contentId)
             {
-                return roster[index];
+                profile = roster[index];
+                return true;
             }
         }
 
-        throw new ArgumentException($"No character profile was supplied for content ID {contentId}.", nameof(roster));
+        profile = default;
+        return false;
     }
 
     private static RunPreview Rejected(RunPolicy policy, RunPolicyError error) => new()
@@ -482,6 +592,26 @@ internal static class AssignmentPlanner
         GroupOdds = [],
         Blockers = RunBlocker.InvalidPolicy,
     };
+
+    private readonly record struct SelectedCharacter(CharacterRunSettings Settings, CharacterProfile Profile, OwnershipGroup Group);
+
+    private readonly ref struct OddsContext(
+        ReadOnlySpan<CharacterProfile> roster,
+        IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
+        ImmutableArray<RankedPlot> ranking,
+        List<SelectedCharacter> selected,
+        CycleKey cycle)
+    {
+        public ReadOnlySpan<CharacterProfile> Roster { get; } = roster;
+
+        public IReadOnlyDictionary<PlotKey, PlotSnapshot> Plots { get; } = plots;
+
+        public ImmutableArray<RankedPlot> Ranking { get; } = ranking;
+
+        public List<SelectedCharacter> Selected { get; } = selected;
+
+        public CycleKey Cycle { get; } = cycle;
+    }
 
     private sealed class PlannedCharacter(CharacterRunSettings settings, CharacterProfile profile, OwnershipGroup group, EligibilityResult characterResult)
     {
