@@ -81,6 +81,18 @@ public sealed class SchedulerTests
     }
 
     [Fact]
+    public void AGmAlertHoldsEveryVisitUntilThePlayersOwnInput()
+    {
+        const long HeldAtMs = 1_000_000;
+
+        Assert.Equal(SchedulerBlock.HeldAfterAlert, SchedulerRules.Check(Ready() with { HeldAfterAlert = true }));
+        Assert.Equal(SchedulerBlock.HeldAfterAlert, SchedulerRules.Check(Ready() with { HeldAfterAlert = true, IdleMs = SchedulerRules.IdleMsRequired * 100 }));
+        Assert.False(SchedulerRules.HoldReleased(HeldAtMs, idleMs: 5_000, nowMs: HeldAtMs + 5_000));
+        Assert.False(SchedulerRules.HoldReleased(HeldAtMs, idleMs: SchedulerRules.IdleMsRequired * 100, nowMs: HeldAtMs + SchedulerRules.IdleMsRequired * 10));
+        Assert.True(SchedulerRules.HoldReleased(HeldAtMs, idleMs: 1_000, nowMs: HeldAtMs + 5_000));
+    }
+
+    [Fact]
     public void ResultsArrivingScheduleOneCheckPerUnknownEntry()
     {
         var entered = Receipt(Plot(12, 5), FirstCycle);
@@ -207,6 +219,7 @@ public sealed class SchedulerTests
         WorkDue: true,
         JournalWritable: true,
         AutoAnswerLoaded: false,
+        HeldAfterAlert: false,
         InDuty: false,
         InCombat: false,
         InCutscene: false,

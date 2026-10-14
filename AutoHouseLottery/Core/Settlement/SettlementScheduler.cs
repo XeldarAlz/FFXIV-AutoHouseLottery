@@ -27,6 +27,8 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     private ImmutableArray<EntrySettlement> estateCheckedFor;
     private Estates estateChecked;
     private long blockedSinceMs;
+    private long heldAtMs;
+    private bool heldAfterAlert;
     private volatile bool fixing;
 
     public SchedulerBlock Block { get; private set; } = SchedulerBlock.NotLoggedIn;
@@ -43,6 +45,14 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     public long IdleMs(long nowMs) => input.IdleMs(nowMs);
 
     public void SampleGamepad(long nowMs) => input.SampleGamepad(nowMs);
+
+    // After a GM alert no automatic visit starts until the player's own input after this moment.
+    public void HoldUntilInput(long nowMs)
+    {
+        heldAtMs = nowMs;
+        heldAfterAlert = true;
+        RunLog.Info("Settlement scheduler: held after a GM alert until you act in the game again.");
+    }
 
     public void RecordTravel(ulong contentId, long spent)
     {
@@ -72,6 +82,12 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     public SettlementWork? Tick(long nowMs, bool ownWorkActive, bool busy, bool ownVisitRunning, Func<Guid, PlotKey, bool> collectable)
     {
         input.Sample(nowMs, ownWorkActive);
+        if (heldAfterAlert && SchedulerRules.HoldReleased(heldAtMs, input.IdleMs(nowMs), nowMs))
+        {
+            heldAfterAlert = false;
+            RunLog.Info("Settlement scheduler: you acted in the game after the GM alert; automatic visits may start again.");
+        }
+
         if (CharacterContextReader.Read() is not { } context)
         {
             Block = SchedulerBlock.NotLoggedIn;
@@ -93,6 +109,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             WorkDue: next is not null,
             JournalWritable: housing.JournalWritable,
             AutoAnswerLoaded: AutoAnswerGuard.Blocks,
+            HeldAfterAlert: heldAfterAlert,
             InDuty: DutyWatcher.InContent(),
             InCombat: Svc.Condition[ConditionFlag.InCombat],
             InCutscene: Svc.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Svc.Condition[ConditionFlag.WatchingCutscene] || Svc.Condition[ConditionFlag.WatchingCutscene78],
@@ -135,8 +152,9 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     public int DueCountFor(ulong contentId, in CyclePosition position)
         => SettlementSchedule.Due(housing.JournalSnapshot, contentId, position, static (_, _) => SettlementGate.Validated(ActionKind.Refund), Parked).Length;
 
-    // While a placard without a result cannot settle anything, revisiting one already found that way only costs travel.
-    private bool Parked(Guid id) => !SettlementCapabilities.AbsenceSettlementValidated && configuration.AbsenceSighting(id) is not null;
+    // While a placard without a result cannot settle anything, revisiting one already found that way in full only costs
+    // travel. A weaker sighting (a placard not fully read) is visited again.
+    private bool Parked(Guid id) => !SettlementCapabilities.AbsenceSettlementValidated && configuration.AbsenceSighting(id) is { Strong: true };
 
     // A win the character's estate list now holds was claimed, by this plugin's press or in game; it is recorded as
     // claimed without a visit. Checked again only when the journal's settlements change.

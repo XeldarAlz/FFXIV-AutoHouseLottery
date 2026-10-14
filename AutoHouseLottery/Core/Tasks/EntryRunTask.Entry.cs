@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Dialogs;
@@ -31,6 +32,11 @@ internal sealed partial class EntryRunTask
     private async Task<EntryFailure> Enter()
     {
         Move(EntryStep.PrepareEntry);
+        if (AutoAnswerGuard.Blocks)
+        {
+            return EntryFailure.AutoAnswerPlugin;
+        }
+
         var pressedAt = GameSequence.Next();
         if (!await PressEnterLottery())
         {

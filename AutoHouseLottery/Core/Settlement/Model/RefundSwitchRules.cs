@@ -7,11 +7,12 @@ internal readonly record struct RefundCandidate(ulong ContentId, bool Listed, bo
 internal static class RefundSwitchRules
 {
     // The session may be left for another character on the same terms background work may start on: the player has left
-    // the game alone long enough and nothing else holds it.
+    // the game alone long enough, nothing else holds it, and no GM alert is still holding automatic work.
     public static bool SessionFree(in SchedulerFacts facts)
         => facts.LoggedIn
         && facts.JournalWritable
         && !facts.AutoAnswerLoaded
+        && !facts.HeldAfterAlert
         && !facts.InDuty
         && !facts.InCombat
         && !facts.InCutscene

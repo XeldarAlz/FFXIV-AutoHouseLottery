@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Persistence.Model;
@@ -16,15 +17,24 @@ internal readonly record struct RosterFacts(
     DateTime? GilSeenUtc,
     DateTime? SeenUtc);
 
+// The journal as the planner reads it for characters that are not logged in, with the receipts nothing here can settle
+// (OutstandingRules) worked out on the framework thread, so a plan built on a task never reads the settings.
+internal readonly record struct PlanningJournal(JournalSnapshot Snapshot, FrozenSet<Guid> LeftToTheGame)
+{
+    public static readonly PlanningJournal Empty = new(new JournalSnapshot([], [], []), FrozenSet<Guid>.Empty);
+
+    public bool IsLeftToTheGame(EntryReceipt receipt, EntrySettlement settlement) => LeftToTheGame.Contains(receipt.ReceiptId);
+}
+
 internal static class RosterProfiles
 {
     // A character that is not logged in, planned from the journal and its last login. The journal alone decides its entry
     // slot and earlier settlements, since no reading of its lottery record is current; its gil is an estimate until it
     // logs in again, and nothing remembered can make it eligible on its own.
-    public static CharacterProfile Offline(in RosterFacts facts, GameRegion region, in JournalSnapshot journal, in CyclePosition position)
+    public static CharacterProfile Offline(in RosterFacts facts, GameRegion region, in PlanningJournal journal, in CyclePosition position)
     {
         var unread = new SlotEvidence(EntrySlotState.Unknown, null, null, null);
-        var participation = ParticipationRules.Resolve(position.Cycle, ParticipationRules.FromJournal(journal, facts.ContentId, facts.HomeWorldId, position.Cycle), unread);
+        var participation = ParticipationRules.Resolve(position.Cycle, ParticipationRules.FromJournal(journal.Snapshot, facts.ContentId, facts.HomeWorldId, position.Cycle), unread);
         return new CharacterProfile
         {
             ContentId = facts.ContentId,
@@ -37,7 +47,7 @@ internal static class RosterProfiles
             FreeCompanyId = facts.FreeCompanyId,
             AccountGroup = facts.AccountGroup,
             AccountOwnsLandOnHomeWorld = facts.OwnsLandOnHomeWorld == true ? true : null,
-            Outstanding = OutstandingRules.ToSettlement(OutstandingRules.Find(journal, facts.ContentId, position.Cycle).Kind),
+            Outstanding = OutstandingRules.ToSettlement(OutstandingRules.Find(journal.Snapshot, facts.ContentId, position.Cycle, journal.IsLeftToTheGame).Kind),
             Participation = participation,
             FactsObservedUtc = facts.SeenUtc,
         };

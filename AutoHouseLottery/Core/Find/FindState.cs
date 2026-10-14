@@ -6,7 +6,6 @@ using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Integration.Model;
-using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Providers.Model;
 using AutoHouseLottery.Core.Selection.Model;
 
@@ -23,7 +22,7 @@ internal sealed class FindState
     private readonly Configuration configuration;
     private readonly ShortlistStore store;
     private readonly FindSelection selection;
-    private readonly Func<JournalSnapshot> journal;
+    private readonly Func<PlanningJournal> journal;
     private ImmutableArray<RosterEntry> roster = [];
     private int selectedCount;
     private (int Revision, ulong LoggedIn) rosterBuiltFor = (-1, 0);
@@ -34,7 +33,7 @@ internal sealed class FindState
     private ViewInputs lastInputs;
     private Task<FindView>? building;
 
-    public FindState(Configuration configuration, ShortlistStore store, Func<JournalSnapshot> journal)
+    public FindState(Configuration configuration, ShortlistStore store, Func<PlanningJournal> journal)
     {
         this.configuration = configuration;
         this.store = store;
@@ -474,7 +473,7 @@ internal sealed class FindState
         long Minute,
         int RosterRevision,
         bool MultipleWinRiskAccepted,
-        JournalSnapshot Journal);
+        PlanningJournal Journal);
 
     private sealed record ViewRequest(
         int Revision,
@@ -489,7 +488,7 @@ internal sealed class FindState
         int QueryRevision,
         DateTime NowUtc,
         ImmutableArray<RosterEntry> Roster,
-        JournalSnapshot Journal,
+        PlanningJournal Journal,
         PlacementChoice Placement,
         bool MultipleWinRiskAccepted,
         int RosterRevision);

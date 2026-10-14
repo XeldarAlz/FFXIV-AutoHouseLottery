@@ -38,8 +38,20 @@ internal sealed class MyLotteryPage
     // The logged-in character and the estates it holds, read without building a whole character context each frame.
     private readonly record struct CharacterKey(ulong ContentId, ulong? PersonalEstate, ulong? FreeCompanyEstate);
 
+    // SettledInGame: the row may be marked as settled in game by the player (a receipt, never an attempt in question).
     // Group: for a win, how its ownership group stands, so several wins ask for a choice and a claimed group locks the rest.
-    private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State, string LogInAs, string? SettleHint, ClaimGroupState Group, string? GroupHint);
+    private readonly record struct RowView(
+        LotteryRow Row,
+        string Id,
+        string Title,
+        string Facts,
+        string Receipt,
+        string State,
+        string LogInAs,
+        string? SettleHint,
+        bool SettledInGame,
+        ClaimGroupState Group,
+        string? GroupHint);
 
     private ImmutableArray<RowView> rows = [];
     private ImmutableArray<ActionAttempt> cachedAttempts;
@@ -56,6 +68,7 @@ internal sealed class MyLotteryPage
     private string summary = string.Empty;
     private CharacterKey cachedCharacter;
     private int cachedSightings = -1;
+    private Guid confirmingSettled;
     private SchedulerBlock statusFor;
     private ulong statusCharacter;
     private LanguageInfo? statusLanguage;
@@ -112,7 +125,7 @@ internal sealed class MyLotteryPage
         var character = Svc.ClientState.IsLoggedIn && Svc.PlayerState.IsLoaded
             ? new CharacterKey(Svc.PlayerState.ContentId, CharacterContextReader.ReadPersonalEstateId(), CharacterContextReader.ReadFreeCompanyEstateId())
             : default;
-        var sightings = plugin.Configuration.AbsenceSightings.Count;
+        var sightings = plugin.Configuration.AbsenceSightingsRevision;
         if (snapshot.Attempts == cachedAttempts && snapshot.Receipts == cachedReceipts && snapshot.Settlements == cachedSettlements
             && position.Cycle == cachedPosition.Cycle && position.Phase == cachedPosition.Phase
             && ReferenceEquals(Loc.Culture, cachedCulture) && rosterRevision == cachedRosterRevision && character == cachedCharacter && sightings == cachedSightings)
@@ -143,7 +156,7 @@ internal sealed class MyLotteryPage
                 : group.NeedsChoice ? (settleHint is null ? Loc.T(L.Settlement.GroupChoice, group.Wins) : string.Concat(Loc.T(L.Settlement.GroupChoice, group.Wins), " ", settleHint))
                 : null;
             views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(name, Separator, Address(row)), Facts(row, plugin.Configuration.AbsenceSighting(row.Id)), Receipt(row), StateLabel(row.State), Loc.T(L.Lottery.LogInAs, name),
-                settleHint, group, groupHint));
+                settleHint, MaySettleInGame(snapshot, row, position), group, groupHint));
         }
 
         rows = views.MoveToImmutable();
@@ -195,12 +208,21 @@ internal sealed class MyLotteryPage
         var actionIcon = ActionIcon(row.Action);
         var actionWidth = PillButton.Width(actionLabel, actionIcon);
         var stateWidth = TextDraw.Measure(view.State).X;
-        var textRight = right - actionWidth - stateWidth - StateGap * 2f * scale;
+        var confirming = view.SettledInGame && confirmingSettled == row.Id;
+        var settledWidth = !view.SettledInGame ? 0f
+            : confirming ? PillButton.Width(Loc.T(L.Settlement.SettledInGameConfirm), FontAwesomeIcon.Check) + PillButton.Width(Loc.T(L.Settlement.SettledInGameCancel)) + StateGap * scale
+            : PillButton.Width(Loc.T(L.Settlement.SettledInGame), FontAwesomeIcon.HandHoldingUsd);
+        var secondaryWidth = settledWidth > 0f ? settledWidth + StateGap * scale : 0f;
+        var textRight = right - actionWidth - secondaryWidth - stateWidth - StateGap * 2f * scale;
 
         TextDraw.At(TextDraw.Truncate(view.Title, textRight - x), new Vector2(x, top), Styling.TextStrong);
         TextDraw.At(TextDraw.Truncate(view.Facts, textRight - x), new Vector2(x, top + lineHeight + RowGap * scale * 0.5f), Styling.TextDim);
         var midY = origin.Y + RowHeight * scale * 0.5f;
-        TextDraw.At(view.State, new Vector2(right - actionWidth - StateGap * scale - stateWidth, midY - lineHeight * 0.5f), accent);
+        TextDraw.At(view.State, new Vector2(right - actionWidth - secondaryWidth - StateGap * scale - stateWidth, midY - lineHeight * 0.5f), accent);
+        if (view.SettledInGame)
+        {
+            DrawSettledInGame(plugin, row, confirming, right - actionWidth - secondaryWidth, midY - Layout.ActionPillHeight * scale * 0.5f);
+        }
 
         ImGui.SetCursorScreenPos(new Vector2(right - actionWidth, midY - Layout.ActionPillHeight * scale * 0.5f));
         if (PillButton.Draw(view.Id, actionLabel, accent, PillButton.Emphasis.Tinted, actionIcon, actionEnabled, Layout.ActionPillHeight, actionTooltip))
@@ -216,6 +238,44 @@ internal sealed class MyLotteryPage
         ImGui.SetCursorScreenPos(origin);
         ImGui.Dummy(new Vector2(width, height + RowGap * scale));
     }
+
+    // "Settled in game", then a confirmation in its place: the player's word that the refund or the result was settled by
+    // hand. It records the entry as refunded for an amount not seen and never touches the game.
+    private void DrawSettledInGame(Plugin plugin, LotteryRow row, bool confirming, float x, float y)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        ImGui.SetCursorScreenPos(new Vector2(x, y));
+        var writable = plugin.HousingData.JournalWritable && !plugin.Controller.Busy;
+        if (!confirming)
+        {
+            if (PillButton.Draw($"##ahl_lottery_settled_{row.Id:N}", Loc.T(L.Settlement.SettledInGame), Styling.AccentNebula, PillButton.Emphasis.Ghost, FontAwesomeIcon.HandHoldingUsd,
+                    writable, Layout.ActionPillHeight, Loc.T(L.Settlement.SettledInGameHint)))
+            {
+                confirmingSettled = row.Id;
+            }
+
+            return;
+        }
+
+        var confirmLabel = Loc.T(L.Settlement.SettledInGameConfirm);
+        if (PillButton.Draw($"##ahl_lottery_settled_yes_{row.Id:N}", confirmLabel, Styling.AccentAmber, PillButton.Emphasis.Tinted, FontAwesomeIcon.Check, writable, Layout.ActionPillHeight,
+                Loc.T(L.Settlement.SettledInGameHint)))
+        {
+            confirmingSettled = Guid.Empty;
+            plugin.Controller.MarkSettledInGame(row.Id);
+        }
+
+        ImGui.SetCursorScreenPos(new Vector2(x + PillButton.Width(confirmLabel, FontAwesomeIcon.Check) + StateGap * scale, y));
+        if (PillButton.Draw($"##ahl_lottery_settled_no_{row.Id:N}", Loc.T(L.Settlement.SettledInGameCancel), Styling.AccentNebula, PillButton.Emphasis.Ghost, null, true, Layout.ActionPillHeight))
+        {
+            confirmingSettled = Guid.Empty;
+        }
+    }
+
+    private static bool MaySettleInGame(in JournalSnapshot snapshot, LotteryRow row, in CyclePosition position)
+        => SettlementLookups.Receipt(snapshot, row.Id) is { } receipt
+        && SettlementLookups.Settlement(snapshot, row.Id) is { } settlement
+        && ManualSettlement.CanMarkSettledInGame(settlement.State, SettlementDeadlines.ResultsArrived(receipt.Cycle, position), SettlementLookups.OpenAttempt(snapshot, row.Id) is not null);
 
     private void Act(Plugin plugin, in RowView view)
     {

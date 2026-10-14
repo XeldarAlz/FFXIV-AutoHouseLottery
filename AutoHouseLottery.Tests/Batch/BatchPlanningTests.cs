@@ -234,7 +234,7 @@ public sealed class BatchPlanningTests
             Deposit = Deposit,
             EnteredUtc = ObservedAt,
         };
-        var journal = new JournalSnapshot([], [receipt], [EntrySettlement.Entered(receipt.ReceiptId, ObservedAt)]);
+        var journal = PlanningJournal.Empty with { Snapshot = new JournalSnapshot([], [receipt], [EntrySettlement.Entered(receipt.ReceiptId, ObservedAt)]) };
         var entered = RosterProfiles.Offline(Facts(2, gil: 10 * Deposit), GameRegion.Global, journal, VerifiedEntryPhase());
 
         var preview = Plan(Policy(keys, Settings(1), Settings(2)), [Character(1), entered], Listed(keys));
@@ -288,7 +288,7 @@ public sealed class BatchPlanningTests
     internal static RosterFacts Facts(ulong contentId, long? gil = null, bool? ownsLand = null, int? accountGroup = null)
         => new(contentId, $"Character {contentId}", HomeWorld, accountGroup, 900, ownsLand, gil, gil is null ? null : ObservedAt, ObservedAt);
 
-    private static readonly JournalSnapshot Empty = new([], [], []);
+    private static readonly PlanningJournal Empty = PlanningJournal.Empty;
 
     private static CharacterProfile Offline(ulong contentId, long gil)
         => RosterProfiles.Offline(Facts(contentId, gil), GameRegion.Global, Empty, VerifiedEntryPhase()) with

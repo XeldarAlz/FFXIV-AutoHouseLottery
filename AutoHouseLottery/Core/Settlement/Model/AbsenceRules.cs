@@ -23,6 +23,13 @@ internal readonly record struct AbsenceEvidence(
 
 internal static class AbsenceRules
 {
+    // Two sightings count as two sessions only this far apart, so a reload or a quick relog is not a second visit.
+    public static readonly TimeSpan MinimumSightingGap = TimeSpan.FromHours(6);
+
+    // An earlier strong sighting from another session, at least the minimum gap before this one.
+    public static bool CountsAsSecondSighting(bool earlierStrong, Guid earlierSession, DateTime earlierUtc, Guid session, DateTime nowUtc)
+        => earlierStrong && earlierSession != session && nowUtc - earlierUtc >= MinimumSightingGap;
+
     // A placard that no longer offers this character a result settles the entry only once that rule has been
     // validated in game, and then only on the strongest evidence: a fully read placard of an unowned plot whose every
     // button is known; this cycle's entry confirmed gone by the lottery record, or an earlier cycle's entry found the same

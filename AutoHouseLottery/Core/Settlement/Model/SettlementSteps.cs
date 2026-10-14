@@ -20,8 +20,8 @@ internal enum SettlementStep : byte
 }
 
 // Classified: the result was read and recorded, and nothing was pressed. DryRun: a refund or claim was due, and the
-// dialog was closed instead because nothing permits the press. Refunded, RefundedAmountDiffers and Claimed: the press
-// went through and was confirmed. NeedsReconciliation: a press may have reached the game and its outcome is not known.
+// dialog was closed instead because nothing permits the press. Refunded and Claimed: the press went through and was
+// confirmed. NeedsReconciliation: a press may have reached the game and its outcome is not known.
 // NeedsPlayer: the visit stopped short and says why. Stopped: the visit was stopped before it pressed anything.
 internal enum SettlementResult : byte
 {
@@ -29,7 +29,6 @@ internal enum SettlementResult : byte
     Classified,
     DryRun,
     Refunded,
-    RefundedAmountDiffers,
     Claimed,
     NeedsReconciliation,
     NeedsPlayer,

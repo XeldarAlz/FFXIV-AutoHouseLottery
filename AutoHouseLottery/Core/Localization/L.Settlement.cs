@@ -16,6 +16,11 @@ internal static partial class L
         public static readonly LocString BlockTyping = new("settlement.block.typing", "Waits while you type.");
         public static readonly LocString BlockNotIdle = new("settlement.block.notIdle", "Starts after 30 seconds without input from you.");
         public static readonly LocString BlockStarting = new("settlement.block.starting", "Starting.");
+        public static readonly LocString BlockHeldAfterAlert = new("settlement.block.heldAfterAlert", "Held after a GM alert until you act in the game.");
+        public static readonly LocString SettledInGame = new("settlement.settledInGame", "Settled in game");
+        public static readonly LocString SettledInGameHint = new("settlement.settledInGameHint", "Use this when you collected this entry's refund in game yourself. It is recorded as refunded for an amount not seen, and opens again if the game later says a refund still waits.");
+        public static readonly LocString SettledInGameConfirm = new("settlement.settledInGameConfirm", "Yes, I collected it");
+        public static readonly LocString SettledInGameCancel = new("settlement.settledInGameCancel", "Cancel");
         public static readonly LocString SummaryReceived = new("settlement.summary.received", "Refund received {0}");
         public static readonly LocString SummaryTravel = new("settlement.summary.travel", "Travel spent {0}");
         public static readonly LocString SummaryNet = new("settlement.summary.net", "Net returned {0}");
@@ -36,7 +41,6 @@ internal static partial class L
         public static readonly LocString DryRunBody = new("settlement.dryRunBody", "{0} The result was closed instead of accepted, and nothing was collected or claimed.");
         public static readonly LocString RefundedTitle = new("settlement.refundedTitle", "Refund collected");
         public static readonly LocString RefundedBody = new("settlement.refundedBody", "{0} came back for {1}.");
-        public static readonly LocString RefundedDiffersBody = new("settlement.refundedDiffersBody", "{0} came back for {1}, not the {2} the game offered. The amount that came back is what is recorded.");
         public static readonly LocString ClaimedTitle = new("settlement.claimedTitle", "House claimed");
         public static readonly LocString ClaimedBody = new("settlement.claimedBody", "{0} is yours. Building the house is a separate step.");
         public static readonly LocString UncertainTitle = new("settlement.uncertainTitle", "Checking whether it went through");

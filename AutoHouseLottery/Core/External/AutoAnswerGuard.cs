@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using AutoHouseLottery.Core.Tasks.Model;
 using ECommons.DalamudServices;
 
@@ -30,7 +31,7 @@ internal static class AutoAnswerGuard
             installed.Add(new InstalledPlugin(plugin.InternalName, plugin.Name, plugin.IsLoaded));
         }
 
-        var found = AutoAnswerPlugins.FirstLoaded(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(installed));
+        var found = AutoAnswerPlugins.FirstLoaded(CollectionsMarshal.AsSpan(installed));
         if (found != loaded)
         {
             RunLog.Info(found is null ? "No plugin that answers dialogs on its own is loaded." : $"{found} is loaded and could answer the lottery dialogs; runs and result visits are held until it is turned off.");

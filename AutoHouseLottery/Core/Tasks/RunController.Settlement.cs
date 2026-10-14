@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Watchers;
@@ -85,7 +86,7 @@ internal sealed partial class RunController
 
         RunLog.Info($"Settlement {visit.Progress.VisitId}: stopped at once at {visit.Progress.Step} for an alert.");
         stopReason = SettlementFailure.Interrupted;
-        pendingJournalWrite = visit.LeaveOpenAttempt() ?? pendingJournalWrite;
+        TrackJournalWrite(visit.LeaveOpenAttempt());
         ClibServices.Automation.Stop();
         FinishSettlement(visit);
     }
@@ -213,6 +214,31 @@ internal sealed partial class RunController
 
     private void RecordSettlementTravel(ulong contentId, long spent) => scheduler.RecordTravel(contentId, spent);
 
+    // The player's word that an entry was settled in game by hand. Refused while a run or a visit drives the game, so
+    // nothing reads the same entry while it is written.
+    public bool MarkSettledInGame(Guid receiptId)
+    {
+        if (Busy || !housing.JournalWritable)
+        {
+            return false;
+        }
+
+        TrackJournalWrite(housing.MarkSettledInGame(receiptId));
+        return true;
+    }
+
+    // A journal write started outside the run's own steps, kept with any earlier one still running so an unload waits
+    // for both before the journal closes.
+    private void TrackJournalWrite(Task? write)
+    {
+        if (write is null)
+        {
+            return;
+        }
+
+        pendingJournalWrite = pendingJournalWrite is { IsCompleted: false } earlier ? Task.WhenAll(earlier, write) : write;
+    }
+
     private Guid SettlementSession() => settlementSession;
 
     // A new login is a new session for the two-session rule of a placard without a result.
@@ -227,6 +253,7 @@ internal sealed partial class RunController
 
         settlement = null;
         scheduledWork = null;
+        TrackJournalWrite(visit.PendingWrite);
         if (settlementOwner is { } holder)
         {
             lease.Release(holder);
@@ -253,7 +280,7 @@ internal sealed partial class RunController
 
         RunLog.Info($"Settlement {visit.Progress.VisitId}: ended at {visit.Progress.Step} ({reason}).");
         stopReason = SettlementFailure.Interrupted;
-        pendingJournalWrite = visit.LeaveOpenAttempt() ?? pendingJournalWrite;
+        TrackJournalWrite(visit.LeaveOpenAttempt());
         ClibServices.Automation.Stop();
         FinishSettlement(visit);
     }

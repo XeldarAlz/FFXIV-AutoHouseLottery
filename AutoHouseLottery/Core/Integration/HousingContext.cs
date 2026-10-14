@@ -1,8 +1,10 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.IO;
 using System.Threading.Tasks;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Find.Model;
+using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration.Model;
@@ -32,6 +34,8 @@ internal sealed class HousingContext : IDisposable
     private readonly Configuration configuration;
     private readonly HousingFeedService feed;
     private LotterySnapshot? lastReading;
+    private PlanningJournal? planningJournal;
+    private int planningSightings;
 
     public HousingContext(Configuration configuration, string directory, HousingFeedService feed)
     {
@@ -128,7 +132,72 @@ internal sealed class HousingContext : IDisposable
         return ParticipationRules.Resolve(position.Cycle, journal, read);
     }
 
-    public OutstandingEntry Outstanding(ulong contentId, CycleKey cycle) => OutstandingRules.Find(JournalSnapshot, contentId, cycle);
+    public OutstandingEntry Outstanding(ulong contentId, CycleKey cycle) => OutstandingRules.Find(JournalSnapshot, contentId, cycle, LeftToTheGame);
+
+    // The journal for planning characters that are not logged in, worked out again only when the journal or the absence
+    // sightings change. Framework thread only.
+    public PlanningJournal PlanningJournal()
+    {
+        var journal = JournalSnapshot;
+        var sightings = configuration.AbsenceSightings.Count;
+        if (planningJournal is { } cached && cached.Snapshot == journal && planningSightings == sightings)
+        {
+            return cached;
+        }
+
+        var left = new List<Guid>();
+        for (var index = 0; index < journal.Receipts.Length; index++)
+        {
+            var receipt = journal.Receipts[index];
+            if (JournalLookups.TryFindSettlement(journal, receipt.ReceiptId, out var settlement) && LeftToTheGame(receipt, settlement))
+            {
+                left.Add(receipt.ReceiptId);
+            }
+        }
+
+        planningSightings = sightings;
+        planningJournal = new PlanningJournal(journal, left.ToFrozenSet());
+        return planningJournal.Value;
+    }
+
+    // An entry nothing here can settle is left to the game: no result was offered at its placard, its outcome could not
+    // be read, or its imported address names no single plot.
+    private bool LeftToTheGame(EntryReceipt receipt, EntrySettlement settlement)
+        => PendingRules.LeftToTheGame(
+            settlement.State,
+            configuration.AbsenceSighting(receipt.ReceiptId) is not null,
+            receipt.Plot is not null || (receipt.AddressText is { } text && ImportedAddress.Resolve(text, receipt.Cycle.Region, receipt.HomeWorldId, DistrictNames.Of) is not null));
+
+    // The player's word that an entry's refund, or its result, was settled in game by hand: recorded as refunded for an
+    // amount nobody saw, and reopened like an absence settlement if the game later refuses an entry with LogMessage 6100.
+    // Never for an earlier attempt still in question. Off the framework thread.
+    public async Task<JournalWrite> MarkSettledInGame(Guid receiptId)
+    {
+        var snapshot = JournalSnapshot;
+        if (Journal is not { } journal
+            || SettlementLookups.Receipt(snapshot, receiptId) is not { } receipt
+            || SettlementLookups.Settlement(snapshot, receiptId) is not { } settlement
+            || !ManualSettlement.CanMarkSettledInGame(settlement.State, SettlementDeadlines.ResultsArrived(receipt.Cycle, CurrentPosition(DateTime.UtcNow)), SettlementLookups.OpenAttempt(snapshot, receiptId) is not null))
+        {
+            return JournalWrite.IllegalTransition;
+        }
+
+        configuration.ForgetAbsenceSighting(receiptId);
+        var written = await Task.Run(() =>
+        {
+            Span<SettlementState> steps = stackalloc SettlementState[SettlementPath.MaximumSteps];
+            var count = SettlementPath.Plan(settlement.State, SettlementState.Refunded, steps);
+            var result = count < 0 ? JournalWrite.IllegalTransition : JournalWrite.AlreadyRecorded;
+            for (var stepIndex = 0; stepIndex < count; stepIndex++)
+            {
+                result = journal.AdvanceSettlement(receiptId, steps[stepIndex], null, DateTime.UtcNow, byAbsence: stepIndex == count - 1);
+            }
+
+            return result;
+        });
+        RunLog.Info($"Journal: the player marked receipt {receiptId} for {receipt.Plot?.ToString() ?? receipt.AddressText ?? "a plot not named"} as settled in game ({written}); the amount is not known.");
+        return written;
+    }
 
     public int? AccountGroup(ulong contentId) => configuration.Characters.TryGetValue(contentId, out var known) ? known.AccountGroup : null;
 
@@ -154,7 +223,7 @@ internal sealed class HousingContext : IDisposable
     public CharacterProfile[] Roster(ReadOnlySpan<ulong> contentIds, CharacterContext? loggedIn, in CyclePosition position)
     {
         var profiles = new List<CharacterProfile>(contentIds.Length);
-        var journal = JournalSnapshot;
+        var journal = PlanningJournal();
         for (var index = 0; index < contentIds.Length; index++)
         {
             var contentId = contentIds[index];
@@ -267,27 +336,29 @@ internal sealed class HousingContext : IDisposable
     }
 
     // The game refused an entry because a refund or a plot from an earlier entry still waits (LogMessage 6100): every
-    // entry of this character that was recorded as settled only because its placard offered no result goes back to an
-    // open outcome, so it is checked again and its deposit is not lost from view. Off the framework thread.
-    public async Task ReopenAbsenceSettlements(ulong contentId)
+    // entry of this character that was recorded as settled without its result being read (its placard offered none, or
+    // the player said it was settled in game) goes back to an open outcome, so it is checked again and its deposit is not
+    // lost from view. The journal writes run off the framework thread; the task is returned so an unload can wait for it.
+    // Its sightings are forgotten too, so once the absence rule is validated the same evidence cannot settle it again.
+    public Task ReopenAbsenceSettlements(ulong contentId)
     {
-        if (Journal is not { } journal)
+        var reopened = ManualSettlement.ReopenedBy6100(JournalSnapshot, contentId);
+        if (Journal is not { } journal || reopened.IsEmpty)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var snapshot = JournalSnapshot;
-        await Task.Run(() =>
+        for (var index = 0; index < reopened.Length; index++)
         {
-            var receipts = snapshot.Receipts;
-            for (var index = 0; index < receipts.Length; index++)
+            configuration.ForgetAbsenceSighting(reopened[index]);
+        }
+
+        return Task.Run(() =>
+        {
+            for (var index = 0; index < reopened.Length; index++)
             {
-                var receipt = receipts[index];
-                if (receipt.CharacterContentId == contentId && SettlementLookups.Settlement(snapshot, receipt.ReceiptId) is { SettledByAbsence: true })
-                {
-                    var written = journal.ReopenAbsence(receipt.ReceiptId, DateTime.UtcNow);
-                    RunLog.Warning($"Journal: the game says an earlier refund or plot still waits, so receipt {receipt.ReceiptId}, settled only because its placard offered no result, is open again ({written}).");
-                }
+                var written = journal.ReopenAbsence(reopened[index], DateTime.UtcNow);
+                RunLog.Warning($"Journal: the game says an earlier refund or plot still waits, so receipt {reopened[index]}, settled without its result being read, is open again ({written}).");
             }
         });
     }

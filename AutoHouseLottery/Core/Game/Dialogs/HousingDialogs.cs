@@ -99,6 +99,12 @@ internal static unsafe class HousingDialogs
         return new EntryConfirmationReading(identified, deposit, proceed, confirm != null, confirm != null && confirm->IsEnabled);
     }
 
+    // Whether a result dialog is open at all: its text matches at least one result row. Closing goes by this, so a text
+    // that matches two rows is still closed, never left open.
+    public static bool ResultDialogOpen()
+        => AddonReads.TryGetReady(ResultAddon, out var addon)
+        && HousingSheetText.Match(AddonReads.NodeText(((AddonSelectYesno*)addon)->PromptText) ?? string.Empty, HousingTextRows.ResultDialogs.AsSpan()) is not null;
+
     // A result dialog reads as a row only when exactly one result row matches its text, so Yes is never pressed on a text
     // that could be read two ways.
     public static DialogIdentity? IdentifyResultDialog()
@@ -228,8 +234,8 @@ internal static unsafe class HousingDialogs
         return DialogActionResult.Closed;
     }
 
-    // Like the entry's Cancel, closing a result dialog presses nothing on it, and only a dialog that reads as one of the
-    // result rows is closed; any other Yes/No window is left alone.
+    // Like the entry's Cancel, closing a result dialog presses nothing on it, and only a dialog whose text matches one of
+    // the result rows is closed; any other Yes/No window is left alone.
     public static DialogActionResult CloseResult()
     {
         const NativeAction action = NativeAction.CloseResult;
@@ -238,7 +244,7 @@ internal static unsafe class HousingDialogs
             return Refused(action, DialogActionResult.NotPermitted);
         }
 
-        if (IdentifyResultDialog() is not { Text: not null } || !AddonReads.TryGetReady(ResultAddon, out var addon))
+        if (!ResultDialogOpen() || !AddonReads.TryGetReady(ResultAddon, out var addon))
         {
             return Refused(action, DialogActionResult.IdentityMismatch);
         }

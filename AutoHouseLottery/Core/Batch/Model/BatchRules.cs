@@ -136,6 +136,7 @@ internal static class BatchRules
             EntryFailure.None => (BatchMemberState.Queued, BatchHalt.Interrupted),
             EntryFailure.CharacterChanged => (BatchMemberState.Queued, BatchHalt.CharacterChanged),
             EntryFailure.JournalUnavailable => (BatchMemberState.Queued, BatchHalt.JournalUnavailable),
+            EntryFailure.AutoAnswerPlugin => (BatchMemberState.Queued, BatchHalt.AutoAnswerPlugin),
             _ => (BatchMemberState.NotEntered, BatchHalt.None),
         };
     }

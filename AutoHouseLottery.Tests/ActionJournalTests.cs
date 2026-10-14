@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Persistence;
 using AutoHouseLottery.Core.Persistence.Model;
+using AutoHouseLottery.Core.Settlement.Model;
 using static AutoHouseLottery.Tests.HousingFixtures;
 
 namespace AutoHouseLottery.Tests;
@@ -569,6 +570,35 @@ public sealed class ActionJournalTests : IDisposable
         Assert.Equal(JournalWrite.IllegalTransition, reopened.ReopenAbsence(byAbsence.ReceiptId, now));
     }
 
+    [Theory]
+    [InlineData((byte)SettlementState.Entered)]
+    [InlineData((byte)SettlementState.OutcomeUnknown)]
+    [InlineData((byte)SettlementState.LostRefundDue)]
+    [InlineData((byte)SettlementState.ForfeitRefundDue)]
+    public void AnEntrySettledInGameIsRefundedForNoKnownAmountAndA6100RefusalReopensIt(byte recorded)
+    {
+        var journal = Create();
+        var receipt = ConfirmedEntry(journal, Plot(12, 5));
+        Walk(journal, receipt.ReceiptId, PathTo(SettlementState.Entered, (SettlementState)recorded));
+
+        var steps = PathTo((SettlementState)recorded, SettlementState.Refunded);
+        for (var stepIndex = 0; stepIndex < steps.Length; stepIndex++)
+        {
+            Assert.Equal(JournalWrite.Written, journal.AdvanceSettlement(receipt.ReceiptId, steps[stepIndex], null, now, byAbsence: stepIndex == steps.Length - 1));
+        }
+
+        Assert.True(journal.TryGetSettlement(receipt.ReceiptId, out var settled));
+        Assert.Equal(SettlementState.Refunded, settled.State);
+        Assert.Null(settled.ReceivedRefund);
+        Assert.True(settled.SettledByAbsence);
+        Assert.Equal(receipt.ReceiptId, Assert.Single(ManualSettlement.ReopenedBy6100(journal.Snapshot(), ContentId)));
+
+        Assert.Equal(JournalWrite.Written, journal.ReopenAbsence(receipt.ReceiptId, now));
+        Assert.True(journal.TryGetSettlement(receipt.ReceiptId, out var open));
+        Assert.Equal(SettlementState.OutcomeUnknown, open.State);
+        Assert.Empty(ManualSettlement.ReopenedBy6100(journal.Snapshot(), ContentId));
+    }
+
     [Fact]
     public void ASettlementByAbsenceIsNeverPrunedSoItCanStillBeReopened()
     {
@@ -675,6 +705,14 @@ public sealed class ActionJournalTests : IDisposable
         var receipt = Receipt(intent);
         Assert.Equal(JournalWrite.Written, journal.Confirm(intent.AttemptId, receipt, now));
         return receipt;
+    }
+
+    private static SettlementState[] PathTo(SettlementState from, SettlementState to)
+    {
+        Span<SettlementState> steps = stackalloc SettlementState[SettlementPath.MaximumSteps];
+        var count = SettlementPath.Plan(from, to, steps);
+        Assert.True(count >= 0);
+        return steps[..count].ToArray();
     }
 
     private static void Walk(ActionJournal journal, Guid receiptId, params SettlementState[] steps)

@@ -38,12 +38,38 @@ public sealed class RefundAndClaimRulesTests
         Assert.Equal(new RefundSettlement(RefundVerdict.Refunded, Deposit), settled);
     }
 
-    [Fact]
-    public void ADifferentGilRiseIsRecordedAsWhatCameBack()
+    [Theory]
+    [InlineData(Deposit / 2)]
+    [InlineData(Deposit - 1)]
+    [InlineData(Deposit + 1)]
+    [InlineData(Deposit * 2)]
+    public void AGilRiseOfAnyOtherAmountNeverConfirmsARefund(long rise)
     {
-        var settled = RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit / 2, DialogGone: true, PlacardStillOffers: false));
+        var first = new RefundEvidence(Deposit, GilBefore, GilBefore + rise, DialogGone: true, PlacardStillOffers: false);
 
-        Assert.Equal(new RefundSettlement(RefundVerdict.RefundedAmountDiffers, Deposit / 2), settled);
+        Assert.Equal(new RefundSettlement(RefundVerdict.Uncertain, null), RefundRules.Settle(first));
+        Assert.True(RefundRules.NeedsSecondLook(first));
+        Assert.Equal(RefundVerdict.Uncertain, RefundRules.Settle(first with { Looks = 2 }).Verdict);
+        Assert.False(RefundRules.NeedsSecondLook(first with { Looks = 2 }));
+    }
+
+    [Fact]
+    public void ASecondLookThatFindsTheExactAmountConfirmsTheRefund()
+    {
+        var first = new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit / 2, DialogGone: true, PlacardStillOffers: false);
+        var second = first with { GilAfter = GilBefore + Deposit, Looks = 2 };
+
+        Assert.True(RefundRules.NeedsSecondLook(first));
+        Assert.Equal(new RefundSettlement(RefundVerdict.Refunded, Deposit), RefundRules.Settle(second));
+    }
+
+    [Fact]
+    public void AnOwnedPlotsPlacardIsReadableWithoutSaleData()
+    {
+        Assert.True(RefundRules.PlacardReadable(saleRead: true, housingTypeKnown: false, allLabelsKnown: false));
+        Assert.True(RefundRules.PlacardReadable(saleRead: false, housingTypeKnown: true, allLabelsKnown: true));
+        Assert.False(RefundRules.PlacardReadable(saleRead: false, housingTypeKnown: false, allLabelsKnown: true));
+        Assert.False(RefundRules.PlacardReadable(saleRead: false, housingTypeKnown: true, allLabelsKnown: false));
     }
 
     [Theory]

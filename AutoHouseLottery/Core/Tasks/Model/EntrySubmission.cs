@@ -27,6 +27,9 @@ internal enum SubmissionOutcome : byte
 // Disk work runs off the game thread; returnToGame brings the caller back to it before the press.
 internal sealed class EntrySubmission(ActionJournal journal)
 {
+    // The journal write under way, so a caller ending the submission from outside can order its own write after it.
+    public Task InFlight { get; private set; } = Task.CompletedTask;
+
     public async Task<SubmissionOutcome> Submit(ActionAttempt intent, bool gateOpen, Func<Task> returnToGame, Func<DialogActionResult> pressConfirm, Func<DateTime> utcNow)
     {
         if (!gateOpen)
@@ -34,7 +37,9 @@ internal sealed class EntrySubmission(ActionJournal journal)
             return SubmissionOutcome.GateClosed;
         }
 
-        var prepared = await Task.Run(() => journal.Prepare(intent));
+        var preparing = Task.Run(() => journal.Prepare(intent));
+        InFlight = preparing;
+        var prepared = await preparing;
         if (prepared != JournalWrite.Written)
         {
             return prepared switch
@@ -49,11 +54,15 @@ internal sealed class EntrySubmission(ActionJournal journal)
         var pressed = pressConfirm();
         if (pressed != DialogActionResult.Pressed)
         {
-            await Task.Run(() => journal.Reject(intent.AttemptId, utcNow()));
+            var rejecting = Task.Run(() => journal.Reject(intent.AttemptId, utcNow()));
+            InFlight = rejecting;
+            await rejecting;
             return SubmissionOutcome.PressRefused;
         }
 
-        var dispatched = await Task.Run(() => journal.RecordDispatch(intent.AttemptId, utcNow()));
+        var dispatching = Task.Run(() => journal.RecordDispatch(intent.AttemptId, utcNow()));
+        InFlight = dispatching;
+        var dispatched = await dispatching;
         return dispatched == JournalWrite.Written ? SubmissionOutcome.Dispatched : SubmissionOutcome.DispatchUnrecorded;
     }
 }

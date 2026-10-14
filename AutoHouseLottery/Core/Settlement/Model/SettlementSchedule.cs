@@ -14,6 +14,7 @@ internal enum SchedulerBlock : byte
     NothingDue,
     JournalUnavailable,
     AutoAnswerPlugin,
+    HeldAfterAlert,
     InDuty,
     InCombat,
     InCutscene,
@@ -26,7 +27,8 @@ internal enum SchedulerBlock : byte
 }
 
 // What the scheduler checks once a second before background work. AutoAnswerLoaded: a plugin that answers dialogs on its
-// own is loaded, so no visit may open a result dialog. IdleMs is the time since the player's own last input;
+// own is loaded, so no visit may open a result dialog. HeldAfterAlert: a GM alert stopped the plugin and the player has
+// not touched the game since. IdleMs is the time since the player's own last input;
 // TravelAllowance is what this session may still spend travelling; Gil is the live balance, null when unreadable.
 internal readonly record struct SchedulerFacts(
     bool LoggedIn,
@@ -34,6 +36,7 @@ internal readonly record struct SchedulerFacts(
     bool WorkDue,
     bool JournalWritable,
     bool AutoAnswerLoaded,
+    bool HeldAfterAlert,
     bool InDuty,
     bool InCombat,
     bool InCutscene,
@@ -84,6 +87,11 @@ internal static class SchedulerRules
             return SchedulerBlock.AutoAnswerPlugin;
         }
 
+        if (facts.HeldAfterAlert)
+        {
+            return SchedulerBlock.HeldAfterAlert;
+        }
+
         if (facts.InDuty)
         {
             return SchedulerBlock.InDuty;
@@ -126,6 +134,10 @@ internal static class SchedulerRules
 
         return facts.TravelAllowance < TravelLegEstimate ? SchedulerBlock.TravelBudgetSpent : SchedulerBlock.None;
     }
+
+    // A hold a GM alert set ends only with the player's own input after it: a minute of idleness alone never lets
+    // automatic visits start again while somebody may be watching the character.
+    public static bool HoldReleased(long heldAtMs, long idleMs, long nowMs) => nowMs - idleMs > heldAtMs;
 
     // The smaller of what is left of the session cap and what the character can spend above its reserve. An unreadable
     // balance allows nothing.

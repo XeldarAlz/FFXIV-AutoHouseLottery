@@ -3,8 +3,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Integration;
+using AutoHouseLottery.Core.Integration.Model;
 using AutoHouseLottery.Core.Maps;
-using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Providers;
 using AutoHouseLottery.Core.Providers.Model;
 using AutoHouseLottery.Core.Saved;
@@ -31,7 +31,7 @@ internal sealed class Discovery : IDisposable
     private (uint World, int Library, int Shortlist) scopeInputs = (uint.MaxValue, -1, -1);
     private long nextTickMs;
 
-    public Discovery(Configuration configuration, string directory, HousingFeedService feed, CurrentCharacter character, Func<JournalSnapshot> journal, Func<bool> windowOpen)
+    public Discovery(Configuration configuration, string directory, HousingFeedService feed, CurrentCharacter character, Func<PlanningJournal> journal, Func<bool> windowOpen)
     {
         this.windowOpen = windowOpen;
         this.configuration = configuration;
