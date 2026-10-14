@@ -14,7 +14,7 @@ using AutoHouseLottery.Core.Travel.Model;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-internal sealed record RunServices(HousingContext Housing, HousingObservers Observers, Func<RealEntryGrant?> Grant, Action ConsumeGrant);
+internal sealed record RunServices(HousingContext Housing, HousingObservers Observers, Func<RealEntryGrant?> Grant, Action ConsumeGrant, Action CloseConfirmationLater);
 
 // Drives one character's entry through the steps of TECHNICAL_DESIGN section 11. Each await does at most one validated
 // operation and every wait has its own deadline. A pause or stop before the intent cancels this task and relaunches
@@ -262,9 +262,9 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
             travelToken = 0;
         }
 
-        if (confirmationOpenedByRun && !EntrySteps.InSubmissionWindow(session.Step))
+        if (confirmationOpenedByRun && !EntrySteps.InSubmissionWindow(session.Step) && !CloseConfirmationNow())
         {
-            CloseConfirmationNow();
+            services.CloseConfirmationLater();
         }
     }
 

@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
+using AutoHouseLottery.Core.Game.Dialogs;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
@@ -22,6 +23,7 @@ namespace AutoHouseLottery.Core.Tasks;
 internal sealed class RunController
 {
     private const int SchedulerPollMs = TimeUnits.MillisecondsPerSecond;
+    private const int ConfirmationCloseRetryMs = 5_000;
 
     private readonly ExecutionLease lease = new();
     private readonly HousingContext housing;
@@ -35,11 +37,12 @@ internal sealed class RunController
     private bool reconcileWanted;
     private ulong lastContentId;
     private long nextPollMs;
+    private long closeConfirmationUntilMs;
 
     public RunController(HousingContext housing, HousingObservers observers)
     {
         this.housing = housing;
-        services = new RunServices(housing, observers, () => grant, ConsumeGrant);
+        services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater);
         reconcileWanted = true;
         Svc.Framework.Update += OnUpdate;
     }
@@ -443,6 +446,41 @@ internal sealed class RunController
         LastReconcile = reconcile.Report;
     }
 
+    // A paused or stopped run that could not close the confirmation it opened leaves it to these retries, for a few
+    // seconds and only while no run task is driving the game again.
+    private void CloseConfirmationLater()
+    {
+        closeConfirmationUntilMs = Environment.TickCount64 + ConfirmationCloseRetryMs;
+        RunLog.Info("The entry confirmation the run opened is still open; closing it again.");
+    }
+
+    private void RetryConfirmationClose(long now)
+    {
+        if (closeConfirmationUntilMs == 0)
+        {
+            return;
+        }
+
+        if (HousingDialogs.IdentifyEntryConfirmation() is not { Text: HousingText.EntryConfirmation })
+        {
+            closeConfirmationUntilMs = 0;
+            RunLog.Info("The entry confirmation the run opened is closed.");
+            return;
+        }
+
+        if (task is not null || now >= closeConfirmationUntilMs)
+        {
+            closeConfirmationUntilMs = 0;
+            RunLog.Warning("The entry confirmation the run opened is still open; close it by hand and do not press Confirm.");
+            return;
+        }
+
+        using (NativeActionGate.Allow(NativeAction.CancelEntry))
+        {
+            HousingDialogs.CancelEntry();
+        }
+    }
+
     private void ConsumeGrant()
     {
         if (grant is not { Used: false } open)
@@ -458,6 +496,7 @@ internal sealed class RunController
     private void OnUpdate(IFramework framework)
     {
         var now = Environment.TickCount64;
+        RetryConfirmationClose(now);
         if (now < nextPollMs)
         {
             return;
