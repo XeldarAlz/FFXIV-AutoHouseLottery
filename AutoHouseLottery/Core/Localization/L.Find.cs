@@ -192,8 +192,7 @@ internal static partial class L
         public static readonly LocString CopyAddress = new("findHome.copyAddress", "Copy address");
         public static readonly LocString Copied = new("findHome.copied", "Address copied");
         public static readonly LocString NewList = new("findHome.newList", "New list");
-        public static readonly LocString InspectPlot = new("findHome.inspectPlot", "Inspect plot");
-        public static readonly LocString InspectLater = new("findHome.inspectLater", "Visiting arrives with the travel update");
+        public static readonly LocString EnterWhenOpen = new("findHome.enterWhenOpen", "Enter shows here while this plot's lottery takes entries.");
         public static readonly LocString FieldSize = new("findHome.fieldSize", "Size");
         public static readonly LocString FieldDeposit = new("findHome.fieldDeposit", "Deposit");
         public static readonly LocString FieldBuyers = new("findHome.fieldBuyers", "Allowed buyers");

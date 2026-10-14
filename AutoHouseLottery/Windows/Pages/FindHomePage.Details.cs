@@ -143,11 +143,17 @@ internal sealed partial class FindHomePage
             return;
         }
 
-        UnavailableAction(FontAwesomeIcon.Search, Loc.T(L.Find.InspectPlot), Styling.AccentBlue, Loc.T(L.Find.InspectLater));
+        ImGui.PushTextWrapPos();
+        using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextMuted))
+        {
+            ImGui.TextUnformatted(Loc.T(L.Find.EnterWhenOpen));
+        }
+
+        ImGui.PopTextWrapPos();
     }
 
-    // Enter always asks for a dry run, which no grant can turn real, from the frozen policy; while the controller would
-    // refuse it, the button is locked and its reason is shown under it.
+    // Enter asks for a dry run until entries are validated in game, and a requested dry run no grant can turn real; it
+    // starts from the frozen policy. While the controller would refuse it, the button is locked and its reason is shown.
     private void DrawEnterAction(string title, RunMode mode, RunPolicy? policy, string? missing, StartCheck check)
     {
         var controller = plugin.Controller;
@@ -155,7 +161,8 @@ internal sealed partial class FindHomePage
         var enabled = policy is not null && reason.Length == 0;
         if (HeroButton.Draw(FontAwesomeIcon.Ticket, title, BuyerLabel(State.Filter.Buyer), Styling.AccentGlow, enabled) && policy is not null && enabled)
         {
-            var refusal = mode == RunMode.Exact ? controller.StartExact(policy) : controller.StartBestMatch(policy);
+            var dryRun = EntryCapabilities.PlayerDryRun;
+            var refusal = mode == RunMode.Exact ? controller.StartExact(policy, dryRun) : controller.StartBestMatch(policy, dryRun);
             check.Invalidate();
             if (refusal != StartRefusal.None)
             {
@@ -167,7 +174,7 @@ internal sealed partial class FindHomePage
         ImGui.PushTextWrapPos();
         using (ImRaii.PushColor(ImGuiCol.Text, enabled ? Styling.TextDim : Styling.TextMuted))
         {
-            ImGui.TextUnformatted(enabled ? Loc.T(L.Run.DryRunHint) : reason);
+            ImGui.TextUnformatted(enabled ? Loc.T(EntryCapabilities.PlayerDryRun ? L.Run.DryRunHint : L.Run.RealEntryHint) : reason);
         }
 
         ImGui.PopTextWrapPos();
@@ -179,20 +186,6 @@ internal sealed partial class FindHomePage
         BuyerType.FreeCompany => Loc.T(L.Find.BuyerFreeCompany),
         _ => null,
     };
-
-    // Visiting arrives with a later update; its button is shown, locked, with the reason under it.
-    private static void UnavailableAction(FontAwesomeIcon icon, string title, Vector4 accent, string reason)
-    {
-        HeroButton.Draw(icon, title, null, accent, false);
-        Styling.VSpace(4f);
-        ImGui.PushTextWrapPos();
-        using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextMuted))
-        {
-            ImGui.TextUnformatted(reason);
-        }
-
-        ImGui.PopTextWrapPos();
-    }
 
     private void DrawSaveToListPopup(PlotKey key)
     {
