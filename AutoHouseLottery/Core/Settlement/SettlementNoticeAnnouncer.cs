@@ -59,6 +59,7 @@ internal sealed class SettlementNoticeAnnouncer(HousingContext housing, Configur
         var deadline = notice.DeadlineUtc is { } at ? at.ToLocalTime().ToString(DateFormat, Loc.Culture) : Loc.T(L.Lottery.DeadlineUnknown);
         return notice.Kind switch
         {
+            SettlementNoticeKind.Won => Loc.T(L.Settlement.NoticeWon, address, character, deadline),
             SettlementNoticeKind.ClaimDeadline => Loc.T(L.Settlement.NoticeClaimDeadline, address, character, deadline),
             SettlementNoticeKind.RefundDeadline => Loc.T(L.Settlement.NoticeRefundDeadline, address, character, deadline),
             _ => Loc.T(L.Settlement.NoticeResults, address, character),

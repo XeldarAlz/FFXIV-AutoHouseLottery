@@ -47,7 +47,9 @@ internal static class ManualSettlement
 
     // A fresh reading from the validated lottery record that shows no entry, taken during the results period of a cycle
     // in which the character's entry had already been found to owe a refund: the refund was collected. Only the record
-    // can say "no entry"; the Timers text cannot, and an older cycle's entry may simply have left the record.
+    // can say "no entry"; the Timers text cannot, and an older cycle's entry may simply have left the record. A press a
+    // running visit has just made (Prepared or Dispatched) is that visit's own to confirm, with its amount, so only one
+    // already set aside as in question is confirmed here.
     public static ImmutableArray<SettlementFix> FromReading(in JournalSnapshot snapshot, in LotterySnapshot reading, in CyclePosition position)
     {
         if (reading is not { State: LotterySnapshotState.LoadedNone, Source: LotterySource.Record } || position.Phase != LotteryPhase.Results)
@@ -68,7 +70,7 @@ internal static class ManualSettlement
             }
 
             var open = SettlementLookups.OpenAttempt(snapshot, receipt.ReceiptId);
-            var refundInQuestion = open is { Kind: ActionKind.Refund } && settlement.State is SettlementState.RefundPending or SettlementState.NeedsReconciliation;
+            var refundInQuestion = open is { Kind: ActionKind.Refund, State: AttemptState.NeedsReconciliation } && settlement.State == SettlementState.NeedsReconciliation;
             if ((open is null && SettlementStates.RefundOwed(settlement.State)) || refundInQuestion)
             {
                 fixes.Add(new SettlementFix(receipt.ReceiptId, SettlementState.Refunded, open?.AttemptId));

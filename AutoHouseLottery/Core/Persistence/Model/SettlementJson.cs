@@ -15,4 +15,8 @@ internal readonly struct SettlementJson
     public DateTime? UpdatedUtc { get; init; }
 
     public long? TravelSpent { get; init; }
+
+    public DateTime? RefundDeadlineUtc { get; init; }
+
+    public bool? SettledByAbsence { get; init; }
 }

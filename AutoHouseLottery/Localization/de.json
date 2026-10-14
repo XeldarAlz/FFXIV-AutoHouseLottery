@@ -643,7 +643,7 @@
   "settlement.outcome.forfeit": "Der Gewinn von {0} wurde nicht rechtzeitig beansprucht. Nach der Gebühr von 50 % ist eine Erstattung von {1} fällig.",
   "settlement.outcome.expired": "Die Erstattung für {0} ist verfallen.",
   "settlement.outcome.claimed": "{0} ist beansprucht.",
-  "settlement.outcome.refunded": "Der Einsatz für {0} wurde bereits außerhalb des Plugins zurückgegeben.",
+  "settlement.outcome.refunded": "{0} bietet diesem Charakter kein Ergebnis mehr an; es gilt daher als außerhalb des Plugins abgewickelt. Der Betrag wurde nicht gesehen.",
   "settlement.outcome.notEntered": "{0} zeigt keine Teilnahme dieses Charakters; der frühere Versuch hat also nicht teilgenommen.",
   "settlement.failure.character": "Melde dich mit dem Charakter an, der teilgenommen hat.",
   "settlement.failure.nothing": "Für diese Teilnahme gibt es nichts mehr abzuwickeln.",
@@ -684,6 +684,9 @@
   "dev.settleNotFound": "Keine offene Teilnahme des angemeldeten Charakters passt zu diesem Beleg oder dieser Adresse.",
   "dev.refundGrantWarning": "ECHTE ERSTATTUNG ERLAUBT, nur für diese Sitzung: {0} darf die Erstattung bei {1} einmal annehmen. Ein /ahl dev settle auf diesem Grundstück mit dem Wort real oder eine automatische Erstattung drückt Ja. /ahl dev revoke-real-settlement nimmt das zurück.",
   "dev.claimGrantWarning": "ECHTE BEANSPRUCHUNG ERLAUBT, nur für diese Sitzung: {0} darf {1} einmal beanspruchen. Ein /ahl dev settle auf diesem Grundstück mit den Wörtern claim und real drückt Ja und kann nicht rückgängig gemacht werden. /ahl dev revoke-real-settlement nimmt das zurück.",
-  "dev.settlementGrantRefused": "Nicht erlaubt: Nenne den angemeldeten Charakter, einen Bezirk, ein Viertel und ein Grundstück auf seiner Heimatwelt.",
-  "dev.settlementRevoked": "Erlaubnisse für echte Erstattungen und Beanspruchungen zurückgenommen. Jede Abwicklung ist wieder ein Probelauf."
+  "dev.settlementGrantRefused": "Nicht erlaubt: Nenne den angemeldeten Charakter sowie Bezirk, Viertel und Grundstück einer seiner offenen Teilnahmen auf seiner Heimatwelt.",
+  "dev.settlementRevoked": "Erlaubnisse für echte Erstattungen und Beanspruchungen zurückgenommen. Jede Abwicklung ist wieder ein Probelauf.",
+  "runStart.autoAnswer": "Schalte zuerst {0} aus: Es könnte die Dialoge der Verlosung beantworten.",
+  "settlement.absenceMarker": "Am {0} bot die Informationstafel kein Ergebnis an; noch offen",
+  "settlement.notice.won": "{1} hat {0} gewonnen. Beanspruche es unter Meine Verlosung vor {2}."
 }

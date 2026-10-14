@@ -34,6 +34,9 @@ internal sealed class MyLotteryPage
     private const string Separator = " · ";
     private const string DateFormat = "g";
 
+    // The logged-in character and the estates it holds, read without building a whole character context each frame.
+    private readonly record struct CharacterKey(ulong ContentId, ulong? PersonalEstate, ulong? FreeCompanyEstate);
+
     private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State, string LogInAs, string? SettleHint);
 
     private ImmutableArray<RowView> rows = [];
@@ -49,7 +52,8 @@ internal sealed class MyLotteryPage
     private string? reconcileText;
     private Guid expandedReceipt;
     private string summary = string.Empty;
-    private ulong? cachedEstates;
+    private CharacterKey cachedCharacter;
+    private int cachedSightings = -1;
     private SchedulerBlock statusFor;
     private ulong statusCharacter;
     private LanguageInfo? statusLanguage;
@@ -101,16 +105,20 @@ internal sealed class MyLotteryPage
         var snapshot = housing.JournalSnapshot;
         var position = housing.CurrentPosition(DateTime.UtcNow);
         var characters = plugin.Configuration.Characters.Count;
-        var context = CharacterContextReader.Read();
-        var estates = context?.PersonalEstate?.RawId ^ context?.FreeCompanyEstate?.RawId ^ context?.ContentId;
+        var character = Svc.ClientState.IsLoggedIn && Svc.PlayerState.IsLoaded
+            ? new CharacterKey(Svc.PlayerState.ContentId, CharacterContextReader.ReadPersonalEstateId(), CharacterContextReader.ReadFreeCompanyEstateId())
+            : default;
+        var sightings = plugin.Configuration.AbsenceSightings.Count;
         if (snapshot.Attempts == cachedAttempts && snapshot.Receipts == cachedReceipts && snapshot.Settlements == cachedSettlements
             && position.Cycle == cachedPosition.Cycle && position.Phase == cachedPosition.Phase
-            && ReferenceEquals(Loc.Culture, cachedCulture) && characters == cachedCharacterCount && estates == cachedEstates)
+            && ReferenceEquals(Loc.Culture, cachedCulture) && characters == cachedCharacterCount && character == cachedCharacter && sightings == cachedSightings)
         {
             return;
         }
 
-        cachedEstates = estates;
+        cachedCharacter = character;
+        cachedSightings = sightings;
+        var context = CharacterContextReader.Read();
         summary = Summary(NetReturn.Of(snapshot));
 
         cachedAttempts = snapshot.Attempts;
@@ -125,7 +133,7 @@ internal sealed class MyLotteryPage
         {
             var row = built[index];
             var name = CharacterName(plugin, row.ContentId);
-            views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(name, Separator, Address(row)), Facts(row), Receipt(row), StateLabel(row.State), Loc.T(L.Lottery.LogInAs, name),
+            views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(name, Separator, Address(row)), Facts(row, plugin.Configuration.AbsenceSighting(row.Id)), Receipt(row), StateLabel(row.State), Loc.T(L.Lottery.LogInAs, name),
                 SettleHint(snapshot, row, context)));
         }
 
@@ -380,7 +388,7 @@ internal sealed class MyLotteryPage
         return row.AddressText ?? Loc.T(L.Lottery.PlotNotNamed);
     }
 
-    private static string Facts(LotteryRow row)
+    private static string Facts(LotteryRow row, AbsenceSighting? sighting)
     {
         var number = row.EntryNumber is { } entryNumber ? Loc.T(L.Lottery.Number, entryNumber) : Loc.T(L.Lottery.NumberUnknown);
         var deposit = row.Deposit is { } amount ? Loc.T(L.Lottery.Deposit, Loc.Gil(amount)) : Loc.T(L.Lottery.DepositUnknown);
@@ -388,6 +396,11 @@ internal sealed class MyLotteryPage
         if (row.Section != LotterySection.History)
         {
             facts = string.Concat(facts, Separator, Deadline(row));
+        }
+
+        if (row.Section != LotterySection.History && sighting is { } seen)
+        {
+            facts = string.Concat(facts, Separator, Loc.T(L.Settlement.AbsenceMarker, seen.AtUtc.ToLocalTime().ToString(DateFormat, Loc.Culture)));
         }
 
         return row.Imported ? string.Concat(facts, Separator, Loc.T(L.Lottery.Imported)) : facts;

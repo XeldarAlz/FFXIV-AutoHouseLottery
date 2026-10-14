@@ -643,7 +643,7 @@
   "settlement.outcome.forfeit": "Le gain de {0} n'a pas été acheté à temps. Après les frais de 50 %, un remboursement de {1} vous est dû.",
   "settlement.outcome.expired": "Le remboursement pour {0} a expiré.",
   "settlement.outcome.claimed": "{0} est acheté.",
-  "settlement.outcome.refunded": "Le dépôt pour {0} a déjà été rendu en dehors du plugin.",
+  "settlement.outcome.refunded": "{0} ne propose plus de résultat à ce personnage ; il est donc enregistré comme réglé en dehors du plugin. Le montant n'a pas été vu.",
   "settlement.outcome.notEntered": "{0} n'indique aucune participation de ce personnage ; la tentative précédente n'a donc pas participé.",
   "settlement.failure.character": "Connectez-vous avec le personnage qui a participé.",
   "settlement.failure.nothing": "Il ne reste rien à régler pour cette participation.",
@@ -684,6 +684,9 @@
   "dev.settleNotFound": "Aucune participation non réglée du personnage connecté ne correspond à ce reçu ou à cette adresse.",
   "dev.refundGrantWarning": "REMBOURSEMENT RÉEL AUTORISÉ pour cette session uniquement : {0} peut accepter une fois le remboursement à {1}. Un /ahl dev settle sur ce terrain avec le mot real, ou un remboursement automatique, appuie sur Oui. /ahl dev revoke-real-settlement le retire.",
   "dev.claimGrantWarning": "ACHAT RÉEL AUTORISÉ pour cette session uniquement : {0} peut acheter {1} une fois. Un /ahl dev settle sur ce terrain avec les mots claim et real appuie sur Oui et ne peut pas être annulé. /ahl dev revoke-real-settlement le retire.",
-  "dev.settlementGrantRefused": "Non autorisé : indiquez le personnage connecté, un quartier, un secteur et un terrain sur son monde d'origine.",
-  "dev.settlementRevoked": "Autorisations de remboursement et d'achat réels retirées. Chaque règlement redevient une simulation."
+  "dev.settlementGrantRefused": "Non autorisé : indiquez le personnage connecté et le quartier, le secteur et le terrain de l'une de ses participations non réglées sur son monde d'origine.",
+  "dev.settlementRevoked": "Autorisations de remboursement et d'achat réels retirées. Chaque règlement redevient une simulation.",
+  "runStart.autoAnswer": "Désactivez d'abord {0} : il pourrait répondre aux fenêtres de la loterie.",
+  "settlement.absenceMarker": "Le panneau ne proposait aucun résultat le {0} ; toujours en attente",
+  "settlement.notice.won": "{1} a gagné {0}. Achetez-le dans Ma loterie avant {2}."
 }

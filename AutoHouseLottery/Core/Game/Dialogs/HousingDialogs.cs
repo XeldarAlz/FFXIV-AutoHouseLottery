@@ -99,6 +99,8 @@ internal static unsafe class HousingDialogs
         return new EntryConfirmationReading(identified, deposit, proceed, confirm != null, confirm != null && confirm->IsEnabled);
     }
 
+    // A result dialog reads as a row only when exactly one result row matches its text, so Yes is never pressed on a text
+    // that could be read two ways.
     public static DialogIdentity? IdentifyResultDialog()
     {
         if (!AddonReads.TryGetReady(ResultAddon, out var addon))
@@ -107,11 +109,12 @@ internal static unsafe class HousingDialogs
         }
 
         var shown = AddonReads.NodeText(((AddonSelectYesno*)addon)->PromptText) ?? string.Empty;
-        return new DialogIdentity(ResultAddon, HousingSheetText.Match(shown, HousingTextRows.ResultDialogs.AsSpan()), shown);
+        return new DialogIdentity(ResultAddon, HousingSheetText.MatchExactlyOne(shown, HousingTextRows.ResultDialogs.AsSpan()), shown);
     }
 
-    // The result dialog as it stands: the result row its text matched, the refund a refund row names (read only when its
-    // text is exactly that row's shape), and the text itself for the log.
+    // The result dialog as it stands: the one result row its text matched (none when it matched no row or more than one),
+    // the refund and the refund deadline a refund row names (read only when its text is exactly that row's shape), and
+    // the text itself for the log.
     public static ResultDialogReading? ReadResultDialog()
     {
         if (!AddonReads.TryGetReady(ResultAddon, out var addon))
@@ -120,14 +123,16 @@ internal static unsafe class HousingDialogs
         }
 
         var shown = AddonReads.NodeText(((AddonSelectYesno*)addon)->PromptText) ?? string.Empty;
-        var row = HousingSheetText.Match(shown, HousingTextRows.ResultDialogs.AsSpan());
+        var row = HousingSheetText.MatchExactlyOne(shown, HousingTextRows.ResultDialogs.AsSpan());
         long? refund = null;
+        DateTime? deadline = null;
         if (row is { } matched && HousingSheetText.Pattern(matched).TryCapture(shown, out var gaps))
         {
             refund = ResultDialogText.Refund(matched, gaps);
+            deadline = ResultDialogText.RefundDeadline(matched, gaps, HousingSheetText.DateOrder);
         }
 
-        return new ResultDialogReading(row, refund, shown);
+        return new ResultDialogReading(row, refund, deadline, shown);
     }
 
     public static DialogActionResult PressPlacardButton(HousingText label)

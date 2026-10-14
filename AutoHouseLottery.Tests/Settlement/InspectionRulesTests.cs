@@ -10,6 +10,8 @@ public sealed class InspectionRulesTests
 {
     private const long ForfeitRefund = Deposit / 2;
 
+    private static readonly PlacardEvidence strongPlacard = new(SaleRead: true, Unowned: true, AllLabelsKnown: true, LotteryButtonShown: true);
+
     [Theory]
     [InlineData((byte)HousingText.ResultWon, (byte)InspectionOutcome.WonUnclaimed)]
     [InlineData((byte)HousingText.ResultSoleEntrantWon, (byte)InspectionOutcome.WonUnclaimed)]
@@ -22,6 +24,7 @@ public sealed class InspectionRulesTests
 
         Assert.Equal((InspectionOutcome)expected, verdict.Outcome);
         Assert.Equal(InspectionReason.None, verdict.Reason);
+        Assert.False(verdict.ByAbsence);
     }
 
     [Fact]
@@ -38,13 +41,8 @@ public sealed class InspectionRulesTests
     [InlineData((byte)HousingText.LotteryNumber)]
     public void AnyOtherDialogIsAnUnknownOutcome(byte row)
     {
-        var verdict = InspectionRules.Decide(Facts(ResultKinds.Of(true, (HousingText)row)));
-        var unmatched = InspectionRules.Decide(Facts(ResultKinds.Of(true, null)));
-
-        Assert.Equal(InspectionReason.UnrecognizedDialog, unmatched.Reason);
-
-        Assert.Equal(InspectionOutcome.OutcomeUnknown, verdict.Outcome);
-        Assert.Equal(InspectionReason.UnrecognizedDialog, verdict.Reason);
+        Assert.Equal(InspectionReason.UnrecognizedDialog, InspectionRules.Decide(Facts(ResultKinds.Of(true, (HousingText)row))).Reason);
+        Assert.Equal(InspectionReason.UnrecognizedDialog, InspectionRules.Decide(Facts(ResultKinds.Of(true, null))).Reason);
     }
 
     [Theory]
@@ -83,6 +81,19 @@ public sealed class InspectionRulesTests
         Assert.Equal(InspectionReason.ContradictsRecord, lossDuringClaim.Reason);
     }
 
+    [Theory]
+    [InlineData((byte)ResultKind.Lost)]
+    [InlineData((byte)ResultKind.Forfeited)]
+    [InlineData((byte)ResultKind.Expired)]
+    [InlineData((byte)ResultKind.Won)]
+    public void AnOwnedPlotNeverOverridesAnExplicitResultRow(byte kind)
+    {
+        var verdict = InspectionRules.Decide(Facts((ResultKind)kind, offered: Deposit) with { OwnsPlot = true });
+
+        Assert.Equal(InspectionOutcome.OutcomeUnknown, verdict.Outcome);
+        Assert.Equal(InspectionReason.ContradictsRecord, verdict.Reason);
+    }
+
     [Fact]
     public void AnUnclaimedWinPastItsResultsPeriodBecomesAForfeitRefund()
     {
@@ -101,70 +112,110 @@ public sealed class InspectionRulesTests
     }
 
     [Fact]
-    public void NoResultOfferedIsNeverReadAsALoss()
+    public void WhileTheAbsenceRuleIsUnvalidatedNoResultOfferedLeavesTheEntryPending()
     {
-        var verdict = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: false));
+        var everything = Absence(validated: false) with { ReadingShowsNoEntry = true, SeenInAnotherSession = true, ClaimDeadlinePassed = true };
 
-        Assert.NotEqual(InspectionOutcome.LostRefundDue, verdict.Outcome);
-        Assert.Null(verdict.Refund);
+        Assert.False(SettlementCapabilities.AbsenceSettlementValidated);
+        Assert.Equal(InspectionVerdict.Unknown(InspectionReason.NoResultOffered), InspectionRules.Decide(NoResult() with { Absence = everything }));
+        Assert.Equal(InspectionVerdict.Unknown(InspectionReason.NoResultOffered),
+            InspectionRules.Decide(NoResult(SettlementState.LostRefundDue, RefundKind.Loss) with { Absence = everything }));
     }
 
     [Fact]
-    public void APressedButtonWithoutADialogOrAReadingStillShowingTheEntryDecidesNothing()
+    public void ThisCyclesAbsenceNeedsTheRecordToShowNoEntry()
     {
-        var buttonButNoDialog = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: true, readingShowsEntry: false));
-        var entryStillShown = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: false, readingShowsEntry: true));
-        var claimInQuestion = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.NeedsReconciliation, open: ActionKind.Claim));
+        var missingReading = Absence() with { CurrentCycle = true, ReadingShowsNoEntry = false };
+        var proved = missingReading with { ReadingShowsNoEntry = true };
 
-        Assert.Equal(InspectionReason.ResultNotShown, buttonButNoDialog.Reason);
-        Assert.Equal(InspectionReason.NoResultOffered, entryStillShown.Reason);
-        Assert.Equal(InspectionReason.NoResultOffered, claimInQuestion.Reason);
+        Assert.Equal(InspectionReason.NoResultOffered, InspectionRules.Decide(NoResult() with { Absence = missingReading }).Reason);
+        var settled = InspectionRules.Decide(NoResult() with { Absence = proved });
+        Assert.Equal(InspectionOutcome.Refunded, settled.Outcome);
+        Assert.True(settled.ByAbsence);
+        Assert.Null(settled.Refund);
     }
 
     [Fact]
-    public void AResultNoLongerOfferedWasSettledOutsideTheVisitForAnAmountNobodySaw()
+    public void AnEarlierCyclesAbsenceNeedsTwoSessions()
     {
-        var owed = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.LostRefundDue, recordedRefund: RefundKind.Loss));
-        var byOwnPress = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.NeedsReconciliation, recordedRefund: RefundKind.Loss, open: ActionKind.Refund) with { RefundWindowPassed = true });
-        var neverRead = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, readingShowsEntry: false));
-        var lapsed = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false) with { RefundWindowPassed = true });
+        var once = Absence() with { CurrentCycle = false, SeenInAnotherSession = false };
 
-        Assert.Equal(new InspectionVerdict(InspectionOutcome.Refunded, null, InspectionReason.None), owed);
-        Assert.Equal(new InspectionVerdict(InspectionOutcome.Refunded, null, InspectionReason.None), byOwnPress);
-        Assert.Equal(InspectionOutcome.Refunded, neverRead.Outcome);
-        Assert.Equal(InspectionOutcome.Expired, lapsed.Outcome);
+        Assert.Equal(InspectionReason.NoResultOffered, InspectionRules.Decide(NoResult() with { Absence = once }).Reason);
+        Assert.Equal(InspectionOutcome.Refunded, InspectionRules.Decide(NoResult() with { Absence = once with { SeenInAnotherSession = true } }).Outcome);
+        Assert.Equal(InspectionOutcome.Expired, InspectionRules.Decide(NoResult() with { Absence = once with { SeenInAnotherSession = true }, RefundWindowPassed = true }).Outcome);
     }
 
     [Fact]
-    public void AClaimMadeInGameSettlesTheWin()
+    public void AWinWithoutAResultIsNeverSettledBeforeItsClaimDeadline()
     {
-        var claimed = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.WonUnclaimed) with { OwnsPlot = true });
-        var neverRead = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false) with { OwnsPlot = true });
-        var refundOnRecord = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.LostRefundDue, recordedRefund: RefundKind.Loss) with { OwnsPlot = true });
+        var beforeDeadline = Absence() with { SeenInAnotherSession = true, ReadingShowsNoEntry = true, ClaimDeadlinePassed = false };
+
+        Assert.Equal(InspectionReason.NoResultOffered, InspectionRules.Decide(NoResult(SettlementState.WonUnclaimed) with { Absence = beforeDeadline }).Reason);
+        Assert.Equal(InspectionOutcome.Refunded, InspectionRules.Decide(NoResult(SettlementState.WonUnclaimed) with { Absence = beforeDeadline with { ClaimDeadlinePassed = true } }).Outcome);
+    }
+
+    [Theory]
+    [InlineData(false, true, true, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, true, true, false)]
+    public void OnlyAFullyReadPlacardOfAnUnownedPlotWithKnownButtonsCounts(bool saleRead, bool unowned, bool allKnown, bool lotteryButton)
+    {
+        var weak = Absence() with { Placard = new PlacardEvidence(saleRead, unowned, allKnown, lotteryButton), SeenInAnotherSession = true, ReadingShowsNoEntry = true };
+
+        Assert.Equal(InspectionReason.NoResultOffered, InspectionRules.Decide(NoResult() with { Absence = weak }).Reason);
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, false, weak));
+    }
+
+    [Fact]
+    public void AClaimInQuestionOrAPressedButtonWithoutADialogDecidesNothing()
+    {
+        var strong = Absence() with { SeenInAnotherSession = true };
+
+        Assert.Equal(InspectionReason.NoResultOffered, InspectionRules.Decide(NoResult(SettlementState.NeedsReconciliation) with { OpenAttempt = ActionKind.Claim, Absence = strong }).Reason);
+        Assert.Equal(InspectionReason.ResultNotShown, InspectionRules.Decide(NoResult() with { ResultsOffered = true, Absence = strong }).Reason);
+    }
+
+    [Fact]
+    public void AClaimMadeInGameSettlesTheWinButNeverARefundOnRecord()
+    {
+        var claimed = InspectionRules.Decide(NoResult(SettlementState.WonUnclaimed) with { OwnsPlot = true });
+        var neverRead = InspectionRules.Decide(NoResult() with { OwnsPlot = true });
+        var refundOnRecord = InspectionRules.Decide(NoResult(SettlementState.LostRefundDue, RefundKind.Loss) with { OwnsPlot = true });
 
         Assert.Equal(InspectionOutcome.Claimed, claimed.Outcome);
         Assert.Equal(InspectionOutcome.Claimed, neverRead.Outcome);
-        Assert.Equal(InspectionOutcome.OutcomeUnknown, refundOnRecord.Outcome);
+        Assert.Equal(InspectionReason.ContradictsRecord, refundOnRecord.Reason);
     }
 
     [Fact]
     public void AnyResultRowAtTheAttemptedPlotProvesTheEntryWasMade()
     {
-        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Lost, ownsPlot: false));
-        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.SoleEntrantWon, ownsPlot: false));
-        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Expired, ownsPlot: false));
-        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, ownsPlot: true));
+        var none = Absence(validated: false);
+
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Lost, ownsPlot: false, none));
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.SoleEntrantWon, ownsPlot: false, none));
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Expired, ownsPlot: false, none));
+        Assert.Equal(AttemptVerdict.Entered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, ownsPlot: true, none));
     }
 
     [Fact]
-    public void OnlyAConfirmedPlacardWithoutAnyResultProvesTheEntryWasNotMade()
+    public void OnlyTheValidatedAbsenceRuleProvesAnAttemptNeverEntered()
     {
-        Assert.Equal(AttemptVerdict.NotEntered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, ownsPlot: false));
-        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.NotShown, ownsPlot: false));
-        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Unverified, false, ResultKind.NotShown, ownsPlot: false));
-        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.WrongPlot, true, ResultKind.Lost, ownsPlot: false));
-        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Unrecognized, ownsPlot: false));
+        var strong = Absence() with { SeenInAnotherSession = true };
+
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, false, strong with { Validated = false }));
+        Assert.Equal(AttemptVerdict.NotEntered, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, false, ResultKind.NotShown, false, strong));
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.NotShown, false, strong));
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Unverified, false, ResultKind.NotShown, false, strong));
+        Assert.Equal(AttemptVerdict.Unknown, InspectionRules.DecideAttempt(PlacardIdentityVerdict.Confirmed, true, ResultKind.Unrecognized, false, strong));
     }
+
+    private static AbsenceEvidence Absence(bool validated = true)
+        => new(validated, strongPlacard, CurrentCycle: false, ReadingShowsNoEntry: false, SeenInAnotherSession: false, ClaimDeadlinePassed: false);
+
+    private static InspectionFacts NoResult(SettlementState recorded = SettlementState.ResultsPending, RefundKind recordedRefund = RefundKind.None)
+        => Facts(ResultKind.NotShown, offered: null, recorded: recorded, recordedRefund: recordedRefund, resultsOffered: false);
 
     private static InspectionFacts Facts(
         ResultKind result,
@@ -172,7 +223,6 @@ public sealed class InspectionRulesTests
         SettlementState recorded = SettlementState.ResultsPending,
         RefundKind recordedRefund = RefundKind.None,
         ActionKind? open = null,
-        bool resultsOffered = true,
-        bool? readingShowsEntry = null)
-        => new(PlacardIdentityVerdict.Confirmed, resultsOffered, result, offered, recorded, recordedRefund, open, readingShowsEntry, OwnsPlot: false, RefundWindowPassed: false);
+        bool resultsOffered = true)
+        => new(PlacardIdentityVerdict.Confirmed, resultsOffered, result, offered, recorded, recordedRefund, open, OwnsPlot: false, RefundWindowPassed: false, Absence(validated: false));
 }

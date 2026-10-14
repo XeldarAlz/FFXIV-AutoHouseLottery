@@ -8,13 +8,16 @@ public sealed class SettlementGateTests
 {
     private const ulong ContentId = 4_000_000_020;
 
+    private static readonly Guid receiptId = Guid.NewGuid();
+
     [Fact]
-    public void RefundAndClaimShipUnvalidated()
+    public void RefundClaimAndAbsenceShipUnvalidated()
     {
-        Assert.False(SettlementCapabilities.RefundConfirmValidated);
-        Assert.False(SettlementCapabilities.ClaimConfirmValidated);
         Assert.False(SettlementGate.Validated(ActionKind.Refund));
         Assert.False(SettlementGate.Validated(ActionKind.Claim));
+        Assert.False(SettlementGate.Validated(ActionKind.Entry));
+        Assert.True(SettlementGate.PlayerDryRun(SettlementMode.Refund));
+        Assert.True(SettlementGate.PlayerDryRun(SettlementMode.Claim));
     }
 
     [Theory]
@@ -23,55 +26,69 @@ public sealed class SettlementGateTests
     public void WithoutValidationOrAGrantYesIsUnreachable(byte raw)
     {
         var kind = (ActionKind)raw;
-        Assert.False(SettlementGate.MayPress(kind, SettlementGate.Validated(kind), dryRun: false, null, ContentId, Plot(12, 5)));
+        Assert.False(SettlementGate.MayPress(kind, SettlementGate.Validated(kind), dryRun: false, null, ContentId, Plot(12, 5), receiptId));
     }
 
     [Fact]
-    public void AGrantOpensExactlyItsOwnKindCharacterAndPlot()
+    public void AGrantOpensExactlyItsOwnKindCharacterReceiptAndPlot()
     {
         var plot = Plot(12, 5);
-        var refund = new SettlementGrant(ActionKind.Refund, ContentId, "Test Character", plot, ObservedAt);
+        var refund = new SettlementGrant(ActionKind.Refund, ContentId, "Test Character", plot, receiptId, ObservedAt);
 
-        Assert.True(SettlementGate.MayPress(ActionKind.Refund, false, false, refund, ContentId, plot));
-        Assert.False(SettlementGate.MayPress(ActionKind.Claim, false, false, refund, ContentId, plot));
-        Assert.False(SettlementGate.MayPress(ActionKind.Refund, false, false, refund, ContentId + 1, plot));
-        Assert.False(SettlementGate.MayPress(ActionKind.Refund, false, false, refund, ContentId, Plot(12, 6)));
-        Assert.False(SettlementGate.MayPress(ActionKind.Refund, false, false, refund with { Used = true }, ContentId, plot));
-        Assert.False(SettlementGate.MayPress(ActionKind.Entry, false, false, refund with { Kind = ActionKind.Entry }, ContentId, plot));
+        Assert.True(SettlementGate.MayPress(ActionKind.Refund, false, false, refund, ContentId, plot, receiptId));
+        Assert.False(SettlementGate.MayPress(ActionKind.Claim, false, false, refund, ContentId, plot, receiptId));
+        Assert.False(SettlementGate.MayPress(ActionKind.Refund, false, false, refund, ContentId + 1, plot, receiptId));
+        Assert.False(SettlementGate.MayPress(ActionKind.Refund, false, false, refund, ContentId, Plot(12, 6), receiptId));
+        Assert.False(SettlementGate.MayPress(ActionKind.Refund, false, false, refund, ContentId, plot, Guid.NewGuid()));
+        Assert.False(SettlementGate.MayPress(ActionKind.Refund, false, false, refund with { Used = true }, ContentId, plot, receiptId));
+        Assert.False(SettlementGate.MayPress(ActionKind.Entry, false, false, refund with { Kind = ActionKind.Entry }, ContentId, plot, receiptId));
     }
 
     [Fact]
-    public void ADryRunNeverPressesWhateverIsAllowed()
+    public void ARequestedDryRunAlwaysWins()
     {
         var plot = Plot(12, 5);
-        var claim = new SettlementGrant(ActionKind.Claim, ContentId, "Test Character", plot, ObservedAt);
+        var claim = new SettlementGrant(ActionKind.Claim, ContentId, "Test Character", plot, receiptId, ObservedAt);
 
-        Assert.False(SettlementGate.MayPress(ActionKind.Claim, true, dryRun: true, claim, ContentId, plot));
-        Assert.True(SettlementGate.MayPress(ActionKind.Claim, true, dryRun: false, null, ContentId, plot));
+        Assert.False(SettlementGate.MayPress(ActionKind.Claim, true, dryRun: true, claim, ContentId, plot, receiptId));
+        Assert.False(SettlementGate.MayPress(ActionKind.Claim, false, dryRun: true, claim, ContentId, plot, receiptId));
+        Assert.True(SettlementGate.MayPress(ActionKind.Claim, true, dryRun: false, null, ContentId, plot, receiptId));
     }
 
     [Fact]
-    public void YesIsPressedOnlyOnTheRowsOfTheModesOwnResult()
+    public void ARefundIsCollectedOnlyForALossOrForfeitThatIsRecordedAsOwed()
     {
-        Assert.Equal(Core.Game.Model.HousingText.ResultLost, ResultKinds.AcceptRow(ResultKind.Lost, SettlementMode.Refund));
-        Assert.Equal(Core.Game.Model.HousingText.ResultForfeited, ResultKinds.AcceptRow(ResultKind.Forfeited, SettlementMode.Refund));
-        Assert.Equal(Core.Game.Model.HousingText.ResultWon, ResultKinds.AcceptRow(ResultKind.Won, SettlementMode.Claim));
-        Assert.Equal(Core.Game.Model.HousingText.ResultSoleEntrantWon, ResultKinds.AcceptRow(ResultKind.SoleEntrantWon, SettlementMode.Claim));
-        Assert.Null(ResultKinds.AcceptRow(ResultKind.Won, SettlementMode.Refund));
-        Assert.Null(ResultKinds.AcceptRow(ResultKind.Lost, SettlementMode.Claim));
-        Assert.Null(ResultKinds.AcceptRow(ResultKind.Expired, SettlementMode.Refund));
-        Assert.Null(ResultKinds.AcceptRow(ResultKind.Lost, SettlementMode.Inspect));
-        Assert.Null(ResultKinds.AcceptRow(ResultKind.Unrecognized, SettlementMode.Refund));
+        var owedLoss = new InspectionVerdict(InspectionOutcome.LostRefundDue, Deposit, InspectionReason.None);
+        var owedForfeit = new InspectionVerdict(InspectionOutcome.ForfeitRefundDue, Deposit / 2, InspectionReason.None);
+
+        Assert.Equal(VisitAction.CollectRefund, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedLoss, attemptOpenBeforeVisit: false));
+        Assert.Equal(VisitAction.CollectRefund, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Forfeited, owedForfeit, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedLoss with { Refund = null }, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedForfeit, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedLoss, attemptOpenBeforeVisit: true));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Inspect, ResultKind.Lost, owedLoss, false));
     }
 
     [Fact]
-    public void APressMayBeCutShortOnlyBeforeItsIntent()
+    public void AWinIsNeverCollectedAsARefundAndALossIsNeverClaimed()
     {
-        Assert.True(SettlementSteps.MayInterrupt(SettlementStep.ViewResult));
-        Assert.True(SettlementSteps.MayInterrupt(SettlementStep.Classify));
-        Assert.False(SettlementSteps.MayInterrupt(SettlementStep.PersistIntent));
-        Assert.False(SettlementSteps.MayInterrupt(SettlementStep.Press));
-        Assert.False(SettlementSteps.MayInterrupt(SettlementStep.AwaitSettlement));
-        Assert.True(SettlementSteps.MayInterrupt(SettlementStep.Finished));
+        var won = new InspectionVerdict(InspectionOutcome.WonUnclaimed, null, InspectionReason.None);
+        var owedLoss = new InspectionVerdict(InspectionOutcome.LostRefundDue, Deposit, InspectionReason.None);
+
+        Assert.Equal(VisitAction.Claim, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.Won, won, false));
+        Assert.Equal(VisitAction.Claim, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.SoleEntrantWon, won, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Won, won, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.Lost, owedLoss, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Inspect, ResultKind.Won, won, false));
+    }
+
+    [Fact]
+    public void ARowThatDisagreesWithTheVerdictClosesTheDialog()
+    {
+        var claimed = new InspectionVerdict(InspectionOutcome.Claimed, null, InspectionReason.None);
+        var unknown = InspectionVerdict.Unknown(InspectionReason.ContradictsRecord);
+
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, claimed, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.Won, unknown, false));
     }
 }

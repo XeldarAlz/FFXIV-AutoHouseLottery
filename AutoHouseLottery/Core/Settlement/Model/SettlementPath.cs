@@ -6,6 +6,9 @@ internal static class SettlementPath
 {
     public const int Unreachable = -1;
 
+    // Longer than any walk the transitions allow, so a buffer of this size always fits one.
+    public const int MaximumSteps = 8;
+
     private const int StateCount = (int)SettlementState.NeedsReconciliation + 1;
     private const sbyte NotVisited = -1;
 

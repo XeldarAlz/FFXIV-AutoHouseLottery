@@ -643,7 +643,7 @@
   "settlement.outcome.forfeit": "{0} kazancı zamanında alınmadı. %50 kesintiden sonra {1} iade alacaksınız.",
   "settlement.outcome.expired": "{0} için iade süresi doldu.",
   "settlement.outcome.claimed": "{0} satın alındı.",
-  "settlement.outcome.refunded": "{0} için depozito eklenti dışında zaten iade edildi.",
+  "settlement.outcome.refunded": "{0} artık bu karaktere sonuç göstermiyor, bu yüzden eklenti dışında tamamlanmış olarak kaydedildi; tutar görülmedi.",
   "settlement.outcome.notEntered": "{0} bu karakterin katılımını göstermiyor; önceki deneme hiç katılmadı.",
   "settlement.failure.character": "Katılan karakterle giriş yapın.",
   "settlement.failure.nothing": "Bu katılım için yapılacak bir şey kalmadı.",
@@ -684,6 +684,9 @@
   "dev.settleNotFound": "Giriş yapan karakterin hiçbir bekleyen katılımı o kayıt veya adresle eşleşmiyor.",
   "dev.refundGrantWarning": "GERÇEK İADEYE İZİN VERİLDİ, yalnızca bu oturum için: {0}, {1} konumundaki iadeyi bir kez kabul edebilir. O arsada real kelimesiyle bir /ahl dev settle veya otomatik bir iade Evet'e basar. /ahl dev revoke-real-settlement bunu geri alır.",
   "dev.claimGrantWarning": "GERÇEK SATIN ALMAYA İZİN VERİLDİ, yalnızca bu oturum için: {0}, {1} arsasını bir kez satın alabilir. O arsada claim ve real kelimeleriyle bir /ahl dev settle Evet'e basar ve geri alınamaz. /ahl dev revoke-real-settlement bunu geri alır.",
-  "dev.settlementGrantRefused": "İzin verilmedi: giriş yapan karakteri, bir bölgeyi, bir mahalleyi ve ana dünyasındaki bir arsayı belirtin.",
-  "dev.settlementRevoked": "Gerçek iade ve satın alma izinleri geri çekildi. Her işlem yeniden deneme oldu."
+  "dev.settlementGrantRefused": "İzin verilmedi: giriş yapan karakteri ve ana dünyasındaki bekleyen katılımlarından birinin bölgesini, mahallesini ve arsasını belirtin.",
+  "dev.settlementRevoked": "Gerçek iade ve satın alma izinleri geri çekildi. Her işlem yeniden deneme oldu.",
+  "runStart.autoAnswer": "Önce {0} eklentisini kapatın: çekiliş pencerelerini yanıtlayabilir.",
+  "settlement.absenceMarker": "{0} tarihinde tabela sonuç göstermedi; hâlâ bekliyor",
+  "settlement.notice.won": "{1}, {0} arsasını kazandı. {2} tarihinden önce Çekilişlerim'den satın alın."
 }

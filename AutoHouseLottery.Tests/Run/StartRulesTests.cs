@@ -30,6 +30,12 @@ public sealed class StartRulesTests
     }
 
     [Fact]
+    public void APluginThatAnswersDialogsRefusesEveryRunDryOrReal()
+    {
+        Assert.Equal(StartRefusal.AutoAnswerPlugin, StartRules.Check(Facts() with { AutoAnswerLoaded = true }));
+    }
+
+    [Fact]
     public void UnwritableJournalRefusesTheStart()
     {
         Assert.Equal(StartRefusal.JournalUnavailable, StartRules.Check(Facts() with { JournalWritable = false }));

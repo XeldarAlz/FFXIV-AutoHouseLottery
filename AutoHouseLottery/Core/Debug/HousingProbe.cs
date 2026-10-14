@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Dialogs;
@@ -57,6 +58,9 @@ internal static unsafe class HousingProbe
                 return;
             case "approach" when tokens.Length == ApproachArgumentCount && TryDestination(Svc.ClientState.TerritoryType, tokens[1], tokens[2], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: false, observers));
+                return;
+            case "press" when tokens.Length == PressArgumentCount && OpensLotteryDialog(tokens[1]) && AutoAnswerGuard.Blocks:
+                Svc.Chat.PrintError($"{HouseLotteryConstants.LogPrefix} {RunText.AutoAnswer()}");
                 return;
             case "press" when tokens.Length == PressArgumentCount && UiIsOwned():
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Failed)}");
@@ -127,6 +131,10 @@ internal static unsafe class HousingProbe
         destination = new HousingDestination(Svc.PlayerState.CurrentWorld.RowId, territoryTypeId, ward - ResidentialDistricts.OneBased, plot - ResidentialDistricts.OneBased);
         return destination.IsValid;
     }
+
+    // Enter Lottery and View Lottery Results open the dialogs a plugin that answers dialogs on its own could commit.
+    private static bool OpensLotteryDialog(string what)
+        => what.Equals("enter", StringComparison.OrdinalIgnoreCase) || what.Equals("results", StringComparison.OrdinalIgnoreCase);
 
     private static bool Press(string what)
     {

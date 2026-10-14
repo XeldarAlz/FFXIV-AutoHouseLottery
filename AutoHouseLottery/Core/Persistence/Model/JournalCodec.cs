@@ -61,6 +61,8 @@ internal static class JournalCodec
             ReceivedRefund = settlement.ReceivedRefund,
             UpdatedUtc = settlement.UpdatedUtc,
             TravelSpent = settlement.TravelSpent == 0 ? null : settlement.TravelSpent,
+            RefundDeadlineUtc = settlement.RefundDeadlineUtc,
+            SettledByAbsence = settlement.SettledByAbsence ? true : null,
         },
     };
 
@@ -184,7 +186,12 @@ internal static class JournalCodec
             return false;
         }
 
-        settlement = new EntrySettlement(receipt, state, refund, json.ExpectedRefund, json.ReceivedRefund, updated) { TravelSpent = json.TravelSpent ?? 0 };
+        settlement = new EntrySettlement(receipt, state, refund, json.ExpectedRefund, json.ReceivedRefund, updated)
+        {
+            TravelSpent = json.TravelSpent ?? 0,
+            RefundDeadlineUtc = json.RefundDeadlineUtc,
+            SettledByAbsence = json.SettledByAbsence == true,
+        };
         return true;
     }
 }

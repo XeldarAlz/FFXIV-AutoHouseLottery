@@ -57,8 +57,6 @@ internal sealed class EntryRunSession
     // Each target is inspected once, in order, so the targets reached so far are the inspections used.
     public int InspectionsUsed => TargetIndex + 1;
 
-    public int TravelAttempts { get; set; }
-
     public bool ManualArrival { get; set; }
 
     public DepositLedger Ledger { get; set; }
@@ -74,6 +72,9 @@ internal sealed class EntryRunSession
     public DryRunTrace? Trace { get; private set; }
 
     public bool PauseRequested { get; set; }
+
+    // Why the deferred pause was asked for, so a pause for a duty can still resume on its own afterwards.
+    public PauseReason RequestedPause { get; set; }
 
     public bool StopRequested { get; set; }
 
@@ -149,7 +150,6 @@ internal sealed class EntryRunSession
     public void BeginInspection()
     {
         LiveDeposit = null;
-        TravelAttempts = 0;
         Publish();
     }
 

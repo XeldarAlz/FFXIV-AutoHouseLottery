@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using AutoHouseLottery.Core.Eligibility.Model;
+using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Dialogs;
@@ -48,7 +49,7 @@ internal sealed partial class RunController
     {
         this.housing = housing;
         services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater, AutomaticRefunds, CollectForEntry);
-        settlementServices = new SettlementServices(housing, observers, SettlementGrantFor, ConsumeSettlementGrant, RecordSettlementTravel);
+        settlementServices = new SettlementServices(housing, observers, Plugin.Instance.Configuration, SettlementGrantFor, ConsumeSettlementGrant, RecordSettlementTravel, SettlementSession);
         scheduler = new SettlementScheduler(housing, Plugin.Instance.Configuration);
         notices = new SettlementNoticeAnnouncer(housing, Plugin.Instance.Configuration);
         reconcileWanted = true;
@@ -96,6 +97,7 @@ internal sealed partial class RunController
             if (!active.PauseRequested && active.Step != EntryStep.NeedsPlayer)
             {
                 active.PauseRequested = true;
+                active.RequestedPause = reason;
                 active.Publish();
                 RunLog.Info($"Entry run {active.RunId}: pause asked at {active.Step}; a press may have reached the game, so the run finishes verifying it first.");
             }
@@ -172,11 +174,21 @@ internal sealed partial class RunController
         Settle(active, EntryStep.Stopped, "stopped by the player");
     }
 
+    // A GM alert ends everything at once: a refund an entry run is collecting is not verified first either, and a press it
+    // may have made is left for reconciliation.
     public void StopForAlert()
     {
-        Stop();
+        if (session is { CollectingInPressWindow: true })
+        {
+            End("a GM alert");
+        }
+        else
+        {
+            Stop();
+        }
+
         CancelReconcile();
-        StopSettlement();
+        StopSettlementNow();
     }
 
     public void Interrupt()
@@ -288,7 +300,10 @@ internal sealed partial class RunController
             context is not null && housing.HasPendingAttempt(context.ContentId, policy.Cycle.Cycle),
             slot,
             preview?.Blockers ?? RunBlocker.None,
-            assignment is not null);
+            assignment is not null)
+        {
+            AutoAnswerLoaded = AutoAnswerGuard.Blocks,
+        };
         var refusal = StartRules.Check(facts);
         if (refusal == StartRefusal.None && (context is null || settings is null || assignment is null || preview is null))
         {
@@ -369,9 +384,9 @@ internal sealed partial class RunController
 
         if (active.PauseRequested && RunTransitions.IsLegal(active.Step, EntryStep.Paused))
         {
-            PauseReason = PauseReason.Manual;
+            PauseReason = active.RequestedPause == PauseReason.None ? PauseReason.Manual : active.RequestedPause;
             active.MoveTo(EntryStep.Paused);
-            RunLog.Info($"Entry run {active.RunId}: paused after the earlier refund it was collecting; Resume starts again from a fresh check.");
+            RunLog.Info($"Entry run {active.RunId}: paused ({PauseReason}) after the earlier refund it was collecting; Resume starts again from a fresh check.");
             return;
         }
 
@@ -387,9 +402,11 @@ internal sealed partial class RunController
         }
 
         var interruptedAt = active.Step;
+        var collectingWrite = active.Collecting?.LeaveOpenAttempt();
         StopTask();
         active.ForceEnd(reason);
         Settle(active, interruptedAt, reason);
+        pendingJournalWrite = collectingWrite ?? pendingJournalWrite;
     }
 
     // InterruptedAt is the step the run was at when it ended, which can differ from its final step after an interrupt.
@@ -528,6 +545,7 @@ internal sealed partial class RunController
     {
         var now = Environment.TickCount64;
         RetryConfirmationClose(now);
+        scheduler.SampleGamepad(now);
         if (now < nextPollMs)
         {
             return;
@@ -545,6 +563,7 @@ internal sealed partial class RunController
         {
             lastContentId = contentId;
             reconcileWanted = true;
+            RenewSettlementSession();
             Plugin.Instance.Configuration.Remember(contentId, Svc.PlayerState.CharacterName, Svc.PlayerState.HomeWorld.RowId);
         }
 

@@ -31,9 +31,9 @@ public sealed class RefundAndClaimRulesTests
     }
 
     [Fact]
-    public void ARefundSettlesOnTheExactGilAndAReadingWithoutTheEntry()
+    public void ARefundSettlesOnTheExactGilWithTheDialogGoneAndThePlacardNoLongerOffering()
     {
-        var settled = RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit, EntryShown: false));
+        var settled = RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit, DialogGone: true, PlacardStillOffers: false));
 
         Assert.Equal(new RefundSettlement(RefundVerdict.Refunded, Deposit), settled);
     }
@@ -41,33 +41,36 @@ public sealed class RefundAndClaimRulesTests
     [Fact]
     public void ADifferentGilRiseIsRecordedAsWhatCameBack()
     {
-        var settled = RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit / 2, EntryShown: false));
+        var settled = RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit / 2, DialogGone: true, PlacardStillOffers: false));
 
         Assert.Equal(new RefundSettlement(RefundVerdict.RefundedAmountDiffers, Deposit / 2), settled);
     }
 
     [Theory]
-    [InlineData(true, GilBefore + Deposit)]
-    [InlineData(null, GilBefore + Deposit)]
-    [InlineData(false, GilBefore)]
-    [InlineData(false, GilBefore - 1)]
-    public void GilAloneOrNothingAtAllLeavesTheRefundInQuestion(bool? entryShown, long gilAfter)
+    [InlineData(true, true, GilBefore + Deposit)]
+    [InlineData(true, null, GilBefore + Deposit)]
+    [InlineData(false, false, GilBefore + Deposit)]
+    [InlineData(true, false, GilBefore)]
+    [InlineData(true, false, GilBefore - 1)]
+    public void GilAloneNeverConfirmsARefund(bool dialogGone, bool? placardStillOffers, long gilAfter)
     {
-        Assert.Equal(RefundVerdict.Uncertain, RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, gilAfter, entryShown)).Verdict);
-        Assert.Equal(RefundVerdict.Uncertain, RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, null, false)).Verdict);
+        Assert.Equal(RefundVerdict.Uncertain, RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, gilAfter, dialogGone, placardStillOffers)).Verdict);
+        Assert.Equal(RefundVerdict.Uncertain, RefundRules.Settle(new RefundEvidence(Deposit, GilBefore, null, true, false)).Verdict);
     }
 
     [Fact]
-    public void AReadingThatHasNotCaughtUpIsReadAgainBeforeTheRefundIsDecided()
+    public void APlacardThatHasNotCaughtUpIsReadOnceMoreBeforeTheRefundIsDecided()
     {
-        var first = new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit, EntryShown: true);
+        var first = new RefundEvidence(Deposit, GilBefore, GilBefore + Deposit, DialogGone: true, PlacardStillOffers: true);
 
-        Assert.True(RefundRules.NeedsSecondReading(first));
-        Assert.False(RefundRules.NeedsSecondReading(first with { EntryShown = false }));
-        Assert.False(RefundRules.NeedsSecondReading(first with { GilAfter = GilBefore }));
-        Assert.Equal(RefundVerdict.Refunded, RefundRules.Settle(first with { SecondReadingTaken = true, SecondEntryShown = false }).Verdict);
-        Assert.Equal(RefundVerdict.Uncertain, RefundRules.Settle(first with { SecondReadingTaken = true, SecondEntryShown = null }).Verdict);
-        Assert.False(RefundRules.NeedsSecondReading(first with { SecondReadingTaken = true }));
+        Assert.True(RefundRules.NeedsSecondLook(first));
+        Assert.True(RefundRules.NeedsSecondLook(first with { PlacardStillOffers = null }));
+        Assert.False(RefundRules.NeedsSecondLook(first with { PlacardStillOffers = false }));
+        Assert.False(RefundRules.NeedsSecondLook(first with { GilAfter = GilBefore }));
+        Assert.False(RefundRules.NeedsSecondLook(first with { DialogGone = false }));
+        var second = first with { PlacardStillOffers = false, Looks = 2 };
+        Assert.False(RefundRules.NeedsSecondLook(first with { Looks = 2 }));
+        Assert.Equal(RefundVerdict.Refunded, RefundRules.Settle(second).Verdict);
     }
 
     [Fact]

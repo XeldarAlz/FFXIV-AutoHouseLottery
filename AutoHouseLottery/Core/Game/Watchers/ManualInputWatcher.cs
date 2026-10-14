@@ -1,20 +1,54 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Dalamud.Game.ClientState.GamePad;
 using ECommons.DalamudServices;
 
 namespace AutoHouseLottery.Core.Game.Watchers;
 
 // Tells the player's own input apart from the plugin's work, so background settlement starts only when the player has
 // left the game alone and pauses when they come back. Keyboard and mouse come from the system's last-input time, which
-// the plugin's own travel, walking and dialog presses never touch. A gamepad leaves no trace there, so the character
-// moving while none of the plugin's work runs counts as input too. Sampled once a second on the framework thread.
+// the plugin's own travel, walking and dialog presses never touch. A gamepad leaves no trace there, so its buttons and
+// sticks are read every frame, and the character moving while none of the plugin's work runs counts as input too.
+// Framework thread only.
 internal sealed partial class ManualInputWatcher
 {
     private const float MovedMeters = 0.5f;
 
+    // The game reports stick tilt from -99 to 99; a little drift stays below this.
+    private const float StickDeadZone = 30f;
+
+    private static readonly GamepadButtons[] gamepadButtons =
+    [
+        GamepadButtons.DpadUp, GamepadButtons.DpadDown, GamepadButtons.DpadLeft, GamepadButtons.DpadRight,
+        GamepadButtons.North, GamepadButtons.South, GamepadButtons.West, GamepadButtons.East,
+        GamepadButtons.L1, GamepadButtons.L2, GamepadButtons.L3, GamepadButtons.R1, GamepadButtons.R2, GamepadButtons.R3,
+        GamepadButtons.Select, GamepadButtons.Start,
+    ];
+
     private Vector3? lastPosition;
     private long lastMovedMs;
+    private long lastGamepadMs;
     private bool systemTimeUnavailable;
+
+    // Every frame: a held button or a tilted stick is the player's input.
+    public void SampleGamepad(long nowMs)
+    {
+        var gamepad = Svc.GamepadState;
+        if (gamepad.LeftStick.Length() > StickDeadZone || gamepad.RightStick.Length() > StickDeadZone)
+        {
+            lastGamepadMs = nowMs;
+            return;
+        }
+
+        for (var buttonIndex = 0; buttonIndex < gamepadButtons.Length; buttonIndex++)
+        {
+            if (gamepad.Raw(gamepadButtons[buttonIndex]) > 0)
+            {
+                lastGamepadMs = nowMs;
+                return;
+            }
+        }
+    }
 
     public void Sample(long nowMs, bool ownWorkActive)
     {
@@ -33,7 +67,8 @@ internal sealed partial class ManualInputWatcher
     {
         var systemIdle = SystemIdleMs();
         var sinceMoved = lastMovedMs == 0 ? long.MaxValue : nowMs - lastMovedMs;
-        return Math.Max(0, Math.Min(systemIdle, sinceMoved));
+        var sinceGamepad = lastGamepadMs == 0 ? long.MaxValue : nowMs - lastGamepadMs;
+        return Math.Max(0, Math.Min(systemIdle, Math.Min(sinceMoved, sinceGamepad)));
     }
 
     private long SystemIdleMs()

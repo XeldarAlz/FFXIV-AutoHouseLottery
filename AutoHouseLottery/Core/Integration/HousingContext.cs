@@ -21,8 +21,6 @@ internal sealed class HousingContext : IDisposable
 {
     public const string JournalFileName = "journal.jsonl";
 
-    private const int MaximumSettlementPath = 8;
-
     // An earlier build kept its own calendar file next to the feed's; the feed's lottery-schedules.json is the only one.
     private const string ObsoleteScheduleFileName = "lottery-schedule.json";
 
@@ -141,15 +139,17 @@ internal sealed class HousingContext : IDisposable
         return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position));
     }
 
-    // An attempt in question for this cycle holds its entry slot. One from an earlier cycle cannot hold this cycle's
-    // slot; it waits for a result check instead (ResultChecks).
+    // An entry attempt in question for this cycle holds its entry slot. One from an earlier cycle cannot hold this cycle's
+    // slot; it waits for a result check instead (ResultChecks). A refund or claim in question is the settlement's to read
+    // back, not the entry run's.
     public bool HasPendingAttempt(ulong contentId, CycleKey cycle)
     {
         var attempts = JournalSnapshot.Attempts;
         for (var index = 0; index < attempts.Length; index++)
         {
             var attempt = attempts[index];
-            if (attempt.CharacterContentId == contentId
+            if (attempt.Kind == ActionKind.Entry
+                && attempt.CharacterContentId == contentId
                 && attempt.Cycle == cycle
                 && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
             {
@@ -209,7 +209,11 @@ internal sealed class HousingContext : IDisposable
     {
         if (fix.ConfirmAttempt is { } attemptId)
         {
-            journal.RequireReconciliation(attemptId, DateTime.UtcNow);
+            if (SettlementLookups.Attempt(journal.Snapshot(), attemptId) is { } held && SettlementDecisions.NeedsQuestionBeforeConfirm(held.State))
+            {
+                journal.RequireReconciliation(attemptId, DateTime.UtcNow);
+            }
+
             var confirmed = journal.Confirm(attemptId, null, DateTime.UtcNow);
             RunLog.Info($"Journal: {evidence}, so attempt {attemptId} went through ({confirmed}).");
         }
@@ -219,7 +223,7 @@ internal sealed class HousingContext : IDisposable
             return;
         }
 
-        Span<SettlementState> steps = stackalloc SettlementState[MaximumSettlementPath];
+        Span<SettlementState> steps = stackalloc SettlementState[SettlementPath.MaximumSteps];
         var count = SettlementPath.Plan(current.State, fix.Target, steps);
         var written = JournalWrite.IllegalTransition;
         for (var stepIndex = 0; stepIndex < count; stepIndex++)
@@ -228,6 +232,32 @@ internal sealed class HousingContext : IDisposable
         }
 
         RunLog.Info($"Journal: {evidence}, so receipt {fix.ReceiptId} is settled as {fix.Target} outside a visit ({(count < 0 ? "no legal path from " + current.State : written.ToString())}).");
+    }
+
+    // The game refused an entry because a refund or a plot from an earlier entry still waits (LogMessage 6100): every
+    // entry of this character that was recorded as settled only because its placard offered no result goes back to an
+    // open outcome, so it is checked again and its deposit is not lost from view. Off the framework thread.
+    public async Task ReopenAbsenceSettlements(ulong contentId)
+    {
+        if (Journal is not { } journal)
+        {
+            return;
+        }
+
+        var snapshot = JournalSnapshot;
+        await Task.Run(() =>
+        {
+            var receipts = snapshot.Receipts;
+            for (var index = 0; index < receipts.Length; index++)
+            {
+                var receipt = receipts[index];
+                if (receipt.CharacterContentId == contentId && SettlementLookups.Settlement(snapshot, receipt.ReceiptId) is { SettledByAbsence: true })
+                {
+                    var written = journal.ReopenAbsence(receipt.ReceiptId, DateTime.UtcNow);
+                    RunLog.Warning($"Journal: the game says an earlier refund or plot still waits, so receipt {receipt.ReceiptId}, settled only because its placard offered no result, is open again ({written}).");
+                }
+            }
+        });
     }
 
     private static void DeleteObsoleteScheduleFile(string path)

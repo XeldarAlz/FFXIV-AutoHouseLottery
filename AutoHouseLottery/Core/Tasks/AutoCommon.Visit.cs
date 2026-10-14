@@ -4,6 +4,8 @@ using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Dialogs;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Placard;
+using AutoHouseLottery.Core.Housing.Model;
+using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Ipc;
 using AutoHouseLottery.Core.Travel;
 using AutoHouseLottery.Core.Travel.Model;
@@ -24,14 +26,15 @@ internal enum VisitFailure : byte
     PlacardNotOpened,
 }
 
-// A visit to one plot's placard for a task of its own: travel with one retry, the game's own arrival check, the walk to
-// the placard and opening it. The same steps as the entry run's, for the settlement driver; the placard's address is
-// confirmed by its reading afterwards, never by distance. Travel the task started and still owns is cancelled by
-// ReleaseVisit.
+// The one visit to a plot's placard that the entry run and the settlement driver share: travel with one retry, the
+// game's own arrival check, the walk to the placard, opening it, and reading it once its sources agree on the address
+// and its sale data has arrived. The placard's identity comes from that reading, never from distance. Travel the task
+// started and still owns is cancelled by ReleaseVisit.
 internal abstract partial class AutoCommon
 {
-    private const int VisitObservePollFrames = 15;
+    // One retry of a conclusively failed travel leg before the player is asked (TECHNICAL_DESIGN section 12).
     private const int VisitTravelAttempts = 2;
+    private const int VisitObservePollFrames = 15;
     private const int VisitDependencyBusyWaitMs = 30_000;
     private const int VisitManualArrivalWaitMs = 300_000;
     private const int VisitApproachWatchdogMs = 45_000;
@@ -42,22 +45,25 @@ internal abstract partial class AutoCommon
 
     private long visitTravelToken;
 
-    protected async Task<VisitFailure> TravelToPlot(HousingDestination destination, ulong contentId, bool manualArrival, string label)
+    // Travel until the game shows the character in the plot's ward and division, or the player walks there. beforeRetry
+    // runs before the one retry of a failed leg. The arrival itself is judged by VerifyArrival.
+    protected async Task<VisitFailure> TravelToPlot(HousingDestination destination, ulong contentId, bool manualArrival, string label, Action? beforeRetry = null)
     {
         if (Svc.PlayerState.ContentId != contentId)
         {
             return VisitFailure.CharacterChanged;
         }
 
-        if (ArrivalCheck.Evaluate(destination, HousingTravel.ObserveArrival()) != ArrivalVerdict.Arrived)
+        if (ArrivalCheck.Evaluate(destination, HousingTravel.ObserveArrival()) == ArrivalVerdict.Arrived)
         {
-            var failure = manualArrival ? await AwaitManualArrival(destination, label) : await TravelWithRetry(destination, label);
-            if (failure != VisitFailure.None)
-            {
-                return failure;
-            }
+            return VisitFailure.None;
         }
 
+        return manualArrival ? await AwaitManualArrival(destination, label) : await TravelWithRetry(destination, label, beforeRetry);
+    }
+
+    protected VisitFailure VerifyArrival(HousingDestination destination, string label)
+    {
         var verdict = ArrivalCheck.Evaluate(destination, HousingTravel.ObserveArrival());
         Diag($"{label}: arrival at {destination} is {verdict}.");
         return verdict == ArrivalVerdict.Arrived ? VisitFailure.None : VisitFailure.WrongDestination;
@@ -98,14 +104,21 @@ internal abstract partial class AutoCommon
         return approach.Outcome == ApproachOutcome.PlacardNotFound ? VisitFailure.PlacardNotFound : VisitFailure.PlacardNotOpened;
     }
 
-    // The placard's sources must agree on its address before anything it shows is believed.
-    protected async Task<PlacardReading?> ReadPlacard(HousingObservers observers)
+    // The open placard once its sources agree on its address and its sale data has arrived, merged into the plot store and
+    // the calendar. Proved is the cycle position its phase end proves, null when it proves none.
+    protected async Task<(PlacardReading? Reading, CyclePosition? Proved)> ReadPlacardSettled(HousingObservers observers, HousingContext housing)
     {
         await WaitUntilTimed(
-            () => PlacardReader.Read(observers.PlacardWindow, observers.PlacardSales, observers.SignboardLayout) is { Agreement: AddressAgreement.Agree },
+            () => PlacardReader.Read(observers.PlacardWindow, observers.PlacardSales, observers.SignboardLayout) is { Agreement: AddressAgreement.Agree } settled
+                && (settled.Sale is not null || settled.HousingType is not null),
             VisitPlacardSettleWaitMs,
             "visit-placard-reading");
-        return PlacardReader.Read(observers.PlacardWindow, observers.PlacardSales, observers.SignboardLayout);
+        if (PlacardReader.Read(observers.PlacardWindow, observers.PlacardSales, observers.SignboardLayout) is not { } placard)
+        {
+            return (null, null);
+        }
+
+        return (placard, housing.ObservePlacard(placard, Svc.PlayerState.CurrentWorld.RowId));
     }
 
     protected void ReleaseVisit()
@@ -119,7 +132,7 @@ internal abstract partial class AutoCommon
         visitTravelToken = 0;
     }
 
-    private async Task<VisitFailure> TravelWithRetry(HousingDestination destination, string label)
+    private async Task<VisitFailure> TravelWithRetry(HousingDestination destination, string label, Action? beforeRetry)
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -130,6 +143,7 @@ internal abstract partial class AutoCommon
             }
 
             Diag($"{label}: travel to {destination} failed before anything was committed; trying once more.");
+            beforeRetry?.Invoke();
         }
     }
 
@@ -173,6 +187,7 @@ internal abstract partial class AutoCommon
         };
     }
 
+    // Without travel, or after the player chose to walk, the visit waits for the game to show the character at the plot.
     private async Task<VisitFailure> AwaitManualArrival(HousingDestination destination, string label)
     {
         Status = "Waiting for you at the plot";

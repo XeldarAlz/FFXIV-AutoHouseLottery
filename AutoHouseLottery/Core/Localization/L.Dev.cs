@@ -17,7 +17,7 @@ internal static partial class L
         public static readonly LocString SettleNotFound = new("dev.settleNotFound", "No unsettled entry of the logged-in character matches that receipt or address.");
         public static readonly LocString RefundGrantWarning = new("dev.refundGrantWarning", "REAL REFUND ALLOWED for this session only: {0} may accept the refund at {1} once. A /ahl dev settle on that plot with the word real, or an automatic refund, presses Yes. /ahl dev revoke-real-settlement withdraws it.");
         public static readonly LocString ClaimGrantWarning = new("dev.claimGrantWarning", "REAL CLAIM ALLOWED for this session only: {0} may claim {1} once. A /ahl dev settle on that plot with the words claim and real presses Yes and cannot be undone. /ahl dev revoke-real-settlement withdraws it.");
-        public static readonly LocString SettlementGrantRefused = new("dev.settlementGrantRefused", "Not allowed: name the logged-in character, a district, a ward and a plot on its home world.");
+        public static readonly LocString SettlementGrantRefused = new("dev.settlementGrantRefused", "Not allowed: name the logged-in character and the district, ward and plot of one of its unsettled entries on its home world.");
         public static readonly LocString SettlementRevoked = new("dev.settlementRevoked", "Real refund and claim permissions withdrawn. Every settlement is a dry run again.");
     }
 }

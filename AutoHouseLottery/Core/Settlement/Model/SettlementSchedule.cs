@@ -13,6 +13,7 @@ internal enum SchedulerBlock : byte
     RefundsOff,
     NothingDue,
     JournalUnavailable,
+    AutoAnswerPlugin,
     InDuty,
     InCombat,
     InCutscene,
@@ -24,13 +25,15 @@ internal enum SchedulerBlock : byte
     TravelBudgetSpent,
 }
 
-// What the scheduler checks once a second before background work. IdleMs is the time since the player's own last input;
+// What the scheduler checks once a second before background work. AutoAnswerLoaded: a plugin that answers dialogs on its
+// own is loaded, so no visit may open a result dialog. IdleMs is the time since the player's own last input;
 // TravelAllowance is what this session may still spend travelling; Gil is the live balance, null when unreadable.
 internal readonly record struct SchedulerFacts(
     bool LoggedIn,
     bool AutomaticRefunds,
     bool WorkDue,
     bool JournalWritable,
+    bool AutoAnswerLoaded,
     bool InDuty,
     bool InCombat,
     bool InCutscene,
@@ -74,6 +77,11 @@ internal static class SchedulerRules
         if (!facts.JournalWritable)
         {
             return SchedulerBlock.JournalUnavailable;
+        }
+
+        if (facts.AutoAnswerLoaded)
+        {
+            return SchedulerBlock.AutoAnswerPlugin;
         }
 
         if (facts.InDuty)
@@ -133,9 +141,11 @@ internal static class SchedulerRules
         return Math.Max(0, Math.Min(capLeft, aboveReserve));
     }
 
-    // Work that has waited a minute for anything but the player's own choices is announced, so it is never invisible.
-    public static bool ShouldAnnounceReady(SchedulerBlock block, long blockedForMs)
-        => block is not (SchedulerBlock.None or SchedulerBlock.NotLoggedIn or SchedulerBlock.RefundsOff or SchedulerBlock.NothingDue)
+    // Work that has waited a minute for anything but the player's own choices is announced, so it is never invisible;
+    // not while a visit of this plugin is the reason it waits.
+    public static bool ShouldAnnounceReady(SchedulerBlock block, long blockedForMs, bool ownVisitRunning)
+        => !ownVisitRunning
+        && block is not (SchedulerBlock.None or SchedulerBlock.NotLoggedIn or SchedulerBlock.RefundsOff or SchedulerBlock.NothingDue)
         && blockedForMs >= ReadyNoticeDelayMs;
 }
 
@@ -146,15 +156,16 @@ internal static class SettlementSchedule
     // this cycle's entries once its results are out, a refund already known to be owed once it can actually be collected
     // (a refund that could only be inspected again teaches nothing), and a read-back for a refund of this plugin that may
     // already have gone through. Anything with a refund or claim of this plugin still open is only ever read back. Wins
-    // wait for the player.
-    public static ImmutableArray<SettlementWork> Due(in JournalSnapshot snapshot, ulong contentId, in CyclePosition current, Func<PlotKey, bool> collectable)
+    // wait for the player. Parked items (a placard already found without a result, while that cannot settle anything) are
+    // left for the player's own Check result instead of a trip every session.
+    public static ImmutableArray<SettlementWork> Due(in JournalSnapshot snapshot, ulong contentId, in CyclePosition current, Func<Guid, PlotKey, bool> collectable, Func<Guid, bool> parked)
     {
         var due = ImmutableArray.CreateBuilder<SettlementWork>();
         var checks = ResultChecks.Due(snapshot, current.Cycle);
         for (var index = 0; index < checks.Length; index++)
         {
             var check = checks[index];
-            if (check.ContentId == contentId)
+            if (check.ContentId == contentId && !parked(check.Id))
             {
                 Add(due, new SettlementWork(check.Id, SettlementLookups.OpenAttempt(snapshot, check.Id) is null ? SettlementMode.Refund : SettlementMode.Inspect));
             }
@@ -165,6 +176,7 @@ internal static class SettlementSchedule
         {
             var receipt = receipts[index];
             if (receipt.CharacterContentId != contentId
+                || parked(receipt.ReceiptId)
                 || !SettlementDeadlines.ResultsArrived(receipt.Cycle, current)
                 || SettlementLookups.Settlement(snapshot, receipt.ReceiptId) is not { } settlement)
             {
@@ -183,7 +195,7 @@ internal static class SettlementSchedule
             }
 
             if (SettlementStates.OutcomeOpen(settlement.State)
-                || (SettlementStates.RefundOwed(settlement.State) && receipt.Plot is { } plot && collectable(plot)))
+                || (SettlementStates.RefundOwed(settlement.State) && receipt.Plot is { } plot && collectable(receipt.ReceiptId, plot)))
             {
                 Add(due, new SettlementWork(receipt.ReceiptId, SettlementMode.Refund));
             }

@@ -69,6 +69,7 @@ internal enum SettlementFailure : byte
     GroupClaimOpen,
     AlreadyOwned,
     DepositUnknown,
+    AutoAnswerPlugin,
     PausedForInput,
     StoppedByPlayer,
     Interrupted,
@@ -146,13 +147,7 @@ internal sealed record SettlementStatus
 
     public long? Received { get; init; }
 
-    public ClaimEffect Effect { get; init; }
-
     public long TravelSpent { get; init; }
-
-    public bool StopRequested { get; init; }
-
-    public DateTime StartedUtc { get; init; }
 
     public bool FinishingVerification => Active && SettlementSteps.InPressWindow(Step);
 }

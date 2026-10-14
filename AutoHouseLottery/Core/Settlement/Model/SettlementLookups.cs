@@ -19,6 +19,20 @@ internal static class SettlementLookups
         return null;
     }
 
+    public static ActionAttempt? Attempt(in JournalSnapshot snapshot, Guid attemptId)
+    {
+        var attempts = snapshot.Attempts;
+        for (var index = 0; index < attempts.Length; index++)
+        {
+            if (attempts[index].AttemptId == attemptId)
+            {
+                return attempts[index];
+            }
+        }
+
+        return null;
+    }
+
     public static EntrySettlement? Settlement(in JournalSnapshot snapshot, Guid receiptId)
         => JournalLookups.TryFindSettlement(snapshot, receiptId, out var settlement) ? settlement : null;
 

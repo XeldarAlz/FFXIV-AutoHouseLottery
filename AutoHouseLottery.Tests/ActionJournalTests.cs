@@ -546,6 +546,59 @@ public sealed class ActionJournalTests : IDisposable
         Assert.Empty(reopened.OrphanedReceipts);
     }
 
+    [Fact]
+    public void OnlyASettlementByAbsenceCanBeReopenedAndItSurvivesARestart()
+    {
+        var journal = Create();
+        var byAbsence = ConfirmedEntry(journal, Plot(12, 5));
+        var byResult = ConfirmedEntry(journal, Plot(12, 6), ContentId + 1);
+        journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.ResultsPending, null, now);
+        journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.InspectingResult, null, now);
+        Assert.Equal(JournalWrite.IllegalTransition, journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.WonUnclaimed, null, now, byAbsence: true));
+        Assert.Equal(JournalWrite.Written, journal.AdvanceSettlement(byAbsence.ReceiptId, SettlementState.Refunded, null, now, byAbsence: true));
+        Walk(journal, byResult.ReceiptId, SettlementState.ResultsPending, SettlementState.InspectingResult, SettlementState.LostRefundDue, SettlementState.RefundPending, SettlementState.Refunded);
+
+        var reopened = Reopen(journal).Journal!;
+        Assert.True(reopened.TryGetSettlement(byAbsence.ReceiptId, out var absent));
+        Assert.True(absent.SettledByAbsence);
+        Assert.Equal(JournalWrite.IllegalTransition, reopened.ReopenAbsence(byResult.ReceiptId, now));
+        Assert.Equal(JournalWrite.Written, reopened.ReopenAbsence(byAbsence.ReceiptId, now));
+        Assert.True(reopened.TryGetSettlement(byAbsence.ReceiptId, out var open));
+        Assert.Equal(SettlementState.OutcomeUnknown, open.State);
+        Assert.False(open.SettledByAbsence);
+        Assert.Equal(JournalWrite.IllegalTransition, reopened.ReopenAbsence(byAbsence.ReceiptId, now));
+    }
+
+    [Fact]
+    public void ASettlementByAbsenceIsNeverPrunedSoItCanStillBeReopened()
+    {
+        var journal = Create();
+        var receipt = ConfirmedEntry(journal, Plot(12, 5));
+        journal.AdvanceSettlement(receipt.ReceiptId, SettlementState.ResultsPending, null, now);
+        journal.AdvanceSettlement(receipt.ReceiptId, SettlementState.InspectingResult, null, now);
+        journal.AdvanceSettlement(receipt.ReceiptId, SettlementState.Expired, null, now, byAbsence: true);
+
+        Assert.Equal(JournalWrite.Written, journal.Compact(now.AddDays(400), SecondCycle, out var pruned));
+
+        Assert.Equal(0, pruned);
+        Assert.Single(journal.Snapshot().Receipts);
+    }
+
+    [Fact]
+    public void TheRefundDeadlineADialogNamedSurvivesARestart()
+    {
+        var journal = Create();
+        var receipt = ConfirmedEntry(journal, Plot(12, 5));
+        var deadline = now.AddDays(90);
+
+        Assert.Equal(JournalWrite.Written, journal.RecordRefundDeadline(receipt.ReceiptId, deadline, now));
+        Assert.Equal(JournalWrite.AlreadyRecorded, journal.RecordRefundDeadline(receipt.ReceiptId, deadline, now));
+        Assert.Equal(JournalWrite.UnknownRecord, journal.RecordRefundDeadline(Guid.NewGuid(), deadline, now));
+
+        Assert.True(Reopen(journal).Journal!.TryGetSettlement(receipt.ReceiptId, out var settlement));
+        Assert.Equal(deadline, settlement.RefundDeadlineUtc);
+    }
+
     private ActionJournal Create()
     {
         var created = Open();

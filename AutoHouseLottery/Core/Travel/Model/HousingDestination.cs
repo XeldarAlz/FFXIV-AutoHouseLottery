@@ -1,10 +1,14 @@
 using AutoHouseLottery.Core.Game.Model;
+using AutoHouseLottery.Core.Housing.Model;
 
 namespace AutoHouseLottery.Core.Travel.Model;
 
 // A plot to travel to, with zero-based ward and plot as the game counts them.
 internal readonly record struct HousingDestination(uint WorldId, uint TerritoryTypeId, int WardIndex, int PlotIndex)
 {
+    public static HousingDestination Of(PlotKey plot)
+        => new(plot.WorldId, plot.DistrictId, plot.Ward - ResidentialDistricts.OneBased, plot.Plot - ResidentialDistricts.OneBased);
+
     public int Division => ResidentialDistricts.DivisionOfPlot(PlotIndex);
 
     public bool IsValid

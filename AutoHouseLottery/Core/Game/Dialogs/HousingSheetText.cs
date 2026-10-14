@@ -46,6 +46,36 @@ internal static class HousingSheetText
         return null;
     }
 
+    // The one candidate the text matches; null when it matches none, or more than one, since then it is not plainly any.
+    public static HousingText? MatchExactlyOne(string shown, ReadOnlySpan<HousingText> candidates)
+    {
+        HousingText? found = null;
+        for (var candidateIndex = 0; candidateIndex < candidates.Length; candidateIndex++)
+        {
+            if (!Matches(candidates[candidateIndex], shown))
+            {
+                continue;
+            }
+
+            if (found is not null)
+            {
+                return null;
+            }
+
+            found = candidates[candidateIndex];
+        }
+
+        return found;
+    }
+
+    // The order the client language writes dates in, for the deadlines the result dialogs name.
+    public static DateOrder DateOrder => Language switch
+    {
+        ClientLanguage.Japanese => Model.DateOrder.YearMonthDay,
+        ClientLanguage.English => Model.DateOrder.MonthDayYear,
+        _ => Model.DateOrder.DayMonthYear,
+    };
+
     public static LotteryTextPatterns LotteryPatterns()
         => new(
             Pattern(HousingText.LotteryEntryPeriod),

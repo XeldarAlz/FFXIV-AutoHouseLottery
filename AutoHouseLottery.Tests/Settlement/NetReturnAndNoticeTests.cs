@@ -79,17 +79,45 @@ public sealed class NetReturnAndNoticeTests
     }
 
     [Fact]
+    public void AWinFoundInTheBackgroundIsAnnouncedOnce()
+    {
+        var won = Receipt(Plot(12, 5), FirstCycle);
+        var journal = Journal([], (won, SettlementState.WonUnclaimed));
+        var results = ResultsPhase(FirstCycle);
+        var now = results.PhaseStartUtc.AddHours(1);
+
+        var notice = Assert.Single(SettlementNotices.Due(journal, results, LotteryCalendar.Global, now, _ => false));
+        Assert.Equal(SettlementNoticeKind.Won, notice.Kind);
+        Assert.Equal(results.PhaseEndUtc, notice.DeadlineUtc);
+        Assert.Empty(SettlementNotices.Due(journal, results, LotteryCalendar.Global, now, key => key == notice.Key));
+    }
+
+    [Fact]
     public void AClaimDeadlineIsAnnouncedWithinItsLastDay()
     {
         var won = Receipt(Plot(12, 5), FirstCycle);
         var journal = Journal([], (won, SettlementState.WonUnclaimed));
         var results = ResultsPhase(FirstCycle);
+        static bool WinAnnounced(string key) => key.StartsWith(nameof(SettlementNoticeKind.Won) + ":", StringComparison.Ordinal);
 
-        Assert.Empty(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc.AddHours(-SettlementNotices.ClaimLeadHours - 1), _ => false));
-        var notice = Assert.Single(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc.AddHours(-2), _ => false));
+        Assert.Empty(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc.AddHours(-SettlementNotices.ClaimLeadHours - 1), WinAnnounced));
+        var notice = Assert.Single(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc.AddHours(-2), WinAnnounced));
         Assert.Equal(SettlementNoticeKind.ClaimDeadline, notice.Kind);
         Assert.Equal(results.PhaseEndUtc, notice.DeadlineUtc);
-        Assert.Empty(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc.AddMinutes(1), _ => false));
+        Assert.Empty(SettlementNotices.Due(journal, results, LotteryCalendar.Global, results.PhaseEndUtc.AddMinutes(1), WinAnnounced));
+    }
+
+    [Fact]
+    public void TheDeadlineTheDialogNamedWinsOverTheEstimate()
+    {
+        var lost = Receipt(Plot(12, 5), FirstCycle);
+        var later = ResultsPhase(new CycleKey(GameRegion.Global, 10));
+        var shown = CycleStart.AddDays(40);
+        var journal = With(Journal([], (lost, SettlementState.LostRefundDue)), lost.ReceiptId, settlement => settlement with { RefundDeadlineUtc = shown });
+
+        var notice = Assert.Single(SettlementNotices.Due(journal, later, LotteryCalendar.Global, shown.AddDays(-1), _ => false));
+        Assert.Equal(shown, notice.DeadlineUtc);
+        Assert.Empty(SettlementNotices.Due(journal, later, LotteryCalendar.Global, shown.AddDays(1), _ => false));
     }
 
     [Fact]

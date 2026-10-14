@@ -48,7 +48,8 @@ internal static partial class L
         public static readonly LocString OutcomeForfeit = new("settlement.outcome.forfeit", "The win on {0} was not claimed in time. A refund of {1} is due after the 50% fee.");
         public static readonly LocString OutcomeExpired = new("settlement.outcome.expired", "The refund for {0} has expired.");
         public static readonly LocString OutcomeClaimed = new("settlement.outcome.claimed", "{0} is claimed.");
-        public static readonly LocString OutcomeRefunded = new("settlement.outcome.refunded", "The deposit for {0} was already returned outside the plugin.");
+        public static readonly LocString OutcomeRefunded = new("settlement.outcome.refunded", "{0} no longer offers this character a result, so it is recorded as settled outside the plugin; the amount was not seen.");
+        public static readonly LocString AbsenceMarker = new("settlement.absenceMarker", "No result offered at the placard on {0}; still pending");
         public static readonly LocString OutcomeNotEntered = new("settlement.outcome.notEntered", "{0} shows no entry of this character, so the earlier attempt never entered.");
         public static readonly LocString FailureCharacter = new("settlement.failure.character", "Log in as the character who entered.");
         public static readonly LocString FailureNothing = new("settlement.failure.nothing", "There is nothing left to settle for this entry.");
@@ -74,6 +75,7 @@ internal static partial class L
         public static readonly LocString FailureStopped = new("settlement.failure.stopped", "Stopped before anything was accepted.");
         public static readonly LocString FailureInterrupted = new("settlement.failure.interrupted", "The visit was interrupted.");
         public static readonly LocString NoticeResults = new("settlement.notice.results", "Results are out for {0} ({1}). Check the result on My lottery.");
+        public static readonly LocString NoticeWon = new("settlement.notice.won", "{1} won {0}. Claim it on My lottery before {2}.");
         public static readonly LocString NoticeClaimDeadline = new("settlement.notice.claimDeadline", "{1} won {0}. Claim it before {2}.");
         public static readonly LocString NoticeRefundDeadline = new("settlement.notice.refundDeadline", "The refund for {0} ({1}) can be collected until about {2}.");
         public static readonly LocPlural NoticeSummary = new("settlement.notice.summary", "{0} lottery notice", "{0} lottery notices");

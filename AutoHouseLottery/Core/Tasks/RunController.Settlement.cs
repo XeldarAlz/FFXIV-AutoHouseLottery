@@ -1,3 +1,4 @@
+using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
@@ -28,14 +29,13 @@ internal sealed partial class RunController
     private SettlementGrant? refundGrant;
     private SettlementGrant? claimGrant;
     private SettlementStatus lastSettlement = SettlementStatus.Idle;
+    private Guid settlementSession = Guid.NewGuid();
 
     public bool Settling => settlement is not null;
 
     public SettlementStatus Settlement => settlement?.Progress ?? lastSettlement;
 
     public SchedulerBlock SchedulerBlock => scheduler.Block;
-
-    public int SettlementsDue => scheduler.DueCount;
 
     public SettlementRefusal StartSettlement(Guid id, SettlementMode mode, SettlementOrigin origin, bool dryRun)
     {
@@ -44,6 +44,7 @@ internal sealed partial class RunController
             : context is null ? SettlementRefusal.NotLoggedIn
             : DutyWatcher.InContent() ? SettlementRefusal.InContent
             : !housing.JournalWritable ? SettlementRefusal.JournalUnavailable
+            : AutoAnswerGuard.Blocks ? SettlementRefusal.AutoAnswerPlugin
             : SettlementRefusal.None;
         if (refusal != SettlementRefusal.None || !lease.TryAcquire(LeaseOf(mode), out var leaseGrant))
         {
@@ -71,6 +72,22 @@ internal sealed partial class RunController
         }
 
         return SettlementRefusal.None;
+    }
+
+    // A GM alert stops a visit at once wherever it is; a press it may have made is left for reconciliation rather than
+    // verified while the alert is on screen.
+    public void StopSettlementNow()
+    {
+        if (settlement is not { } visit)
+        {
+            return;
+        }
+
+        RunLog.Info($"Settlement {visit.Progress.VisitId}: stopped at once at {visit.Progress.Step} for an alert.");
+        stopReason = SettlementFailure.Interrupted;
+        pendingJournalWrite = visit.LeaveOpenAttempt() ?? pendingJournalWrite;
+        ClibServices.Automation.Stop();
+        FinishSettlement(visit);
     }
 
     // Stops a visit before its intent. One that may have pressed Yes finishes verifying instead.
@@ -101,19 +118,21 @@ internal sealed partial class RunController
         }
     }
 
-    // A maintainer's permission for one real refund or one real claim, in memory only: the logged-in character and one
-    // plot on its home world. It ends at logout, at unload, or with the one press it opens.
+    // A maintainer's permission for one real refund or one real claim, in memory only: the logged-in character, one plot
+    // on its home world and the one unsettled receipt it entered there. It ends at logout, at unload, or with the one press
+    // it opens.
     public SettlementGrant? GrantRealSettlement(ActionKind kind, string characterName, uint districtId, int ward, int plot)
     {
         if (kind == ActionKind.Entry
             || CharacterContextReader.Read() is not { } context
             || !string.Equals(context.Name, characterName, StringComparison.OrdinalIgnoreCase)
-            || !PlotKey.TryCreate(HousingContext.Region, context.HomeWorldId, districtId, ward, plot, out var key))
+            || !PlotKey.TryCreate(HousingContext.Region, context.HomeWorldId, districtId, ward, plot, out var key)
+            || UnsettledReceiptAt(context.ContentId, key) is not { } receiptId)
         {
             return null;
         }
 
-        var granted = new SettlementGrant(kind, context.ContentId, context.Name, key, DateTime.UtcNow);
+        var granted = new SettlementGrant(kind, context.ContentId, context.Name, key, receiptId, DateTime.UtcNow);
         if (kind == ActionKind.Refund)
         {
             refundGrant = granted;
@@ -123,7 +142,7 @@ internal sealed partial class RunController
             claimGrant = granted;
         }
 
-        RunLog.Warning($"REAL {kind.ToString().ToUpperInvariant()} ALLOWED for this session: {context.Name}, {key}, one press only. It ends at logout or unload.");
+        RunLog.Warning($"REAL {kind.ToString().ToUpperInvariant()} ALLOWED for this session: {context.Name}, {key}, receipt {receiptId}, one press only. It ends at logout or unload.");
         return granted;
     }
 
@@ -141,12 +160,26 @@ internal sealed partial class RunController
 
     // Whether a refund already known to be owed can be collected for real now, so the scheduler knows a visit would do
     // more than inspect it again.
-    public bool RefundCollectable(ulong contentId, PlotKey plot)
-        => SettlementGate.MayPress(ActionKind.Refund, SettlementGate.Validated(ActionKind.Refund), dryRun: false, refundGrant, contentId, plot);
+    public bool RefundCollectable(ulong contentId, Guid receiptId, PlotKey plot)
+        => SettlementGate.MayPress(ActionKind.Refund, SettlementGate.Validated(ActionKind.Refund), dryRun: false, refundGrant, contentId, plot, receiptId);
 
     public bool AutomaticRefunds(ulong contentId) => Plugin.Instance.Configuration.AutomaticRefunds(contentId);
 
-    public long SessionTravelSpent(ulong contentId) => scheduler.TravelSpent(contentId);
+    private Guid? UnsettledReceiptAt(ulong contentId, PlotKey plot)
+    {
+        var snapshot = housing.JournalSnapshot;
+        var receipts = snapshot.Receipts;
+        for (var index = 0; index < receipts.Length; index++)
+        {
+            var receipt = receipts[index];
+            if (receipt.CharacterContentId == contentId && receipt.Plot == plot && SettlementLookups.Settlement(snapshot, receipt.ReceiptId) is { IsSettled: false })
+            {
+                return receipt.ReceiptId;
+            }
+        }
+
+        return null;
+    }
 
     // The refund driver for an entry run's SettleOutstanding step, run inside the run's own lease.
     private SettlementTask CollectForEntry(Guid receiptId, bool dryRun)
@@ -179,6 +212,11 @@ internal sealed partial class RunController
     }
 
     private void RecordSettlementTravel(ulong contentId, long spent) => scheduler.RecordTravel(contentId, spent);
+
+    private Guid SettlementSession() => settlementSession;
+
+    // A new login is a new session for the two-session rule of a placard without a result.
+    private void RenewSettlementSession() => settlementSession = Guid.NewGuid();
 
     private void FinishSettlement(SettlementTask visit)
     {
@@ -215,6 +253,7 @@ internal sealed partial class RunController
 
         RunLog.Info($"Settlement {visit.Progress.VisitId}: ended at {visit.Progress.Step} ({reason}).");
         stopReason = SettlementFailure.Interrupted;
+        pendingJournalWrite = visit.LeaveOpenAttempt() ?? pendingJournalWrite;
         ClibServices.Automation.Stop();
         FinishSettlement(visit);
     }
@@ -226,7 +265,7 @@ internal sealed partial class RunController
         var ownWork = Busy || TaskStarter.Busy || HousingTravel.CurrentToken is not null;
         var otherWork = TaskStarter.Busy || lease.Owner is not null || LifestreamIpc.Instance.IsBusy() == true;
         var contentId = Svc.PlayerState.ContentId;
-        var next = scheduler.Tick(now, ownWork, Busy || otherWork, plot => RefundCollectable(contentId, plot));
+        var next = scheduler.Tick(now, ownWork, Busy || otherWork, Settling, (receiptId, plot) => RefundCollectable(contentId, receiptId, plot));
         if (settlement is { } visit)
         {
             if (visit.Request.Origin == SettlementOrigin.Scheduler
@@ -247,9 +286,9 @@ internal sealed partial class RunController
             return;
         }
 
-        scheduler.Started(due, now);
         if (StartSettlement(due.Id, due.Mode, SettlementOrigin.Scheduler, dryRun: false) == SettlementRefusal.None)
         {
+            scheduler.Started(due, now);
             scheduledWork = due;
         }
     }

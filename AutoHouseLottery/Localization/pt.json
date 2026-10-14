@@ -643,7 +643,7 @@
   "settlement.outcome.forfeit": "A vitória em {0} não foi reivindicada a tempo. Após a taxa de 50%, um reembolso de {1} é devido.",
   "settlement.outcome.expired": "O reembolso de {0} expirou.",
   "settlement.outcome.claimed": "{0} está reivindicado.",
-  "settlement.outcome.refunded": "O depósito de {0} já foi devolvido fora do plugin.",
+  "settlement.outcome.refunded": "{0} não oferece mais resultado a este personagem, então é registrado como resolvido fora do plugin; o valor não foi visto.",
   "settlement.outcome.notEntered": "{0} não mostra inscrição deste personagem, então a tentativa anterior nunca se inscreveu.",
   "settlement.failure.character": "Entre com o personagem que se inscreveu.",
   "settlement.failure.nothing": "Não resta nada a resolver nesta inscrição.",
@@ -684,6 +684,9 @@
   "dev.settleNotFound": "Nenhuma inscrição pendente do personagem conectado corresponde a esse recibo ou endereço.",
   "dev.refundGrantWarning": "REEMBOLSO REAL PERMITIDO só nesta sessão: {0} pode aceitar o reembolso em {1} uma vez. Um /ahl dev settle nesse terreno com a palavra real, ou um reembolso automático, pressiona Sim. /ahl dev revoke-real-settlement o retira.",
   "dev.claimGrantWarning": "REIVINDICAÇÃO REAL PERMITIDA só nesta sessão: {0} pode reivindicar {1} uma vez. Um /ahl dev settle nesse terreno com as palavras claim e real pressiona Sim e não pode ser desfeito. /ahl dev revoke-real-settlement a retira.",
-  "dev.settlementGrantRefused": "Não permitido: informe o personagem conectado, um distrito, um setor e um terreno no mundo natal dele.",
-  "dev.settlementRevoked": "Permissões de reembolso e reivindicação reais retiradas. Toda resolução volta a ser uma simulação."
+  "dev.settlementGrantRefused": "Não permitido: informe o personagem conectado e o distrito, o setor e o terreno de uma das inscrições pendentes dele no mundo natal.",
+  "dev.settlementRevoked": "Permissões de reembolso e reivindicação reais retiradas. Toda resolução volta a ser uma simulação.",
+  "runStart.autoAnswer": "Desative {0} primeiro: ele pode responder às janelas da loteria.",
+  "settlement.absenceMarker": "A placa não oferecia resultado em {0}; ainda pendente",
+  "settlement.notice.won": "{1} ganhou {0}. Reivindique em Minha loteria antes de {2}."
 }

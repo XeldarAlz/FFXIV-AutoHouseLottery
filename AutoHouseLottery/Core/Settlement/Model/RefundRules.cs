@@ -8,14 +8,12 @@ namespace AutoHouseLottery.Core.Settlement.Model;
 // deposit implies, and the plugin cannot tell why.
 internal enum RefundOffer : byte { Matches, DepositUnknown, DiffersFromDeposit }
 
-// Everything seen after Yes on a refund: the amount the dialog offered, the gil before the press and the latest gil, and
-// whether a fresh lottery reading still shows the entry (null when no fresh reading could say). SecondEntryShown is the
-// same from a reading taken again after a further delay, when one was.
-internal readonly record struct RefundEvidence(long Offered, long GilBefore, long? GilAfter, bool? EntryShown)
+// Everything seen after Yes on a refund: the amount the dialog offered, the gil before the press and the latest gil,
+// whether the result dialog is gone, and whether a re-read of the same placard, whose View Lottery Results label matched
+// earlier in this visit, still offers a result (null when it could not be re-read). Looks counts the re-reads so far.
+internal readonly record struct RefundEvidence(long Offered, long GilBefore, long? GilAfter, bool DialogGone, bool? PlacardStillOffers)
 {
-    public bool SecondReadingTaken { get; init; }
-
-    public bool? SecondEntryShown { get; init; }
+    public int Looks { get; init; } = 1;
 }
 
 internal enum RefundVerdict : byte { Refunded, RefundedAmountDiffers, Uncertain }
@@ -25,6 +23,7 @@ internal readonly record struct RefundSettlement(RefundVerdict Verdict, long? Re
 internal static class RefundRules
 {
     private const int CancellationFeePercent = 50;
+    private const int MaximumLooks = 2;
 
     // A losing entry is refunded in full; a forfeited win keeps half after the 50% fee, rounded either way.
     public static RefundOffer CheckOffer(RefundKind kind, long offered, long? deposit)
@@ -42,13 +41,13 @@ internal static class RefundRules
         };
     }
 
-    // Settled needs both the gil to have risen and a fresh reading that no longer shows the entry; a gil rise alone never
-    // settles a refund. A reading so soon after the press may not have caught up, so the latest of the two readings
-    // decides. A rise other than the offered amount is recorded as received, never as the full refund.
+    // Settled needs the gil to have risen, the dialog to be gone and the same placard to offer no result any more; a gil
+    // rise alone never settles a refund. A rise other than the offered amount is recorded as received, never as the full
+    // refund.
     public static RefundSettlement Settle(in RefundEvidence evidence)
     {
-        var latest = evidence.SecondReadingTaken ? evidence.SecondEntryShown : evidence.EntryShown;
-        if (latest != false
+        if (!evidence.DialogGone
+            || evidence.PlacardStillOffers != false
             || evidence.GilAfter is not { } after
             || !Gil.TrySubtract(after, evidence.GilBefore, out var received)
             || received <= 0)
@@ -61,11 +60,12 @@ internal static class RefundRules
             : new RefundSettlement(RefundVerdict.RefundedAmountDiffers, received);
     }
 
-    // The gil rose but the one reading so far does not show the entry gone: a second reading after a further delay is what
-    // can still settle the refund.
-    public static bool NeedsSecondReading(in RefundEvidence evidence)
-        => !evidence.SecondReadingTaken
-            && evidence.EntryShown != false
+    // The gil rose and the dialog is gone, but the placard re-read so soon still offers the result or could not be read:
+    // one more look after a further delay is what can still settle the refund.
+    public static bool NeedsSecondLook(in RefundEvidence evidence)
+        => evidence.Looks < MaximumLooks
+            && evidence.DialogGone
+            && evidence.PlacardStillOffers != false
             && evidence.GilAfter is { } after
             && after > evidence.GilBefore;
 

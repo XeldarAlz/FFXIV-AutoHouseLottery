@@ -643,7 +643,7 @@
   "settlement.outcome.forfeit": "{0} 的中签未按时购买。扣除50%手续费后，你可领取 {1} 退款。",
   "settlement.outcome.expired": "{0} 的退款已过期。",
   "settlement.outcome.claimed": "{0} 已购买。",
-  "settlement.outcome.refunded": "{0} 的保证金已在插件之外退还。",
+  "settlement.outcome.refunded": "{0} 不再向此角色显示结果，因此记录为在插件之外已处理；金额未知。",
   "settlement.outcome.notEntered": "{0} 没有此角色的参与记录，因此之前的尝试并未参与。",
   "settlement.failure.character": "请登录参与的角色。",
   "settlement.failure.nothing": "此参与已没有需要处理的内容。",
@@ -684,6 +684,9 @@
   "dev.settleNotFound": "当前登录角色没有与该记录或地址匹配的未处理参与。",
   "dev.refundGrantWarning": "仅本次会话允许真实退款：{0} 可以在 {1} 接受一次退款。在该地块使用带 real 的 /ahl dev settle 或自动退款会按下“是”。使用 /ahl dev revoke-real-settlement 可撤回。",
   "dev.claimGrantWarning": "仅本次会话允许真实购买：{0} 可以购买一次 {1}。在该地块使用带 claim 和 real 的 /ahl dev settle 会按下“是”，且无法撤销。使用 /ahl dev revoke-real-settlement 可撤回。",
-  "dev.settlementGrantRefused": "不允许：请指定当前登录的角色、住宅区、小区以及其原始服务器上的地块。",
-  "dev.settlementRevoked": "已撤回真实退款和购买许可。所有处理都会重新成为试运行。"
+  "dev.settlementGrantRefused": "不允许：请指定当前登录的角色，以及其原始服务器上一个未处理参与的住宅区、小区和地块。",
+  "dev.settlementRevoked": "已撤回真实退款和购买许可。所有处理都会重新成为试运行。",
+  "runStart.autoAnswer": "请先关闭 {0}：它可能会自动回应抽签对话框。",
+  "settlement.absenceMarker": "{0} 时告示牌未显示结果；仍待处理",
+  "settlement.notice.won": "{1} 抽中了 {0}。请在 {2} 之前在“我的抽签”中购买。"
 }

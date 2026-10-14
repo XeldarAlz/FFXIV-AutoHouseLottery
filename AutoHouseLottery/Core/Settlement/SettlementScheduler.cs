@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Model;
@@ -38,6 +39,8 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
     public long IdleMs(long nowMs) => input.IdleMs(nowMs);
 
+    public void SampleGamepad(long nowMs) => input.SampleGamepad(nowMs);
+
     public void RecordTravel(ulong contentId, long spent)
     {
         if (spent > 0)
@@ -63,7 +66,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     }
 
     // The work to start now, or null with Block saying why not.
-    public SettlementWork? Tick(long nowMs, bool ownWorkActive, bool busy, Func<PlotKey, bool> collectable)
+    public SettlementWork? Tick(long nowMs, bool ownWorkActive, bool busy, bool ownVisitRunning, Func<Guid, PlotKey, bool> collectable)
     {
         input.Sample(nowMs, ownWorkActive);
         if (CharacterContextReader.Read() is not { } context)
@@ -77,7 +80,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             ReconcileEstates(context);
         }
 
-        var due = SettlementSchedule.Due(housing.JournalSnapshot, context.ContentId, housing.CurrentPosition(DateTime.UtcNow), collectable);
+        var due = SettlementSchedule.Due(housing.JournalSnapshot, context.ContentId, housing.CurrentPosition(DateTime.UtcNow), collectable, Parked);
         DueCount = due.Length;
         var next = queue.Next(due, nowMs);
         var facts = new SchedulerFacts(
@@ -85,6 +88,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             AutomaticRefunds: configuration.AutomaticRefunds(context.ContentId),
             WorkDue: next is not null,
             JournalWritable: housing.JournalWritable,
+            AutoAnswerLoaded: AutoAnswerGuard.Blocks,
             InDuty: DutyWatcher.InContent(),
             InCombat: Svc.Condition[ConditionFlag.InCombat],
             InCutscene: Svc.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Svc.Condition[ConditionFlag.WatchingCutscene] || Svc.Condition[ConditionFlag.WatchingCutscene78],
@@ -112,7 +116,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             return next;
         }
 
-        if (SchedulerRules.ShouldAnnounceReady(block, nowMs - blockedSinceMs) && readyAnnounced.Add(context.ContentId))
+        if (SchedulerRules.ShouldAnnounceReady(block, nowMs - blockedSinceMs, ownVisitRunning) && readyAnnounced.Add(context.ContentId))
         {
             SettlementNoticeAnnouncer.AnnounceReady(DueCount);
             RunLog.Info($"Settlement scheduler: announced that refund collection is ready ({DueCount} item(s), waiting on {block}).");
@@ -120,6 +124,9 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
         return null;
     }
+
+    // While a placard without a result cannot settle anything, revisiting one already found that way only costs travel.
+    private bool Parked(Guid id) => !SettlementCapabilities.AbsenceSettlementValidated && configuration.AbsenceSighting(id) is not null;
 
     // A win the character's estate list now holds was claimed, by this plugin's press or in game; it is recorded as
     // claimed without a visit. Checked again only when the journal's settlements change.

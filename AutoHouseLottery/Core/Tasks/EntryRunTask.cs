@@ -37,7 +37,6 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
 
     private LotterySnapshot? reading;
     private HousingText? rejection;
-    private long travelToken;
     private bool confirmationOpenedByRun;
 
     protected override async Task Execute()
@@ -305,16 +304,17 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
     private DepositLedger OtherCommitments()
         => session.Reserved > 0 && session.Ledger.TryRelease(session.Reserved, out var others) ? others : session.Ledger;
 
-    private static HousingDestination DestinationOf(PlotKey plot) => new(plot.WorldId, plot.DistrictId, plot.Ward - ResidentialDistricts.OneBased, plot.Plot - ResidentialDistricts.OneBased);
-
+    // A refusal because an earlier refund or plot still waits (LogMessage 6100) reopens any entry of this character that
+    // was recorded as settled only because its placard offered no result.
     private void ReleaseOwnedWork()
     {
-        services.Observers.HousingLog.EndCapture();
-        if (travelToken != 0)
+        if (rejection == HousingText.OutstandingPropertyOrRefund)
         {
-            HousingTravel.CancelOwned(travelToken);
-            travelToken = 0;
+            _ = services.Housing.ReopenAbsenceSettlements(session.Settings.ContentId);
         }
+
+        services.Observers.HousingLog.EndCapture();
+        ReleaseVisit();
 
         if (confirmationOpenedByRun && !EntrySteps.InSubmissionWindow(session.Step) && !CloseConfirmationNow())
         {

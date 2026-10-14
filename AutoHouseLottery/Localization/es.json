@@ -643,7 +643,7 @@
   "settlement.outcome.forfeit": "La victoria en {0} no se reclamó a tiempo. Tras la comisión del 50 %, te corresponde un reembolso de {1}.",
   "settlement.outcome.expired": "El reembolso de {0} ha caducado.",
   "settlement.outcome.claimed": "{0} está reclamada.",
-  "settlement.outcome.refunded": "El depósito de {0} ya se devolvió fuera del complemento.",
+  "settlement.outcome.refunded": "{0} ya no ofrece resultado a este personaje, así que se registra como resuelto fuera del complemento; no se vio el importe.",
   "settlement.outcome.notEntered": "{0} no muestra participación de este personaje, así que el intento anterior nunca participó.",
   "settlement.failure.character": "Inicia sesión con el personaje que participó.",
   "settlement.failure.nothing": "No queda nada por resolver de esta participación.",
@@ -684,6 +684,9 @@
   "dev.settleNotFound": "Ninguna participación pendiente del personaje conectado coincide con ese recibo o dirección.",
   "dev.refundGrantWarning": "REEMBOLSO REAL PERMITIDO solo en esta sesión: {0} puede aceptar una vez el reembolso en {1}. Un /ahl dev settle en esa parcela con la palabra real, o un reembolso automático, pulsa Sí. /ahl dev revoke-real-settlement lo retira.",
   "dev.claimGrantWarning": "RECLAMACIÓN REAL PERMITIDA solo en esta sesión: {0} puede reclamar {1} una vez. Un /ahl dev settle en esa parcela con las palabras claim y real pulsa Sí y no se puede deshacer. /ahl dev revoke-real-settlement lo retira.",
-  "dev.settlementGrantRefused": "No permitido: indica el personaje conectado, un distrito, un sector y una parcela de su mundo de origen.",
-  "dev.settlementRevoked": "Permisos de reembolso y reclamación reales retirados. Todas las resoluciones vuelven a ser simulaciones."
+  "dev.settlementGrantRefused": "No permitido: indica el personaje conectado y el distrito, el sector y la parcela de una de sus participaciones pendientes en su mundo de origen.",
+  "dev.settlementRevoked": "Permisos de reembolso y reclamación reales retirados. Todas las resoluciones vuelven a ser simulaciones.",
+  "runStart.autoAnswer": "Desactiva primero {0}: podría responder a los diálogos de la lotería.",
+  "settlement.absenceMarker": "El cartel no ofrecía resultado el {0}; aún pendiente",
+  "settlement.notice.won": "{1} ganó {0}. Reclámala en Mi lotería antes de {2}."
 }

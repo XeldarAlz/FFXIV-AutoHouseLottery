@@ -35,7 +35,7 @@ internal static class SettlementText
         _ => Loc.T(L.Settlement.OutcomeNotEntered, address),
     };
 
-    public static string Failure(SettlementFailure failure) => Loc.T(failure switch
+    public static string Failure(SettlementFailure failure) => failure == SettlementFailure.AutoAnswerPlugin ? Tasks.RunText.AutoAnswer() : Loc.T(failure switch
     {
         SettlementFailure.CharacterChanged => L.Settlement.FailureCharacter,
         SettlementFailure.JournalUnavailable => L.RunFailure.JournalUnavailable,
@@ -72,7 +72,7 @@ internal static class SettlementText
         _ => L.Settlement.FailureInterrupted,
     });
 
-    public static string Refusal(SettlementRefusal refusal) => Loc.T(refusal switch
+    public static string Refusal(SettlementRefusal refusal) => refusal == SettlementRefusal.AutoAnswerPlugin ? Tasks.RunText.AutoAnswer() : Loc.T(refusal switch
     {
         SettlementRefusal.NotLoggedIn => L.RunStart.NotLoggedIn,
         SettlementRefusal.InContent => L.RunStart.InContent,
@@ -80,7 +80,7 @@ internal static class SettlementText
         _ => L.RunStart.Busy,
     });
 
-    public static string Block(SchedulerBlock block) => Loc.T(block switch
+    public static string Block(SchedulerBlock block) => block == SchedulerBlock.AutoAnswerPlugin ? Tasks.RunText.AutoAnswer() : Loc.T(block switch
     {
         SchedulerBlock.RefundsOff => L.Settlement.BlockOff,
         SchedulerBlock.NothingDue => L.Settlement.BlockNothingDue,

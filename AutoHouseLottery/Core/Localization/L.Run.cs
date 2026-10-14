@@ -109,6 +109,7 @@ internal static partial class L
         public static readonly LocString EntryPeriodClosed = new("runStart.entryPeriodClosed", "The lottery is not taking entries right now.");
         public static readonly LocString NoAssignment = new("runStart.noAssignment", "No plot in this plan can be entered by this character.");
         public static readonly LocString MultipleWins = new("runStart.multipleWins", "Confirm first that only one win can be claimed.");
+        public static readonly LocString AutoAnswer = new("runStart.autoAnswer", "Turn off {0} first: it could answer the lottery dialogs.");
     }
 
     internal static class Reconcile

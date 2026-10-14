@@ -643,7 +643,7 @@
   "settlement.outcome.forfeit": "{0}の当選は期限内に購入されませんでした。50%の手数料を差し引いた{1}の返金があります。",
   "settlement.outcome.expired": "{0}の返金期限が過ぎました。",
   "settlement.outcome.claimed": "{0}は購入済みです。",
-  "settlement.outcome.refunded": "{0}の支払い額は、プラグインの外ですでに返金されています。",
+  "settlement.outcome.refunded": "{0}はこのキャラクターに結果を表示しなくなったため、プラグインの外で処理済みとして記録しました。金額は確認できていません。",
   "settlement.outcome.notEntered": "{0}にはこのキャラクターの申し込みがないため、以前の試みは申し込まれていません。",
   "settlement.failure.character": "申し込んだキャラクターでログインしてください。",
   "settlement.failure.nothing": "この申し込みで処理するものは残っていません。",
@@ -684,6 +684,9 @@
   "dev.settleNotFound": "ログイン中のキャラクターの未処理の申し込みで、その記録または住所に一致するものはありません。",
   "dev.refundGrantWarning": "このセッションのみ実際の返金を許可：{0}は{1}で一度だけ返金を受け取れます。その土地でrealを付けた /ahl dev settle、または自動の返金が「はい」を押します。/ahl dev revoke-real-settlement で取り消せます。",
   "dev.claimGrantWarning": "このセッションのみ実際の購入を許可：{0}は{1}を一度だけ購入できます。その土地でclaimとrealを付けた /ahl dev settle は「はい」を押し、取り消せません。/ahl dev revoke-real-settlement で取り消せます。",
-  "dev.settlementGrantRefused": "許可できません：ログイン中のキャラクター、地区、区、そのホームワールドの土地を指定してください。",
-  "dev.settlementRevoked": "実際の返金と購入の許可を取り消しました。すべての処理は再び試し実行になります。"
+  "dev.settlementGrantRefused": "許可できません：ログイン中のキャラクターと、そのホームワールドにある未処理の申し込みの地区、区、土地を指定してください。",
+  "dev.settlementRevoked": "実際の返金と購入の許可を取り消しました。すべての処理は再び試し実行になります。",
+  "runStart.autoAnswer": "先に{0}をオフにしてください。抽選のダイアログに自動で応答する可能性があります。",
+  "settlement.absenceMarker": "{0}にサインボードで結果が表示されませんでした。未処理のままです",
+  "settlement.notice.won": "{1}が{0}に当選しました。{2}までにマイ抽選から購入してください。"
 }

@@ -61,18 +61,25 @@ public sealed class OutstandingAndManualSettlementTests
     [InlineData("Mist, Ward 7, Plot 7", 7, 7)]
     public void AnAddressWithOnlyOneValidOrderNamesItsPlot(string text, int ward, int plot)
     {
-        Assert.Equal(Plot(ward, plot), ImportedAddress.Resolve(text, GameRegion.Global, HomeWorld, MistOnly, _ => false));
+        Assert.Equal(Plot(ward, plot), ImportedAddress.Resolve(text, GameRegion.Global, HomeWorld, MistOnly));
     }
 
     [Fact]
-    public void AnAddressValidInBothOrdersNeedsThePlotStoreToTellThemApart()
+    public void AnAddressValidInBothOrdersIsNeverGuessed()
     {
-        const string shown = "Plot 5, 12 Ward, Mist (Small)";
+        Assert.Null(ImportedAddress.Resolve("Plot 5, 12 Ward, Mist (Small)", GameRegion.Global, HomeWorld, MistOnly));
+        Assert.Null(ImportedAddress.Resolve("Mist, Ward 12, Plot 5", GameRegion.Global, HomeWorld, MistOnly));
+    }
 
-        Assert.Null(ImportedAddress.Resolve(shown, GameRegion.Global, HomeWorld, MistOnly, _ => false));
-        Assert.Null(ImportedAddress.Resolve(shown, GameRegion.Global, HomeWorld, MistOnly, _ => true));
-        Assert.Equal(Plot(12, 5), ImportedAddress.Resolve(shown, GameRegion.Global, HomeWorld, MistOnly, key => key == Plot(12, 5)));
-        Assert.Equal(Plot(5, 12), ImportedAddress.Resolve(shown, GameRegion.Global, HomeWorld, MistOnly, key => key == Plot(5, 12)));
+    [Fact]
+    public void AnImportedPlotIsKeptOnlyOnceAResultRowOrTheEstateListProvesIt()
+    {
+        Assert.True(SettlementDecisions.ProvesPlot(ResultKind.Lost, ownsPlot: false));
+        Assert.True(SettlementDecisions.ProvesPlot(ResultKind.Won, ownsPlot: false));
+        Assert.True(SettlementDecisions.ProvesPlot(ResultKind.Expired, ownsPlot: false));
+        Assert.True(SettlementDecisions.ProvesPlot(ResultKind.NotShown, ownsPlot: true));
+        Assert.False(SettlementDecisions.ProvesPlot(ResultKind.NotShown, ownsPlot: false));
+        Assert.False(SettlementDecisions.ProvesPlot(ResultKind.Unrecognized, ownsPlot: false));
     }
 
     [Theory]
@@ -84,7 +91,7 @@ public sealed class OutstandingAndManualSettlementTests
     [InlineData("Mist, Ward 1200000, Plot 5")]
     public void AnAddressThatIsNotCertainNamesNoPlot(string text)
     {
-        Assert.Null(ImportedAddress.Resolve(text, GameRegion.Global, HomeWorld, MistOnly, _ => true));
+        Assert.Null(ImportedAddress.Resolve(text, GameRegion.Global, HomeWorld, MistOnly));
     }
 
     [Fact]
@@ -97,7 +104,7 @@ public sealed class OutstandingAndManualSettlementTests
             _ => null,
         };
 
-        Assert.Null(ImportedAddress.Resolve("Mist Goblet, Ward 12, Plot 35", GameRegion.Global, HomeWorld, BothNamed, _ => true));
+        Assert.Null(ImportedAddress.Resolve("Mist Goblet, Ward 12, Plot 35", GameRegion.Global, HomeWorld, BothNamed));
     }
 
     [Fact]
@@ -150,15 +157,27 @@ public sealed class OutstandingAndManualSettlementTests
     }
 
     [Fact]
-    public void AnOwnRefundInQuestionIsConfirmedByAValidatedReading()
+    public void AnOwnRefundAlreadyInQuestionIsConfirmedByAValidatedReading()
     {
         var lost = Receipt(Plot(12, 5), FirstCycle);
-        var refund = Attempt(Plot(12, 5), AttemptState.Dispatched) with { Kind = ActionKind.Refund, ReceiptId = lost.ReceiptId };
-        var journal = Journal([refund], (lost, SettlementState.RefundPending));
+        var refund = Attempt(Plot(12, 5), AttemptState.NeedsReconciliation) with { Kind = ActionKind.Refund, ReceiptId = lost.ReceiptId };
+        var journal = Journal([refund], (lost, SettlementState.NeedsReconciliation));
 
         var fix = Assert.Single(ManualSettlement.FromReading(journal, Reading(LotterySnapshotState.LoadedNone), ResultsPhase(FirstCycle)));
 
         Assert.Equal(new SettlementFix(lost.ReceiptId, SettlementState.Refunded, refund.AttemptId), fix);
+    }
+
+    [Theory]
+    [InlineData((byte)AttemptState.Prepared)]
+    [InlineData((byte)AttemptState.Dispatched)]
+    public void AReadingNeverRacesTheVisitThatIsConfirmingItsOwnRefund(byte state)
+    {
+        var lost = Receipt(Plot(12, 5), FirstCycle);
+        var refund = Attempt(Plot(12, 5), (AttemptState)state) with { Kind = ActionKind.Refund, ReceiptId = lost.ReceiptId };
+        var journal = Journal([refund], (lost, SettlementState.RefundPending));
+
+        Assert.Empty(ManualSettlement.FromReading(journal, Reading(LotterySnapshotState.LoadedNone), ResultsPhase(FirstCycle)));
     }
 
     private static EstateAddress Estate(int ward, int plot) => new(HousingDistricts.Mist, HomeWorldShort, ward - 1, plot - 1, false, 1);

@@ -12,10 +12,10 @@ internal static class ImportedAddress
 
     // The plot an entry found in the Timers window names (Addon row 8847): exactly one district's name in the client
     // language and exactly two numbers. Client languages order the ward and the plot differently ("Plot 5, 12 Ward" in
-    // English), so both orders are tried; an address resolves only when one order alone makes a valid plot, or when
-    // plausible (what the plot store knows of a lottery plot there) leaves exactly one. Anything less certain names no
-    // plot, and the entry waits for the player.
-    public static PlotKey? Resolve(string addressText, GameRegion region, uint homeWorldId, Func<uint, string?> districtNameOf, Func<PlotKey, bool> plausible)
+    // English) and which macro of the row holds which is not established yet, so an address resolves only when one order
+    // alone makes a valid plot (a plot number above the ward count). Anything less certain names no plot, nothing is
+    // guessed, and the entry waits for the player. The visit keeps the plot only once a result row proves it.
+    public static PlotKey? Resolve(string addressText, GameRegion region, uint homeWorldId, Func<uint, string?> districtNameOf)
     {
         var text = DisplayText.Normalize(addressText);
         if (!FindDistrict(text, districtNameOf, out var district, out var nameStart, out var nameLength))
@@ -43,12 +43,7 @@ internal static class ImportedAddress
             candidates[found++] = plotFirst;
         }
 
-        return found switch
-        {
-            1 => candidates[0],
-            CandidateOrders when plausible(candidates[0]) != plausible(candidates[1]) => plausible(candidates[0]) ? candidates[0] : candidates[1],
-            _ => null,
-        };
+        return found == 1 ? candidates[0] : null;
     }
 
     private static bool FindDistrict(string text, Func<uint, string?> districtNameOf, out uint district, out int nameStart, out int nameLength)

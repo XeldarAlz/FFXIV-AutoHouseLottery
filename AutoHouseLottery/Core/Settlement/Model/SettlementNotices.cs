@@ -5,7 +5,7 @@ using AutoHouseLottery.Core.Persistence.Model;
 
 namespace AutoHouseLottery.Core.Settlement.Model;
 
-internal enum SettlementNoticeKind : byte { ResultsAvailable, ClaimDeadline, RefundDeadline }
+internal enum SettlementNoticeKind : byte { ResultsAvailable, Won, ClaimDeadline, RefundDeadline }
 
 // Each notice belongs to one receipt, so it fires once for that entry across reloads and catch-ups.
 internal readonly record struct SettlementNotice(SettlementNoticeKind Kind, Guid ReceiptId, ulong ContentId, PlotKey? Plot, string? AddressText, DateTime? DeadlineUtc)
@@ -21,9 +21,11 @@ internal static class SettlementNotices
     private static readonly TimeSpan claimLead = TimeSpan.FromHours(ClaimLeadHours);
     private static readonly TimeSpan refundLead = TimeSpan.FromDays(RefundLeadDays);
 
-    // Results available: an entry whose results arrived and whose outcome nobody has read. Claim deadline: a win not yet
-    // claimed within a day of the end of its results period. Refund deadline: a refund owed within a week of the end of
-    // its refund window. A deadline that has passed, or that the calendar cannot place, is not announced.
+    // Results available: an entry whose results arrived and whose outcome nobody has read. Won: a win the plugin found,
+    // announced once whoever found it, since a win is never settled in the background. Claim deadline: that win still not
+    // claimed within a day of the end of its results period. Refund deadline: a refund owed within a week of its deadline,
+    // the dialog's own when it was read, otherwise the 90-day estimate. A deadline that has passed, or that nothing can
+    // place, is not announced.
     public static ImmutableArray<SettlementNotice> Due(in JournalSnapshot snapshot, in CyclePosition current, LotterySchedule? schedule, DateTime nowUtc, Func<string, bool> delivered)
     {
         var due = ImmutableArray.CreateBuilder<SettlementNotice>();
@@ -36,23 +38,39 @@ internal static class SettlementNotices
                 continue;
             }
 
-            SettlementNotice? notice = settlement.State switch
+            if (SettlementStates.OutcomeOpen(settlement.State) && SettlementDeadlines.ResultsArrived(receipt.Cycle, current))
             {
-                _ when SettlementStates.OutcomeOpen(settlement.State) && SettlementDeadlines.ResultsArrived(receipt.Cycle, current)
-                    => Notice(SettlementNoticeKind.ResultsAvailable, receipt, SettlementDeadlines.ResultsEnd(receipt.Cycle, current, schedule)),
-                SettlementState.WonUnclaimed when Approaching(SettlementDeadlines.ResultsEnd(receipt.Cycle, current, schedule), claimLead, nowUtc) is { } claimBy
-                    => Notice(SettlementNoticeKind.ClaimDeadline, receipt, claimBy),
-                _ when SettlementStates.RefundOwed(settlement.State) && Approaching(SettlementDeadlines.RefundDeadline(receipt.Cycle, current, schedule), refundLead, nowUtc) is { } refundBy
-                    => Notice(SettlementNoticeKind.RefundDeadline, receipt, refundBy),
-                _ => null,
-            };
-            if (notice is { } found && !delivered(found.Key))
+                Offer(due, Notice(SettlementNoticeKind.ResultsAvailable, receipt, SettlementDeadlines.ResultsEnd(receipt.Cycle, current, schedule)), delivered);
+            }
+            else if (settlement.State == SettlementState.WonUnclaimed)
             {
-                due.Add(found);
+                var claimBy = SettlementDeadlines.ResultsEnd(receipt.Cycle, current, schedule);
+                var won = Notice(SettlementNoticeKind.Won, receipt, claimBy);
+                if (!delivered(won.Key))
+                {
+                    due.Add(won);
+                }
+                else if (Approaching(claimBy, claimLead, nowUtc) is { } end)
+                {
+                    Offer(due, Notice(SettlementNoticeKind.ClaimDeadline, receipt, end), delivered);
+                }
+            }
+            else if (SettlementStates.RefundOwed(settlement.State)
+                && Approaching(settlement.RefundDeadlineUtc ?? SettlementDeadlines.RefundDeadline(receipt.Cycle, current, schedule), refundLead, nowUtc) is { } refundBy)
+            {
+                Offer(due, Notice(SettlementNoticeKind.RefundDeadline, receipt, refundBy), delivered);
             }
         }
 
         return due.ToImmutable();
+    }
+
+    private static void Offer(ImmutableArray<SettlementNotice>.Builder due, in SettlementNotice notice, Func<string, bool> delivered)
+    {
+        if (!delivered(notice.Key))
+        {
+            due.Add(notice);
+        }
     }
 
     private static DateTime? Approaching(DateTime? deadline, TimeSpan lead, DateTime nowUtc)
