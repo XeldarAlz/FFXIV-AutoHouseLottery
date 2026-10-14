@@ -20,17 +20,21 @@ internal enum CapabilityKind : byte
     Refund,
     Claim,
     AbsenceSettlement,
+    BatchEntry,
+    CharacterSwitch,
 }
 
 // Fallback: it works through a slower or less direct path. DryRunOnly: the action stops before its committing press
 // until it has been validated in game. NotChecked: nothing has told yet, such as a window not opened this session.
 // PermittedOnce: still dry run only by default, but a maintainer's session permission allows one real press now.
+// PermittedThisSession: off until validated, but a maintainer's session permission allows it for a while now.
 internal enum CapabilityState : byte
 {
     Ready,
     Fallback,
     DryRunOnly,
     PermittedOnce,
+    PermittedThisSession,
     NotChecked,
     Missing,
     Blocked,
@@ -77,6 +81,14 @@ internal enum CapabilityReason : byte
     ClaimPermittedOnce,
     AbsenceValidated,
     AbsenceDryRunOnly,
+    BatchValidated,
+    BatchDryRunOnly,
+    SwitchValidated,
+    SwitchOffUntilValidated,
+    SwitchPermittedBatch,
+    SwitchPermittedRefunds,
+    SwitchPermittedBoth,
+    SwitchLifestreamMissing,
 }
 
 internal readonly record struct Capability(CapabilityKind Kind, CapabilityState State, CapabilityReason Reason);
@@ -147,4 +159,12 @@ internal readonly record struct CapabilityFacts
     public bool RefundPermitted { get; init; }
 
     public bool ClaimPermitted { get; init; }
+
+    public bool BatchEntryValidated { get; init; }
+
+    public bool CharacterSwitchValidated { get; init; }
+
+    public bool BatchSwitchPermitted { get; init; }
+
+    public bool RefundSwitchPermitted { get; init; }
 }

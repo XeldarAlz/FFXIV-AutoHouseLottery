@@ -27,11 +27,14 @@ internal static partial class L
         public static readonly LocString NameRefund = new("diagnostics.name.refund", "Collecting refunds");
         public static readonly LocString NameClaim = new("diagnostics.name.claim", "Claiming a house");
         public static readonly LocString NameAbsence = new("diagnostics.name.absence", "Placards without a result");
+        public static readonly LocString NameBatchEntry = new("diagnostics.name.batchEntry", "Entering for several characters");
+        public static readonly LocString NameCharacterSwitch = new("diagnostics.name.characterSwitch", "Switching characters");
 
         public static readonly LocString StateReady = new("diagnostics.state.ready", "Ready");
         public static readonly LocString StateFallback = new("diagnostics.state.fallback", "Fallback");
         public static readonly LocString StateDryRunOnly = new("diagnostics.state.dryRunOnly", "Dry run only until validated");
         public static readonly LocString StatePermittedOnce = new("diagnostics.state.permittedOnce", "One real press allowed");
+        public static readonly LocString StatePermittedThisSession = new("diagnostics.state.permittedThisSession", "Allowed for now");
         public static readonly LocString StateNotChecked = new("diagnostics.state.notChecked", "Not checked yet");
         public static readonly LocString StateMissing = new("diagnostics.state.missing", "Missing");
         public static readonly LocString StateBlocked = new("diagnostics.state.blocked", "Blocked");
@@ -74,6 +77,14 @@ internal static partial class L
         public static readonly LocString ClaimDryRunOnly = new("diagnostics.reason.claimDryRunOnly", "A win is read and closed, so nothing is claimed. Claim your house in game.");
         public static readonly LocString ClaimPermittedOnce = new("diagnostics.reason.claimPermittedOnce", "Dry run only until validated, but a permission given this session allows one real claim on one plot. /ahl dev revoke-real-settlement withdraws it.");
         public static readonly LocString AbsenceValidated = new("diagnostics.reason.absenceValidated", "Validated in game: an entry whose placard no longer offers a result is recorded as settled outside the plugin.");
+        public static readonly LocString BatchValidated = new("diagnostics.reason.batchValidated", "Validated in game: Enter for N characters makes a real entry for each character.");
+        public static readonly LocString BatchDryRunOnly = new("diagnostics.reason.batchDryRunOnly", "Enter for N characters takes each character as far as its lottery confirmation and closes it. A one-plot real-entry permission never makes a batch real.");
+        public static readonly LocString SwitchValidated = new("diagnostics.reason.switchValidated", "Validated in game: batches and, when its option is on, the refund queue log in each character through Lifestream.");
+        public static readonly LocString SwitchOffUntilValidated = new("diagnostics.reason.switchOffUntilValidated", "Off until validated: each character is processed at its own login.");
+        public static readonly LocString SwitchPermittedBatch = new("diagnostics.reason.switchPermittedBatch", "Off until validated, but a permission given this session lets one batch, the one not finished yet or else the next one started, switch characters until it ends, for two hours at most. /ahl dev revoke-switching withdraws it.");
+        public static readonly LocString SwitchPermittedRefunds = new("diagnostics.reason.switchPermittedRefunds", "Off until validated, but a permission given this session lets the refund queue switch characters for two hours. /ahl dev revoke-switching withdraws it.");
+        public static readonly LocString SwitchPermittedBoth = new("diagnostics.reason.switchPermittedBoth", "Off until validated, but permissions given this session let one batch, the one not finished yet or else the next one started, and the refund queue switch characters, for two hours at most. /ahl dev revoke-switching withdraws them.");
+        public static readonly LocString SwitchLifestreamMissing = new("diagnostics.reason.switchLifestreamMissing", "Lifestream does not offer its character change to other plugins, so characters are never switched. Update Lifestream.");
         public static readonly LocString AbsenceDryRunOnly = new("diagnostics.reason.absenceDryRunOnly", "An entry whose placard no longer offers a result stays pending on My lottery instead of being recorded as settled, and does not hold up your next entry.");
     }
 }

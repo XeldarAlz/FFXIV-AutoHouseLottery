@@ -75,6 +75,7 @@ public sealed partial class Configuration
             ManualRefundCharacters.Add(contentId);
         }
 
+        RosterRevision++;
         Save();
     }
 

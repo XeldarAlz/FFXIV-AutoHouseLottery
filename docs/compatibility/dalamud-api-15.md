@@ -1,10 +1,10 @@
 # Compatibility report: Dalamud API 15, global client
 
-This is the compatibility record of Auto House Lottery 1.0.0.0 for the global game client with Dalamud API 15 (built against Dalamud 15.0.3.7). It says what the plugin covers, what it refuses, how each game interaction is recognized, and which values have been checked in game. The game version string is not recorded yet: the first in-game validation fills it in from the plugin's Copy diagnostics (Plugins page), which prints it, and this file is renamed after it then.
+This is the compatibility record of Auto House Lottery 1.1.0.0 for the global game client with Dalamud API 15 (built against Dalamud 15.0.3.7). It says what the plugin covers, what it refuses, how each game interaction is recognized, and which values have been checked in game. The game version string is not recorded yet: the first in-game validation fills it in from the plugin's Copy diagnostics (Plugins page), which prints it, and this file is renamed after it then.
 
 | Item | Value |
 | --- | --- |
-| Plugin version | 1.0.0.0 |
+| Plugin version | 1.1.0.0 |
 | Dalamud API level | 15 |
 | Game version string | Not recorded yet (first in-game validation) |
 | In-game validation | Not started: every row below marked "not yet checked in game" is still open |
@@ -83,6 +83,11 @@ These are read or pressed exactly as the community sources describe them, behind
 | Timers window addons `ContentsInfo` and `ContentsInfoDetail` | `Core/Game/Lottery/LotteryReader.cs` | HouseHunter |
 | Placard event object base ID 2002736, 3.5 m interaction range, 25 m search radius around Lifestream's plot entrance | `Core/Travel/PlacardApproach.cs` | ffxiv-datamining, estimate |
 | Lifestream IPC gates (GoToHousingAddress, IsBusy, Abort, IsHere, IsQuickTravelAvailable, GetPlotEntrance, GetCurrentPlotInfo) on the installed version | `Core/Ipc/LifestreamIpc.cs` | Lifestream `IPC/IPCProvider.cs` |
+| Lifestream `ChangeCharacter(name, world)` and its `ErrorCode` answer crossing into this plugin's copy of the enum; `IsBusy` staying true from the logout to the login | `Core/Ipc/LifestreamIpc.cs`, `Core/Travel/CharacterSwitch.cs` | Lifestream `IPC/IPCProvider.cs`, `Utils.cs` (ef759e9) |
+| A switch is done only after the requested content ID and home world are loaded and ready for 5 seconds and Lifestream is idle; a failed login is called after 60 seconds logged out with Lifestream idle; the switch deadline is 5 minutes | `Core/Travel/Model/CharacterSwitchRules.cs` | Estimates |
+| The Free Company record and owned estates are loaded within those 5 seconds after a login | `Core/Game/Character/CharacterContextReader.cs` | Estimate |
+| Duty, match and world visit queue conditions (`InDutyQueue`, `WaitingForDuty`, `WaitingForDutyFinder`, `WaitingForRaceOrMatch`, `WaitingToVisitOtherWorld`) block a switch | `Core/Travel/CharacterSwitch.cs` | Dalamud `ConditionFlag` |
+| AutoRetainer `GetMultiModeEnabled` gate | `Core/Ipc/AutoRetainerIpc.cs` | AutoRetainer `Modules/IPC.cs` (cc020df) |
 | The Korean data center region row (6) | `Core/Housing/Model/WorldRegion.cs` | Assumed; refused either way |
 
 ## Actions and their validation flags
@@ -94,5 +99,7 @@ These are read or pressed exactly as the community sources describe them, behind
 | Claiming a house | `SettlementCapabilities.ClaimConfirmValidated` | false: dry run only until validated |
 | Placards without a result | `SettlementCapabilities.AbsenceSettlementValidated` | false: dry run only until validated |
 | Direct lottery record read | `LotteryRecordAccess.ValidatedGameVersions` | empty: the Timers window is read instead |
+| Entering for several characters (1.1) | `BatchCapabilities.BatchEntryValidated`, together with `EntryCapabilities.EntryConfirmValidated` | false: every batch is a dry run; a one-plot real-entry permission never makes a batch real |
+| Switching characters (1.1) | `SwitchCapabilities.CharacterSwitchValidated` | false: each character is processed at its own login; `/ahl dev allow-switching` (one batch, the one not finished yet or else the next one started, until it ends or for two hours) and `/ahl dev allow-refund-switching` (the refund queue, two hours) allow it for the validation |
 
 A flag is set only after the matching step of the in-game validation ladder (VALIDATION_PLAN section 10) has passed on the game version above, with its report attached here.

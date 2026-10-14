@@ -30,5 +30,20 @@ internal sealed class StartCheck
         return reason;
     }
 
+    public string BatchReason(RunController controller, RunPolicy policy)
+    {
+        var now = Environment.TickCount64;
+        if (ReferenceEquals(policy, asked) && now - askedAtMs < RecheckMs)
+        {
+            return reason;
+        }
+
+        asked = policy;
+        askedAtMs = now;
+        var refusal = controller.CheckBatch(policy);
+        reason = refusal == StartRefusal.None ? string.Empty : RunText.Refusal(refusal);
+        return reason;
+    }
+
     public void Invalidate() => asked = null;
 }

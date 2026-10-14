@@ -32,6 +32,10 @@ internal static class DevVerbs
     public const string AllowRealRefund = "allow-real-refund";
     public const string AllowRealClaim = "allow-real-claim";
     public const string RevokeRealSettlement = "revoke-real-settlement";
+    public const string AllowSwitching = "allow-switching";
+    public const string AllowRefundSwitching = "allow-refund-switching";
+    public const string RevokeSwitching = "revoke-switching";
 
-    public static readonly ImmutableArray<string> All = [Run, AllowRealEntry, RevokeRealEntry, Settle, AllowRealRefund, AllowRealClaim, RevokeRealSettlement];
+    public static readonly ImmutableArray<string> All =
+        [Run, AllowRealEntry, RevokeRealEntry, Settle, AllowRealRefund, AllowRealClaim, RevokeRealSettlement, AllowSwitching, AllowRefundSwitching, RevokeSwitching];
 }

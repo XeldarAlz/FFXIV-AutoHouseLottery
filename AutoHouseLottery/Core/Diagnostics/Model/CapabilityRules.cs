@@ -6,7 +6,7 @@ namespace AutoHouseLottery.Core.Diagnostics.Model;
 // support report say the same thing.
 internal static class CapabilityRules
 {
-    public const int Count = (int)CapabilityKind.AbsenceSettlement + 1;
+    public const int Count = (int)CapabilityKind.CharacterSwitch + 1;
 
     public static void Evaluate(in CapabilityFacts facts, Span<Capability> destination)
     {
@@ -50,6 +50,33 @@ internal static class CapabilityRules
             ? new(CapabilityKind.Claim, CapabilityState.PermittedOnce, CapabilityReason.ClaimPermittedOnce)
             : Validation(CapabilityKind.Claim, facts.ClaimValidated, CapabilityReason.ClaimValidated, CapabilityReason.ClaimDryRunOnly);
         destination[(int)CapabilityKind.AbsenceSettlement] = Validation(CapabilityKind.AbsenceSettlement, facts.AbsenceSettlementValidated, CapabilityReason.AbsenceValidated, CapabilityReason.AbsenceDryRunOnly);
+        destination[(int)CapabilityKind.BatchEntry] = Validation(CapabilityKind.BatchEntry, facts.EntryConfirmValidated && facts.BatchEntryValidated, CapabilityReason.BatchValidated, CapabilityReason.BatchDryRunOnly);
+        destination[(int)CapabilityKind.CharacterSwitch] = CharacterSwitch(facts);
+    }
+
+    // A batch never goes real on a one-plot permission, so it has no permitted state; switching does, for a while.
+    private static Capability CharacterSwitch(in CapabilityFacts facts)
+    {
+        var permitted = facts.BatchSwitchPermitted || facts.RefundSwitchPermitted;
+        if ((facts.CharacterSwitchValidated || permitted) && !facts.Lifestream.CanSwitchCharacters)
+        {
+            return new(CapabilityKind.CharacterSwitch, CapabilityState.Missing, CapabilityReason.SwitchLifestreamMissing);
+        }
+
+        if (facts.CharacterSwitchValidated)
+        {
+            return new(CapabilityKind.CharacterSwitch, CapabilityState.Ready, CapabilityReason.SwitchValidated);
+        }
+
+        if (!permitted)
+        {
+            return new(CapabilityKind.CharacterSwitch, CapabilityState.DryRunOnly, CapabilityReason.SwitchOffUntilValidated);
+        }
+
+        var reason = facts.BatchSwitchPermitted && facts.RefundSwitchPermitted ? CapabilityReason.SwitchPermittedBoth
+            : facts.BatchSwitchPermitted ? CapabilityReason.SwitchPermittedBatch
+            : CapabilityReason.SwitchPermittedRefunds;
+        return new(CapabilityKind.CharacterSwitch, CapabilityState.PermittedThisSession, reason);
     }
 
     private static Capability Listings(ListingsFact listings) => listings switch

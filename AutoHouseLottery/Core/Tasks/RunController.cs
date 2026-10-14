@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using AutoHouseLottery.Core.Batch.Model;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
@@ -8,10 +9,12 @@ using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
+using AutoHouseLottery.Core.Ipc;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Selection.Model;
 using AutoHouseLottery.Core.Settlement;
 using AutoHouseLottery.Core.Tasks.Model;
+using AutoHouseLottery.Core.Travel;
 using Dalamud.Plugin.Services;
 using ECommons;
 using ECommons.DalamudServices;
@@ -45,9 +48,11 @@ internal sealed partial class RunController
     private long closeConfirmationUntilMs;
     private System.Threading.Tasks.Task? pendingJournalWrite;
 
-    public RunController(HousingContext housing, HousingObservers observers)
+    public RunController(HousingContext housing, HousingObservers observers, string directory)
     {
         this.housing = housing;
+        batchFile = CreateBatchFile(directory);
+        batch = RestoreBatch();
         services = new RunServices(housing, observers, () => grant, ConsumeGrant, CloseConfirmationLater, AutomaticRefunds, CollectForEntry, TrackJournalWrite);
         settlementServices = new SettlementServices(housing, observers, Plugin.Instance.Configuration, SettlementGrantFor, ConsumeSettlementGrant, RecordSettlementTravel, SettlementSession);
         scheduler = new SettlementScheduler(housing, Plugin.Instance.Configuration);
@@ -64,7 +69,7 @@ internal sealed partial class RunController
 
     public bool Reconciling => reconciling is not null;
 
-    public bool Busy => Running || Reconciling || Settling;
+    public bool Busy => Running || Reconciling || Settling || BatchActive || RefundSwitching;
 
     public RunStatus Status => session?.Status ?? finished;
 
@@ -124,6 +129,11 @@ internal sealed partial class RunController
         if (session is not { } active)
         {
             PauseReason = PauseReason.None;
+            if (ContinueCheck() == StartRefusal.None)
+            {
+                ContinueBatch();
+            }
+
             return;
         }
 
@@ -162,28 +172,11 @@ internal sealed partial class RunController
         Resume();
     }
 
-    public void Stop()
-    {
-        if (session is not { } active)
-        {
-            return;
-        }
-
-        if (EntrySteps.InSubmissionWindow(active.Step) || active.Step == EntryStep.PersistIntent || active.CollectingInPressWindow)
-        {
-            active.StopRequested = true;
-            active.Publish();
-            RunLog.Info($"Entry run {active.RunId}: stop asked at {active.Step}; the run ends once the press it made is verified.");
-            return;
-        }
-
-        StopTask();
-        active.MoveTo(EntryStep.Stopped);
-        Settle(active, EntryStep.Stopped, "stopped by the player");
-    }
+    public void Stop() => StopWith(BatchEnd.StoppedByPlayer, BatchHalt.StoppedByPlayer, "stopped by the player");
 
     // A GM alert ends everything at once: a refund an entry run is collecting is not verified first either, and a press it
-    // may have made is left for reconciliation. No automatic visit starts again until the player touches the game.
+    // may have made is left for reconciliation. No automatic visit starts again until the player touches the game. A batch
+    // is halted as interrupted, never as stopped by the player.
     public void StopForAlert()
     {
         scheduler.HoldUntilInput(Environment.TickCount64);
@@ -193,21 +186,57 @@ internal sealed partial class RunController
         }
         else
         {
-            Stop();
+            StopWith(BatchEnd.Interrupted, BatchHalt.Interrupted, "a GM alert");
         }
 
         CancelReconcile();
         StopSettlementNow();
+        if (BatchActive)
+        {
+            HaltBatch(BatchHalt.Interrupted, "a GM alert");
+        }
+
+        StopRefundSwitch("a GM alert");
+    }
+
+    // The stop shared by the player's Stop and a GM alert; End and Halt say which, for the batch the run belongs to.
+    private void StopWith(BatchEnd end, BatchHalt halt, string reason)
+    {
+        if (session is not { } active)
+        {
+            if (BatchActive)
+            {
+                HaltBatch(halt, $"{reason} between characters");
+            }
+
+            StopRefundSwitch(reason);
+            return;
+        }
+
+        memberEnd = end;
+        if (EntrySteps.InSubmissionWindow(active.Step) || active.Step == EntryStep.PersistIntent || active.CollectingInPressWindow)
+        {
+            active.StopRequested = true;
+            active.Publish();
+            RunLog.Info($"Entry run {active.RunId}: stop asked at {active.Step} ({reason}); the run ends once the press it made is verified.");
+            return;
+        }
+
+        StopTask();
+        active.MoveTo(EntryStep.Stopped);
+        Settle(active, EntryStep.Stopped, reason);
     }
 
     // A logout or a disconnect. The next login, even as the same character, counts as a new session: its entry attempt
-    // still in question is read back at once and the two-session rule of a placard without a result starts afresh.
+    // still in question is read back at once and the two-session rule of a placard without a result starts afresh. A
+    // batch or refund switch logs out by design and goes on; any other logout halts a batch that was between characters.
     public void Interrupt()
     {
         grant = null;
         lastContentId = 0;
         End("logged out");
         EndSettlement("logged out");
+        InterruptBatch("logged out");
     }
 
     // The journal is closed right after this, so the last attempt write is waited for, briefly, before it is.
@@ -215,10 +244,16 @@ internal sealed partial class RunController
     {
         End("the plugin is unloading");
         EndSettlement("the plugin is unloading");
+        CharacterSwitch.Release();
         Svc.Framework.Update -= OnUpdate;
         if (pendingJournalWrite is { IsCompleted: false } write && !write.Wait(JournalWriteWaitMs))
         {
             RunLog.Warning("The last journal write did not finish before unload; the attempt is read back as uncertain at the next load.");
+        }
+
+        if (batchFile.Pending is { IsCompleted: false } saving && !saving.Wait(JournalWriteWaitMs))
+        {
+            RunLog.Warning("The batch checkpoint did not finish saving before unload; the batch is read back from its previous checkpoint.");
         }
     }
 
@@ -416,6 +451,7 @@ internal sealed partial class RunController
 
         var interruptedAt = active.Step;
         var collectingWrite = active.Collecting?.LeaveOpenAttempt();
+        memberEnd = BatchEnd.Interrupted;
         StopTask();
         active.ForceEnd(reason);
         Settle(active, interruptedAt, reason);
@@ -432,16 +468,22 @@ internal sealed partial class RunController
 
         session = null;
         PauseReason = PauseReason.None;
+        SettleAttempt(active, interruptedAt);
+        finished = active.Status;
+        RunLog.Info($"Entry run {active.RunId} ended {active.Step} ({reason}){(active.Failure == EntryFailure.None ? string.Empty : $", {active.Failure}")}"
+                  + $"{(active.Trace is { } trace ? $"; dry run reached the confirmation for {trace.Plot} at {trace.Deposit} gil" : string.Empty)}.");
+        var member = RunningMember(active);
+        if (member >= 0)
+        {
+            MemberEnded(batch!, member, active);
+            return;
+        }
+
         if (owner is { } holder)
         {
             lease.Release(holder);
             owner = null;
         }
-
-        SettleAttempt(active, interruptedAt);
-        finished = active.Status;
-        RunLog.Info($"Entry run {active.RunId} ended {active.Step} ({reason}){(active.Failure == EntryFailure.None ? string.Empty : $", {active.Failure}")}"
-                  + $"{(active.Trace is { } trace ? $"; dry run reached the confirmation for {trace.Plot} at {trace.Deposit} gil" : string.Empty)}.");
     }
 
     // An intent written but never pressed is released; a press that may have reached the game and was never settled
@@ -566,6 +608,9 @@ internal sealed partial class RunController
 
         nextPollMs = now + SchedulerPollMs;
         notices.Tick(now);
+        switchCapable = LifestreamIpc.Instance.Capabilities().CanSwitchCharacters;
+        TickBatchSwitch();
+        TickRefundSwitch();
         if (!Svc.ClientState.IsLoggedIn || !Svc.PlayerState.IsLoaded)
         {
             return;
@@ -578,6 +623,7 @@ internal sealed partial class RunController
             reconcileWanted = true;
             RenewSettlementSession();
             Plugin.Instance.Configuration.Remember(contentId, Svc.PlayerState.CharacterName, Svc.PlayerState.HomeWorld.RowId);
+            AnnounceQueuedLogin(contentId, Svc.PlayerState.HomeWorld.RowId);
         }
 
         if (LastReconcile.Outcome == ReconcileOutcome.NotHomeWorld && Svc.PlayerState.HomeWorld.RowId == Svc.PlayerState.CurrentWorld.RowId)
@@ -585,6 +631,8 @@ internal sealed partial class RunController
             LastReconcile = default;
             reconcileWanted = true;
         }
+
+        TickBatch();
 
         if (!reconcileWanted || Busy || TaskStarter.Busy || DutyWatcher.InContent() || GenericHelpers.IsOccupied() || Svc.Objects.LocalPlayer is null)
         {

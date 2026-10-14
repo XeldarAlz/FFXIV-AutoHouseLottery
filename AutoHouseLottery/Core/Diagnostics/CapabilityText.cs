@@ -23,6 +23,7 @@ internal static class CapabilityText
         CapabilityState.Fallback => L.Diagnostics.StateFallback,
         CapabilityState.DryRunOnly => L.Diagnostics.StateDryRunOnly,
         CapabilityState.PermittedOnce => L.Diagnostics.StatePermittedOnce,
+        CapabilityState.PermittedThisSession => L.Diagnostics.StatePermittedThisSession,
         CapabilityState.NotChecked => L.Diagnostics.StateNotChecked,
         CapabilityState.Missing => L.Diagnostics.StateMissing,
         _ => L.Diagnostics.StateBlocked,
@@ -59,6 +60,8 @@ internal static class CapabilityText
         CapabilityKind.EntryConfirm => L.Diagnostics.NameEntryConfirm,
         CapabilityKind.Refund => L.Diagnostics.NameRefund,
         CapabilityKind.Claim => L.Diagnostics.NameClaim,
+        CapabilityKind.BatchEntry => L.Diagnostics.NameBatchEntry,
+        CapabilityKind.CharacterSwitch => L.Diagnostics.NameCharacterSwitch,
         _ => L.Diagnostics.NameAbsence,
     };
 
@@ -102,6 +105,14 @@ internal static class CapabilityText
         CapabilityReason.ClaimDryRunOnly => L.Diagnostics.ClaimDryRunOnly,
         CapabilityReason.ClaimPermittedOnce => L.Diagnostics.ClaimPermittedOnce,
         CapabilityReason.AbsenceValidated => L.Diagnostics.AbsenceValidated,
+        CapabilityReason.BatchValidated => L.Diagnostics.BatchValidated,
+        CapabilityReason.BatchDryRunOnly => L.Diagnostics.BatchDryRunOnly,
+        CapabilityReason.SwitchValidated => L.Diagnostics.SwitchValidated,
+        CapabilityReason.SwitchOffUntilValidated => L.Diagnostics.SwitchOffUntilValidated,
+        CapabilityReason.SwitchPermittedBatch => L.Diagnostics.SwitchPermittedBatch,
+        CapabilityReason.SwitchPermittedRefunds => L.Diagnostics.SwitchPermittedRefunds,
+        CapabilityReason.SwitchPermittedBoth => L.Diagnostics.SwitchPermittedBoth,
+        CapabilityReason.SwitchLifestreamMissing => L.Diagnostics.SwitchLifestreamMissing,
         _ => L.Diagnostics.AbsenceDryRunOnly,
     };
 }

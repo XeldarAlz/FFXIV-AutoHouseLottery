@@ -124,7 +124,7 @@ internal sealed partial class FindHomePage
         drawerText.Refresh(view, Discovery, State.Shortlist.Count);
         var shortlist = State.Shortlist;
         Styling.SectionLabel(Loc.T(L.Find.ShortlistTitle));
-        var entries = view.Preview?.MaxNewEntries ?? 0;
+        var entries = view.Batch?.Preview.MaxNewEntries ?? view.Preview?.MaxNewEntries ?? 0;
         var counts = countsText.Get(((long)shortlist.Count << 8) | (uint)entries,
             static key => Loc.T(L.Find.CountsJoin, Loc.Plural(L.Find.PlotCount, (int)(key >> 8)), Loc.Plural(L.Find.EntryCount, (int)(key & 0xFF))));
         TextDraw.Hint(counts);
@@ -145,6 +145,16 @@ internal sealed partial class FindHomePage
         Styling.VSpace(6f);
         DrawShortlistRows(view);
         Styling.VSpace(10f);
+        DrawCharacters(view);
+        Styling.VSpace(10f);
+        if (view.Batch is { } batch)
+        {
+            DrawBatchPreview(view, batch);
+            Styling.VSpace(10f);
+            DrawBatchEnter(view, batch);
+            return;
+        }
+
         DrawBestMatch(view);
         Styling.VSpace(10f);
         DrawPreview(view);

@@ -1,4 +1,5 @@
 using System.Globalization;
+using AutoHouseLottery.Core.Batch.Model;
 using AutoHouseLottery.Core.Diagnostics.Model;
 using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
@@ -9,6 +10,7 @@ using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Ipc;
 using AutoHouseLottery.Core.Settlement.Model;
 using AutoHouseLottery.Core.Tasks.Model;
+using AutoHouseLottery.Core.Travel.Model;
 using ECommons.DalamudServices;
 
 namespace AutoHouseLottery.Core.Diagnostics;
@@ -51,6 +53,10 @@ internal static class CapabilityReader
             EntryPermitted = plugin.Controller.RealEntryAllowed,
             RefundPermitted = plugin.Controller.RealRefundAllowed,
             ClaimPermitted = plugin.Controller.RealClaimAllowed,
+            BatchEntryValidated = BatchCapabilities.BatchEntryValidated,
+            CharacterSwitchValidated = SwitchCapabilities.CharacterSwitchValidated,
+            BatchSwitchPermitted = plugin.Controller.BatchSwitchGranted,
+            RefundSwitchPermitted = plugin.Controller.RefundSwitchGranted,
         };
     }
 

@@ -34,6 +34,9 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
     public SchedulerBlock Block { get; private set; } = SchedulerBlock.NotLoggedIn;
 
+    // The session as the last tick saw it, for the refund queue's decision to switch to another character.
+    public SchedulerFacts Facts { get; private set; }
+
     public int DueCount { get; private set; }
 
     public long TravelSpent(ulong contentId) => travelSpent.TryGetValue(contentId, out var spent) ? spent : 0;
@@ -89,6 +92,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
         if (CharacterContextReader.Read() is not { } context)
         {
             Block = SchedulerBlock.NotLoggedIn;
+            Facts = default;
             return null;
         }
 
@@ -118,6 +122,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             TravelAllowance: TravelAllowance(context.ContentId, context.Gil),
             Gil: context.Gil,
             Reserve: configuration.Find.GilReserve);
+        Facts = facts;
         var block = SchedulerRules.Check(facts);
         if (block != Block)
         {
@@ -143,6 +148,11 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
         return null;
     }
+
+    // The work due for a character that is not logged in, from the journal alone. Only a refund the validated contract
+    // could collect counts, since a grant names the logged-in character only.
+    public int DueCountFor(ulong contentId, in CyclePosition position)
+        => SettlementSchedule.Due(housing.JournalSnapshot, contentId, position, static (_, _) => SettlementGate.Validated(ActionKind.Refund), Parked).Length;
 
     // While a placard without a result cannot settle anything, revisiting one already found that way in full only costs
     // travel. A weaker sighting (a placard not fully read) is visited again.

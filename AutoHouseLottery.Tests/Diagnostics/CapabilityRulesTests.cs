@@ -110,6 +110,35 @@ public sealed class CapabilityRulesTests
         Assert.Equal(CapabilityState.Fallback, Evaluate(Ready() with { Listings = ListingsFact.SavedCopy })[(int)CapabilityKind.Listings].State);
     }
 
+    [Fact]
+    public void ABatchIsDryRunOnlyUntilTheEntryAndTheBatchAreBothValidatedAndHasNoPermittedState()
+    {
+        var entryOnly = Evaluate(Ready() with { EntryConfirmValidated = true, BatchEntryValidated = false, EntryPermitted = true });
+        var both = Evaluate(Ready() with { EntryConfirmValidated = true, BatchEntryValidated = true });
+
+        Assert.Equal(new Capability(CapabilityKind.BatchEntry, CapabilityState.DryRunOnly, CapabilityReason.BatchDryRunOnly), entryOnly[(int)CapabilityKind.BatchEntry]);
+        Assert.Equal(CapabilityState.Ready, both[(int)CapabilityKind.BatchEntry].State);
+    }
+
+    [Fact]
+    public void SwitchingIsOffUntilValidatedAndShowsTheSessionPermissionsThatAreOpen()
+    {
+        var withChange = fullLifestream with { ChangeCharacter = true };
+        var off = Evaluate(Ready() with { Lifestream = withChange });
+        var batch = Evaluate(Ready() with { Lifestream = withChange, BatchSwitchPermitted = true });
+        var refunds = Evaluate(Ready() with { Lifestream = withChange, RefundSwitchPermitted = true });
+        var bothGrants = Evaluate(Ready() with { Lifestream = withChange, BatchSwitchPermitted = true, RefundSwitchPermitted = true });
+        var noChange = Evaluate(Ready() with { Lifestream = withChange with { ChangeCharacter = false }, BatchSwitchPermitted = true });
+        var validated = Evaluate(Ready() with { Lifestream = withChange, CharacterSwitchValidated = true });
+
+        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.DryRunOnly, CapabilityReason.SwitchOffUntilValidated), off[(int)CapabilityKind.CharacterSwitch]);
+        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.PermittedThisSession, CapabilityReason.SwitchPermittedBatch), batch[(int)CapabilityKind.CharacterSwitch]);
+        Assert.Equal(CapabilityReason.SwitchPermittedRefunds, refunds[(int)CapabilityKind.CharacterSwitch].Reason);
+        Assert.Equal(CapabilityReason.SwitchPermittedBoth, bothGrants[(int)CapabilityKind.CharacterSwitch].Reason);
+        Assert.Equal(new Capability(CapabilityKind.CharacterSwitch, CapabilityState.Missing, CapabilityReason.SwitchLifestreamMissing), noChange[(int)CapabilityKind.CharacterSwitch]);
+        Assert.Equal(CapabilityState.Ready, validated[(int)CapabilityKind.CharacterSwitch].State);
+    }
+
     private static Capability[] Evaluate(in CapabilityFacts facts)
     {
         var rows = new Capability[CapabilityRules.Count];

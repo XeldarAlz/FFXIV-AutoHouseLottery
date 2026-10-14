@@ -8,10 +8,11 @@ namespace AutoHouseLottery.Core.Settlement.Model;
 // to the won plot. Unknown: the character's estate list cannot say which.
 internal enum ClaimEffect : byte { Unknown, Acquire, Relocate }
 
-internal enum ClaimRefusal : byte { None, NotTheEntrant, PlotUnknown, NotWon, BuyerUnknown, EffectUnknown, GroupClaimOpen, AlreadyOwned }
+internal enum ClaimRefusal : byte { None, NotTheEntrant, PlotUnknown, NotWon, BuyerUnknown, EffectUnknown, GroupClaimOpen, AlreadyOwned, GroupAlreadyClaimed }
 
 // What the logged-in character and the journal say right before a claim. FreeCompanyKnown: the character's Free Company
-// record is loaded, so a missing Free Company estate means there is none.
+// record is loaded, so a missing Free Company estate means there is none. GroupAlreadyClaimed: another win of the same
+// ownership group and cycle is claimed or being claimed (ClaimGroups).
 internal readonly record struct ClaimFacts(
     ulong CharacterContentId,
     EntryReceipt Receipt,
@@ -19,12 +20,16 @@ internal readonly record struct ClaimFacts(
     bool FreeCompanyKnown,
     EstateAddress? PersonalEstate,
     EstateAddress? FreeCompanyEstate,
-    bool GroupClaimOpen);
+    bool GroupClaimOpen)
+{
+    public bool GroupAlreadyClaimed { get; init; }
+}
 
 internal static class ClaimRules
 {
-    // Only the entrant who won, on its own receipt, with a known buyer, a known plot and a known effect; and never while
-    // another claim of the same ownership group may still be going through.
+    // Only the entrant who won, on its own receipt, with a known buyer, a known plot and a known effect; never while another
+    // claim of the same ownership group may still be going through, and never after another win of that group was claimed,
+    // so several wins in one group never become several claims or a second move of the estate.
     public static ClaimRefusal Check(in ClaimFacts facts)
     {
         var receipt = facts.Receipt;
@@ -58,7 +63,12 @@ internal static class ClaimRules
             return ClaimRefusal.EffectUnknown;
         }
 
-        return facts.GroupClaimOpen ? ClaimRefusal.GroupClaimOpen : ClaimRefusal.None;
+        if (facts.GroupClaimOpen)
+        {
+            return ClaimRefusal.GroupClaimOpen;
+        }
+
+        return facts.GroupAlreadyClaimed ? ClaimRefusal.GroupAlreadyClaimed : ClaimRefusal.None;
     }
 
     // An apartment is not land, so it neither blocks a private claim nor moves with it.

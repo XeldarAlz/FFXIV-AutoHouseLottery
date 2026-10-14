@@ -19,8 +19,9 @@ internal static class AssignmentPlanner
         var ranking = RankTargets(policy, plots);
         var exclusions = ImmutableArray.CreateBuilder<CharacterExclusion>();
         var selected = SelectCharacters(policy, roster, exclusions);
-        var planned = PlanCharacters(policy, selected, plots, ranking, exclusions);
-        var units = BuildUnits(policy, planned, plots, ranking, exclusions);
+        var entered = new List<GroupEntry>();
+        var planned = PlanCharacters(policy, selected, plots, ranking, exclusions, entered);
+        var units = BuildUnits(policy, planned, entered, plots, ranking, exclusions);
         var assignments = Place(policy, planned, units, plots, ranking);
         var odds = new OddsContext(roster, plots, ranking, selected, policy.Cycle.Cycle);
         var groupOdds = EstimateGroupOdds(assignments, odds);
@@ -80,7 +81,7 @@ internal static class AssignmentPlanner
         for (var index = 0; index < followed.Count; index++)
         {
             var member = followed[index];
-            if (index != leadIndex && member.Group == lead.Group && member.Placement == PlacementMode.SamePlot)
+            if (index != leadIndex && member.Group == lead.Group && member.Placement == PlacementMode.SamePlot && !member.Exact && member.TargetOrder.IndexOf(confirmedPlot) >= 0)
             {
                 followed[index] = member with { TargetOrder = pinned };
             }
@@ -159,16 +160,22 @@ internal static class AssignmentPlanner
         List<SelectedCharacter> selected,
         IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
         ImmutableArray<RankedPlot> ranking,
-        ImmutableArray<CharacterExclusion>.Builder exclusions)
+        ImmutableArray<CharacterExclusion>.Builder exclusions,
+        List<GroupEntry> entered)
     {
         var planned = new List<PlannedCharacter>(selected.Count);
         for (var characterIndex = 0; characterIndex < selected.Count; characterIndex++)
         {
             var (settings, profile, group) = selected[characterIndex];
-            var characterResult = EligibilityRules.EvaluateCharacter(profile, settings.Buyer, policy.Cycle.Cycle, policy.CollectRefundsFirst);
+            var characterResult = EligibilityRules.EvaluateCharacter(profile, settings.Buyer, policy.Cycle.Cycle, policy.CollectRefundsFirst && !settings.ManualRefunds);
             if (characterResult.Blockers != EligibilityReason.None)
             {
                 exclusions.Add(new CharacterExclusion(settings.ContentId, characterResult.Blockers));
+                if (profile.Participation.StateIn(policy.Cycle.Cycle) is EntrySlotState.Entered or EntrySlotState.Unresolved)
+                {
+                    entered.Add(new GroupEntry(group, profile.Participation.EnteredPlot));
+                }
+
                 continue;
             }
 
@@ -176,6 +183,11 @@ internal static class AssignmentPlanner
             var removed = EligibilityReason.None;
             for (var plotIndex = 0; plotIndex < ranking.Length; plotIndex++)
             {
+                if (settings.Target is { } target && ranking[plotIndex].Key != target)
+                {
+                    continue;
+                }
+
                 var fit = EvaluatePlot(policy, character, ranking[plotIndex], plots);
                 if (fit.Blockers != EligibilityReason.None)
                 {
@@ -198,28 +210,74 @@ internal static class AssignmentPlanner
         return planned;
     }
 
+    // Exact targets are applied first, each as its own pinned unit. Outside Spread an ownership group goes on one plot:
+    // the plot one of its characters already entered this cycle or has an entry in question on, else the first exact
+    // target among its members, else the plot its shared order ranks first. A group anchored on an entered or exact plot
+    // goes there with no fallback for any member; a member that cannot enter that plot, or whose own exact target is
+    // another plot, is left out with the reason, so the group never holds a second plot.
     private static List<PlacementUnit> BuildUnits(
         RunPolicy policy,
         List<PlannedCharacter> planned,
+        List<GroupEntry> entered,
         IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
         ImmutableArray<RankedPlot> ranking,
         ImmutableArray<CharacterExclusion>.Builder exclusions)
     {
         var units = new List<PlacementUnit>();
-        if (policy.Placement == PlacementChoice.Spread)
+        var grouped = policy.Placement != PlacementChoice.Spread;
+        var anchors = new Dictionary<OwnershipGroup, int>();
+        if (grouped)
         {
-            for (var characterIndex = 0; characterIndex < planned.Count; characterIndex++)
+            for (var index = 0; index < entered.Count; index++)
             {
-                units.Add(new PlacementUnit(PlacementMode.Spread, [characterIndex], planned[characterIndex].Candidates));
+                anchors.TryAdd(entered[index].Group, entered[index].Plot is { } plot ? IndexOf(ranking, plot) : -1);
             }
-
-            return units;
         }
 
         for (var characterIndex = 0; characterIndex < planned.Count; characterIndex++)
         {
             var character = planned[characterIndex];
-            var unitIndex = FindUnit(units, planned, character.Group);
+            if (!character.Exact)
+            {
+                continue;
+            }
+
+            var target = character.Candidates[0];
+            if (grouped && anchors.TryGetValue(character.Group, out var anchor) && anchor != target)
+            {
+                exclusions.Add(new CharacterExclusion(character.Settings.ContentId, EligibilityReason.GroupOnAnotherPlot));
+                continue;
+            }
+
+            if (grouped)
+            {
+                anchors.TryAdd(character.Group, target);
+            }
+
+            units.Add(new PlacementUnit(grouped ? PlacementMode.SamePlot : PlacementMode.Spread, [characterIndex], character.Candidates) { Pinned = true });
+        }
+
+        for (var characterIndex = 0; characterIndex < planned.Count; characterIndex++)
+        {
+            var character = planned[characterIndex];
+            if (character.Exact)
+            {
+                continue;
+            }
+
+            if (!grouped)
+            {
+                units.Add(new PlacementUnit(PlacementMode.Spread, [characterIndex], character.Candidates));
+                continue;
+            }
+
+            if (anchors.TryGetValue(character.Group, out var anchor))
+            {
+                Anchor(policy, units, planned, characterIndex, anchor, plots, ranking, exclusions);
+                continue;
+            }
+
+            var unitIndex = FindSharedUnit(units, planned, character.Group);
             if (unitIndex < 0)
             {
                 units.Add(new PlacementUnit(PlacementMode.SamePlot, [characterIndex], [.. character.Candidates]));
@@ -241,6 +299,39 @@ internal static class AssignmentPlanner
         return units;
     }
 
+    // Anchor is the group's plot in the ranking, or -1 when a member entered a plot that is not on the shortlist or that
+    // could not be read.
+    private static void Anchor(
+        RunPolicy policy,
+        List<PlacementUnit> units,
+        List<PlannedCharacter> planned,
+        int characterIndex,
+        int anchor,
+        IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
+        ImmutableArray<RankedPlot> ranking,
+        ImmutableArray<CharacterExclusion>.Builder exclusions)
+    {
+        var character = planned[characterIndex];
+        if (anchor < 0 || !character.Candidates.Contains(anchor))
+        {
+            var reasons = anchor < 0 ? EligibilityReason.None : ReasonsAgainst(policy, character, [anchor], plots, ranking);
+            exclusions.Add(new CharacterExclusion(character.Settings.ContentId, reasons | EligibilityReason.GroupOnAnotherPlot));
+            return;
+        }
+
+        for (var unitIndex = 0; unitIndex < units.Count; unitIndex++)
+        {
+            var unit = units[unitIndex];
+            if (unit.Anchored && planned[unit.Members[0]].Group == character.Group)
+            {
+                unit.Members.Add(characterIndex);
+                return;
+            }
+        }
+
+        units.Add(new PlacementUnit(PlacementMode.SamePlot, [characterIndex], [anchor]) { Anchored = true });
+    }
+
     private static ImmutableArray<RunAssignment> Place(
         RunPolicy policy,
         List<PlannedCharacter> planned,
@@ -254,7 +345,7 @@ internal static class AssignmentPlanner
         for (var unitIndex = 0; unitIndex < units.Count; unitIndex++)
         {
             var unit = units[unitIndex];
-            var primaryPosition = distinctPrimaries ? FirstUnused(unit.Order, usedPrimaries) : 0;
+            var primaryPosition = distinctPrimaries && !unit.Pinned && !unit.Anchored ? FirstUnused(unit.Order, usedPrimaries) : 0;
             var primary = unit.Order[primaryPosition];
             usedPrimaries.Add(primary);
             var targetOrder = BuildTargetOrder(unit.Order, primaryPosition, policy.MaxInspections, ranking);
@@ -269,7 +360,10 @@ internal static class AssignmentPlanner
                     targetOrder,
                     MaximumDeposit(targetOrder, ranking, character.Settings.DepositCap),
                     character.Profile.Outstanding == OutstandingSettlement.RefundDue,
-                    eligibility));
+                    eligibility)
+                {
+                    Exact = unit.Pinned,
+                });
             }
         }
 
@@ -537,13 +631,26 @@ internal static class AssignmentPlanner
         return shared;
     }
 
-    private static int FindUnit(List<PlacementUnit> units, List<PlannedCharacter> planned, OwnershipGroup group)
+    private static int FindSharedUnit(List<PlacementUnit> units, List<PlannedCharacter> planned, OwnershipGroup group)
     {
         for (var unitIndex = 0; unitIndex < units.Count; unitIndex++)
         {
-            if (planned[units[unitIndex].Members[0]].Group == group)
+            if (!units[unitIndex].Pinned && !units[unitIndex].Anchored && planned[units[unitIndex].Members[0]].Group == group)
             {
                 return unitIndex;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int IndexOf(ImmutableArray<RankedPlot> ranking, PlotKey plot)
+    {
+        for (var index = 0; index < ranking.Length; index++)
+        {
+            if (ranking[index].Key == plot)
+            {
+                return index;
             }
         }
 
@@ -595,6 +702,8 @@ internal static class AssignmentPlanner
 
     private readonly record struct SelectedCharacter(CharacterRunSettings Settings, CharacterProfile Profile, OwnershipGroup Group);
 
+    private readonly record struct GroupEntry(OwnershipGroup Group, PlotKey? Plot);
+
     private readonly ref struct OddsContext(
         ReadOnlySpan<CharacterProfile> roster,
         IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
@@ -623,8 +732,16 @@ internal static class AssignmentPlanner
 
         public EligibilityResult CharacterResult { get; } = characterResult;
 
+        public bool Exact => Settings.Target is not null;
+
         public List<int> Candidates { get; } = [];
     }
 
-    private readonly record struct PlacementUnit(PlacementMode Mode, List<int> Members, List<int> Order);
+    // Pinned: one member's exact target. Anchored: a group's other members, on the plot the group is anchored to only.
+    private readonly record struct PlacementUnit(PlacementMode Mode, List<int> Members, List<int> Order)
+    {
+        public bool Pinned { get; init; }
+
+        public bool Anchored { get; init; }
+    }
 }

@@ -83,6 +83,7 @@ internal static partial class L
         public static readonly LocString JournalUnavailable = new("runFailure.journalUnavailable", "Entries cannot be recorded right now, so none is made.");
         public static readonly LocString CharacterChanged = new("runFailure.characterChanged", "A different character is logged in.");
         public static readonly LocString InspectionsExhausted = new("runFailure.inspectionsExhausted", "No plot on the shortlist passed its live checks.");
+        public static readonly LocString GroupEnteredElsewhere = new("runFailure.groupEnteredElsewhere", "Another character of its ownership group entered a plot this one cannot follow (another plot, or one that could not be read), and the group could claim only one, so this one stays out.");
         public static readonly LocString SubmissionUncertain = new("runFailure.submissionUncertain", "The entry's outcome is not known yet.");
         public static readonly LocString RejectedOneEntry = new("runFailure.rejected.oneEntry", "The game says this character already has an entry this lottery period.");
         public static readonly LocString RejectedOutstanding = new("runFailure.rejected.outstanding", "The game says an earlier refund or plot must be collected first.");
@@ -112,6 +113,7 @@ internal static partial class L
         public static readonly LocString NoAssignment = new("runStart.noAssignment", "No plot in this plan can be entered by this character.");
         public static readonly LocString MultipleWins = new("runStart.multipleWins", "Confirm first that only one win can be claimed.");
         public static readonly LocString AutoAnswer = new("runStart.autoAnswer", "Turn off {0} first: it could answer the lottery dialogs.");
+        public static readonly LocString BatchWaiting = new("runStart.batchWaiting", "A batch is still waiting. Continue it or discard it first.");
     }
 
     internal static class Reconcile

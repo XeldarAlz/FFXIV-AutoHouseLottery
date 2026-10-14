@@ -75,6 +75,13 @@ internal static partial class L
         public static readonly LocString FailureBuyerUnknown = new("settlement.failure.buyerUnknown", "Whether this was a private or a free company entry is not known. Claim it in game.");
         public static readonly LocString FailureEffectUnknown = new("settlement.failure.effectUnknown", "Whether the claim would move an estate you hold is not known yet. Open your free company window, then try again.");
         public static readonly LocString FailureGroupClaim = new("settlement.failure.groupClaim", "Another claim on this world is still being checked. Only one claim goes through at a time.");
+        public static readonly LocString FailureGroupClaimed = new("settlement.failure.groupClaimed", "Another win in this ownership group was already claimed. Only one plot per group can be claimed.");
+        public static readonly LocString SwitchForRefunds = new("settlement.switchForRefunds", "Switch characters to collect refunds");
+        public static readonly LocString SwitchForRefundsHelp = new("settlement.switchForRefundsHelp", "When the logged-in character has nothing left to settle, log in the next character ticked on Find a home's Characters list that has a result waiting, and check it there. Until refunds are validated in game, collecting stays a dry run. Each character is visited once until the plugin is unloaded, and no other character is ever logged in.");
+        public static readonly LocString SwitchingNotAllowed = new("settlement.switchingNotAllowed", "Character switching is not validated yet, so each character is settled at its own login.");
+        public static readonly LocString GroupChoice = new("settlement.groupChoice", "{0} wins in one ownership group, and only one can be claimed. Press twice to claim this one; the others cannot be claimed after it.");
+        public static readonly LocString GroupClaimed = new("settlement.groupClaimed", "Another win in this ownership group was claimed, so this one cannot be.");
+        public static readonly LocString ChooseThisPlot = new("settlement.chooseThisPlot", "Claim this one");
         public static readonly LocString FailureAlreadyOwned = new("settlement.failure.alreadyOwned", "This plot is already yours.");
         public static readonly LocString FailureDepositUnknown = new("settlement.failure.depositUnknown", "The deposit of this entry is not known. Claim it in game.");
         public static readonly LocString FailurePausedForInput = new("settlement.failure.pausedForInput", "You came back, so the automatic visit stopped. It starts again when you are idle.");

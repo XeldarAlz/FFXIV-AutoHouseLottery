@@ -35,6 +35,10 @@ internal sealed record RunStatus
 
     public string CharacterName { get; init; } = string.Empty;
 
+    public int CharacterNumber { get; init; } = 1;
+
+    public int CharacterCount { get; init; } = 1;
+
     public PlotKey? Target { get; init; }
 
     public int Inspection { get; init; }
