@@ -167,6 +167,7 @@ public sealed class PlotMergeTests
 
         Assert.True(contradicted.NeedsVerification);
         Assert.Equal(PlotField.Availability, Assert.Single(contradicted.Conflicts).Field);
+        Assert.Equal(PlotAvailability.Unknown, contradicted.AvailabilityAt(VerifiedEntryPhase()));
 
         var settled = Merge(
             contradicted,
@@ -186,6 +187,35 @@ public sealed class PlotMergeTests
 
         Assert.False(snapshot.NeedsVerification);
         Assert.Equal(PlotSize.Medium, snapshot.Size!.Value.Value);
+    }
+
+    [Fact]
+    public void SingleObservationThatIsOccupiedAndOfferedIsRejected()
+    {
+        var observation = Observation(ObservationSource.PublicFeed, ObservedAt) with
+        {
+            Occupancy = PlotOccupancy.Occupied,
+            Sale = new SaleState(PlotSale.LotteryEntry, null),
+        };
+
+        Assert.Equal(MergeRejection.ContradictoryFields, PlotMerge.Validate(observation));
+    }
+
+    [Fact]
+    public void RepeatedContradictingRefreshesKeepOneConflict()
+    {
+        var snapshot = Merge(null, Observation(ObservationSource.WardScan, ObservedAt) with { Size = PlotSize.Small });
+        for (var refresh = 1; refresh <= 5; refresh++)
+        {
+            var again = Observation(ObservationSource.PublicFeed, ObservedAt.AddMinutes(1)) with
+            {
+                Provenance = new Provenance(ObservationSource.PublicFeed, ObservedAt.AddMinutes(1), ObservedAt.AddMinutes(refresh * 20), FirstCycle),
+                Size = PlotSize.Medium,
+            };
+            snapshot = Merge(snapshot, again);
+        }
+
+        Assert.Single(snapshot.Conflicts);
     }
 
     private static PlotObservation Observation(ObservationSource source, DateTime sourceTimeUtc, CycleKey? cycle = null)

@@ -73,6 +73,58 @@ public sealed class PlotStoreTests
         Assert.Equal(PlotAvailability.LotteryEntry, store.Plots[dropped].AvailabilityAt(VerifiedEntryPhase()));
     }
 
+    [Fact]
+    public void LaterResponseThatRelistsAnOmittedPlotRestoresIt()
+    {
+        var store = StoreWithTwoListedPlots();
+        var omittedAt = ObservedAt.AddHours(1);
+        store.Apply(Coverage(CoverageOutcome.Complete, omittedAt), [Listing(listed, omittedAt)]);
+        Assert.Equal(PlotAvailability.NotReported, store.Plots[dropped].AvailabilityAt(VerifiedEntryPhase()));
+
+        var relistedAt = ObservedAt.AddHours(2);
+        store.Apply(Coverage(CoverageOutcome.Complete, relistedAt), [Listing(listed, relistedAt), Listing(dropped, ObservedAt.AddMinutes(30))]);
+
+        Assert.Equal(PlotAvailability.LotteryEntry, store.Plots[dropped].AvailabilityAt(VerifiedEntryPhase()));
+    }
+
+    [Fact]
+    public void ModestClockSkewIsAcceptedAndLargeSkewDowngradesTheCoverage()
+    {
+        var store = StoreWithTwoListedPlots();
+        var received = ObservedAt.AddHours(1);
+        var slowClock = new CoverageSnapshot(Scope(), ObservationSource.PublicFeed, CoverageOutcome.Complete, null, 2, received, received, received);
+
+        var modest = store.Apply(slowClock, [SkewedListing(listed, received, TimeSpan.FromMinutes(30)), SkewedListing(dropped, received, TimeSpan.FromMinutes(30))]);
+        var large = store.Apply(slowClock with { ObservedFromUtc = received.AddHours(2) }, [SkewedListing(listed, received, TimeSpan.FromHours(2))]);
+
+        Assert.Equal(2, modest.Merged);
+        Assert.Equal(CoverageOutcome.Complete, modest.RecordedOutcome);
+        Assert.Equal(1, large.Rejected);
+        Assert.Equal(MergeRejection.FutureTimestamp, large.FirstRowRejection);
+        Assert.Equal(CoverageOutcome.Partial, large.RecordedOutcome);
+        Assert.Equal(0, large.MarkedNotReported);
+        Assert.Equal(PlotAvailability.LotteryEntry, store.Plots[dropped].AvailabilityAt(VerifiedEntryPhase()));
+    }
+
+    [Fact]
+    public void ReadersKeepTheSnapshotTheyAlreadyHold()
+    {
+        var store = StoreWithTwoListedPlots();
+        var before = store.Plots;
+        var revision = store.Revision;
+
+        store.Merge(new PlotObservation(listed, Seen(ObservationSource.Placard, ObservedAt.AddHours(3))) { Occupancy = PlotOccupancy.Occupied });
+
+        Assert.Equal(PlotAvailability.LotteryEntry, before[listed].AvailabilityAt(VerifiedEntryPhase()));
+        Assert.Equal(PlotAvailability.Occupied, store.Plots[listed].AvailabilityAt(VerifiedEntryPhase()));
+        Assert.Equal(revision + 1, store.Revision);
+    }
+
+    private static PlotObservation SkewedListing(PlotKey key, DateTime receivedUtc, TimeSpan ahead)
+    {
+        return Listing(key, receivedUtc) with { Provenance = new Provenance(ObservationSource.PublicFeed, receivedUtc + ahead, receivedUtc, FirstCycle) };
+    }
+
     private static PlotStore StoreWithTwoListedPlots()
     {
         var store = new PlotStore();

@@ -4,7 +4,7 @@ namespace AutoHouseLottery.Core.Housing.Model;
 
 internal static class PlotMerge
 {
-    private const int FutureToleranceMinutes = 5;
+    private const int FutureToleranceMinutes = 60;
     private const int ContradictionWindowMinutes = 5;
 
     private const int PublicFeedRank = 1;
@@ -58,6 +58,11 @@ internal static class PlotMerge
             || observation.Sale is { Sale: PlotSale.Unknown })
         {
             return MergeRejection.UnknownValue;
+        }
+
+        if (observation.Occupancy == PlotOccupancy.Occupied && observation.Sale is { } offered && IsOffered(offered.Sale))
+        {
+            return MergeRejection.ContradictoryFields;
         }
 
         var needsCycle = observation.EntryCount is not null || observation.Sale is { } sale && IsCycleScoped(sale.Sale);
@@ -115,6 +120,18 @@ internal static class PlotMerge
         return true;
     }
 
+    public static PlotSnapshot ReleaseOmission(PlotSnapshot current, ObservationSource source, DateTime relistedFromUtc)
+    {
+        if (current.Sale is not { Value.Sale: PlotSale.NotReported } omission
+            || omission.Provenance.Source != source
+            || omission.Provenance.SourceTimeUtc >= relistedFromUtc)
+        {
+            return current;
+        }
+
+        return current with { Sale = null };
+    }
+
     public static bool Supersedes(in Provenance incoming, in Provenance existing)
     {
         if (incoming.SourceTimeUtc != existing.SourceTimeUtc)
@@ -159,7 +176,7 @@ internal static class PlotMerge
         var keepIncoming = Rank(provenance.Source) > Rank(current.Provenance.Source);
         var kept = keepIncoming ? candidate : current;
         var other = keepIncoming ? current : candidate;
-        conflicts = conflicts.Add(new FieldConflict(field, encode(kept.Value), kept.Provenance, encode(other.Value), other.Provenance));
+        conflicts = AddConflict(conflicts, new FieldConflict(field, encode(kept.Value), kept.Provenance, encode(other.Value), other.Provenance));
         return kept;
     }
 
@@ -214,8 +231,23 @@ internal static class PlotMerge
             return conflicts;
         }
 
-        var conflict = new FieldConflict(PlotField.Availability, (byte)PlotOccupancy.Occupied, occupied.Provenance, (byte)listed.Value.Sale, listed.Provenance);
-        return conflicts.Contains(conflict) ? conflicts : conflicts.Add(conflict);
+        return AddConflict(
+            conflicts,
+            new FieldConflict(PlotField.Availability, (byte)PlotOccupancy.Occupied, occupied.Provenance, (byte)listed.Value.Sale, listed.Provenance));
+    }
+
+    private static ImmutableArray<FieldConflict> AddConflict(ImmutableArray<FieldConflict> conflicts, in FieldConflict conflict)
+    {
+        for (var index = 0; index < conflicts.Length; index++)
+        {
+            var existing = conflicts[index];
+            if (existing.Field == conflict.Field && existing.Kept.Source == conflict.Kept.Source && existing.Other.Source == conflict.Other.Source)
+            {
+                return existing == conflict ? conflicts : conflicts.SetItem(index, conflict);
+            }
+        }
+
+        return conflicts.Add(conflict);
     }
 
     private static bool Contradicts(in Provenance left, in Provenance right)
@@ -252,6 +284,8 @@ internal static class PlotMerge
 
         return resolved;
     }
+
+    private static bool IsOffered(PlotSale sale) => sale is PlotSale.LotteryEntry or PlotSale.LotteryResults or PlotSale.FirstComeOpen;
 
     private static bool IsCycleScoped(PlotSale sale) => sale is PlotSale.Unavailable or PlotSale.LotteryEntry or PlotSale.LotteryResults;
 
