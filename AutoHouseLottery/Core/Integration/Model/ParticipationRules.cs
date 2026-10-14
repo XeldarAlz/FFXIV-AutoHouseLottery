@@ -11,7 +11,6 @@ internal readonly record struct SlotEvidence(EntrySlotState State, PlotKey? Plot
 
 internal static class ParticipationRules
 {
-    private const int OneBased = 1;
 
     // The journal speaks first: a receipt or an attempt of this plugin for the cycle decides the slot, whatever the
     // reading says. Otherwise the reading decides, and a reading that cannot tell leaves the slot unknown.
@@ -85,6 +84,6 @@ internal static class ParticipationRules
             return null;
         }
 
-        return PlotKey.TryCreate(region, homeWorldId, territory, ward + OneBased, plot + OneBased, out var key) ? key : null;
+        return PlotKey.TryCreate(region, homeWorldId, territory, ward + ResidentialDistricts.OneBased, plot + ResidentialDistricts.OneBased, out var key) ? key : null;
     }
 }

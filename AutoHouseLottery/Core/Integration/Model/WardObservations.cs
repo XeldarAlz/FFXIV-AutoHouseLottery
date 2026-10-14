@@ -8,7 +8,6 @@ internal readonly record struct WardBatch(CoverageSnapshot Coverage, ImmutableAr
 
 internal static class WardObservations
 {
-    private const int OneBased = 1;
     private const byte FirstComePurchase = 1;
     private const byte FreeCompanyTenant = 1;
     private const byte PrivateTenant = 2;
@@ -68,7 +67,7 @@ internal static class WardObservations
         for (var entryIndex = 0; entryIndex < packet.Entries.Length; entryIndex++)
         {
             var entry = packet.Entries[entryIndex];
-            if (!PlotKey.TryCreate(region, packet.WorldId, packet.TerritoryTypeId, packet.WardIndex + OneBased, entry.PlotIndex + OneBased, out var key))
+            if (!PlotKey.TryCreate(region, packet.WorldId, packet.TerritoryTypeId, packet.WardIndex + ResidentialDistricts.OneBased, entry.PlotIndex + ResidentialDistricts.OneBased, out var key))
             {
                 continue;
             }

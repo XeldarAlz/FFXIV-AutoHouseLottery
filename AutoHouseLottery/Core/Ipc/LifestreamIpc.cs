@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core.External;
+using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Travel.Model;
 using Dalamud.Plugin.Ipc;
 using ECommons.DalamudServices;
@@ -15,7 +16,6 @@ internal sealed class LifestreamIpc
     // PropertyType 0 is a house, and ward and plot count from 1.
     private const int HouseProperty = 0;
     private const int UnusedApartment = 1;
-    private const int OneBased = 1;
 
     private const string IsBusyFailed = "Lifestream IsBusy failed";
     private const string GoToFailed = "Lifestream GoToHousingAddress failed";
@@ -113,5 +113,5 @@ internal sealed class LifestreamIpc
     }
 
     private static HousingAddress AddressOf(in HousingDestination destination, uint aetheryteId)
-        => (string.Empty, (int)destination.WorldId, (int)aetheryteId, destination.WardIndex + OneBased, HouseProperty, destination.PlotIndex + OneBased, UnusedApartment, false, false, string.Empty);
+        => (string.Empty, (int)destination.WorldId, (int)aetheryteId, destination.WardIndex + ResidentialDistricts.OneBased, HouseProperty, destination.PlotIndex + ResidentialDistricts.OneBased, UnusedApartment, false, false, string.Empty);
 }

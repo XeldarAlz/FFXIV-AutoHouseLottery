@@ -8,7 +8,6 @@ internal readonly record struct PhaseEnd(LotteryPhase Phase, DateTime EndsAtUtc)
 
 internal static class PlacardObservations
 {
-    private const int OneBased = 1;
     private const byte SmallSize = 0;
     private const byte MediumSize = 1;
     private const byte LargeSize = 2;
@@ -35,7 +34,7 @@ internal static class PlacardObservations
     public static PlotObservation? From(PlacardReading reading, uint worldId, GameRegion region, CycleKey? verifiedCycle)
     {
         if (reading.Address is not { } address
-            || !PlotKey.TryCreate(region, worldId, address.TerritoryTypeId, address.WardIndex + OneBased, address.PlotIndex + OneBased, out var key))
+            || !PlotKey.TryCreate(region, worldId, address.TerritoryTypeId, address.WardIndex + ResidentialDistricts.OneBased, address.PlotIndex + ResidentialDistricts.OneBased, out var key))
         {
             return null;
         }

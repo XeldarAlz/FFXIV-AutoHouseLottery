@@ -508,7 +508,6 @@ internal sealed class RunController
         RunLog.Warning($"Real entry permission for {open.CharacterName}, {open.Plot} used; it opens nothing more.");
     }
 
-    // Once a second: remember the logged-in character, and read back its uncertain attempts when it is free to.
     private void OnUpdate(IFramework framework)
     {
         var now = Environment.TickCount64;

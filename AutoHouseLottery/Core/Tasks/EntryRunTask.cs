@@ -23,7 +23,6 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
 {
     private const int ObservePollFrames = 15;
     private const int TimersPassWatchdogMs = 75_000;
-    private const int OneBased = 1;
 
     private LotterySnapshot? reading;
     private HousingText? rejection;
@@ -255,7 +254,7 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
     private DepositLedger OtherCommitments()
         => session.Reserved > 0 && session.Ledger.TryRelease(session.Reserved, out var others) ? others : session.Ledger;
 
-    private static HousingDestination DestinationOf(PlotKey plot) => new(plot.WorldId, plot.DistrictId, plot.Ward - OneBased, plot.Plot - OneBased);
+    private static HousingDestination DestinationOf(PlotKey plot) => new(plot.WorldId, plot.DistrictId, plot.Ward - ResidentialDistricts.OneBased, plot.Plot - ResidentialDistricts.OneBased);
 
     private void ReleaseOwnedWork()
     {
