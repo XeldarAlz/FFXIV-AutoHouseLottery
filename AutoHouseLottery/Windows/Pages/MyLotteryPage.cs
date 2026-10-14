@@ -30,7 +30,7 @@ internal sealed class MyLotteryPage
     private const string Separator = " · ";
     private const string DateFormat = "g";
 
-    private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State);
+    private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State, string LogInAs);
 
     private ImmutableArray<RowView> rows = [];
     private ImmutableArray<ActionAttempt> cachedAttempts;
@@ -40,6 +40,9 @@ internal sealed class MyLotteryPage
     private System.Globalization.CultureInfo? cachedCulture;
     private int cachedCharacterCount;
     private bool historyOpen;
+    private ReconcileReport reconcileFor;
+    private LanguageInfo? reconcileLanguage;
+    private string? reconcileText;
     private Guid expandedReceipt;
 
     public void Draw(Plugin plugin)
@@ -105,7 +108,8 @@ internal sealed class MyLotteryPage
         for (var index = 0; index < built.Length; index++)
         {
             var row = built[index];
-            views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(CharacterName(plugin, row.ContentId), Separator, Address(row)), Facts(row), Receipt(row), StateLabel(row.State)));
+            var name = CharacterName(plugin, row.ContentId);
+            views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(name, Separator, Address(row)), Facts(row), Receipt(row), StateLabel(row.State), Loc.T(L.Lottery.LogInAs, name)));
         }
 
         rows = views.MoveToImmutable();
@@ -153,7 +157,7 @@ internal sealed class MyLotteryPage
         var x = origin.X + RowPadX * scale;
         var right = end.X - RowPadX * scale;
         var top = origin.Y + RowPadY * scale;
-        var (actionLabel, actionEnabled, actionTooltip) = ActionOf(plugin, row);
+        var (actionLabel, actionEnabled, actionTooltip) = ActionOf(plugin, view);
         var actionIcon = ActionIcon(row.Action);
         var actionWidth = PillButton.Width(actionLabel, actionIcon);
         var stateWidth = TextDraw.Measure(view.State).X;
@@ -195,20 +199,35 @@ internal sealed class MyLotteryPage
         }
     }
 
-    private static (string Label, bool Enabled, string? Tooltip) ActionOf(Plugin plugin, LotteryRow row) => row.Action switch
+    private (string Label, bool Enabled, string? Tooltip) ActionOf(Plugin plugin, in RowView view)
     {
+        var row = view.Row;
+        return row.Action switch
+        {
         LotteryAction.ViewPlot => (Loc.T(L.Lottery.ViewPlot), true, null),
         LotteryAction.CheckResult => (Loc.T(L.Lottery.CheckResult), false, Loc.T(L.Lottery.ArrivesLater)),
         LotteryAction.ClaimHouse => (Loc.T(L.Lottery.ClaimHouse), false, Loc.T(L.Lottery.ArrivesLater)),
         LotteryAction.CollectRefund => (Loc.T(L.Lottery.CollectRefund), false, Loc.T(L.Lottery.ArrivesLater)),
         LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending => (Loc.T(L.Lottery.VerifyOutcome), false, Loc.T(L.Lottery.ArrivesLater)),
         LotteryAction.VerifyOutcome => (Loc.T(L.Lottery.VerifyOutcome), !plugin.Controller.Busy && row.ContentId == Svc.PlayerState.ContentId,
-            row.ContentId != Svc.PlayerState.ContentId ? Loc.T(L.Lottery.LogInAs, CharacterName(plugin, row.ContentId))
-            : plugin.Controller.LastReconcile.Outcome == ReconcileOutcome.NotRun ? null
-            : RunText.Reconcile(plugin.Controller.LastReconcile)),
+            row.ContentId != Svc.PlayerState.ContentId ? view.LogInAs : ReconcileText(plugin.Controller.LastReconcile)),
         LotteryAction.ViewReceipt => (Loc.T(L.Lottery.ViewReceipt), true, null),
-        _ => (StateLabel(row.State), false, null),
-    };
+        _ => (view.State, false, null),
+        };
+    }
+
+    // The last read-back's result, formatted again only when it changes.
+    private string? ReconcileText(in ReconcileReport report)
+    {
+        if (report != reconcileFor || !ReferenceEquals(Loc.Current, reconcileLanguage))
+        {
+            reconcileFor = report;
+            reconcileLanguage = Loc.Current;
+            reconcileText = report.Outcome == ReconcileOutcome.NotRun ? null : RunText.Reconcile(report);
+        }
+
+        return reconcileText;
+    }
 
     private static FontAwesomeIcon ActionIcon(LotteryAction action) => action switch
     {

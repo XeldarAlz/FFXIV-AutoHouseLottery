@@ -1,4 +1,3 @@
-using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
 using AutoHouseLottery.Core.Tasks.Model;
@@ -20,7 +19,6 @@ internal static class MiniPlayer
     private const float BarWidth = 160f;
     private const float BarHeight = 8f;
     private const float BadgeGap = 8f;
-    private const string Separator = " · ";
 
     public static float Height()
     {
@@ -100,13 +98,7 @@ internal static class MiniPlayer
             return Loc.T(L.Run.UncertainTitle);
         }
 
-        if (!controller.Running)
-        {
-            return ReadyState.ShortLabel(kind);
-        }
-
-        var step = status.Step == EntryStep.NeedsPlayer ? Loc.T(L.Run.NeedsPlayerTitle) : RunPanel.StepLine(controller, status);
-        return status.Target is { } target ? string.Concat(step, Separator, PlotNames.Address(target)) : step;
+        return controller.Running ? RunPanelText.Shared.For(controller).RunningLabel : ReadyState.ShortLabel(kind);
     }
 
     private static void DrawButtons(RunController controller, Vector2 end, float midY)
