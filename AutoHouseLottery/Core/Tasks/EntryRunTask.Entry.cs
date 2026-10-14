@@ -248,7 +248,7 @@ internal sealed partial class EntryRunTask
     }
 
     private bool MayConfirm(long deposit)
-        => RealEntryGate.MayConfirm(EntryCapabilities.EntryConfirmValidated, session.DryRunRequested, services.Grant(), session.Settings.ContentId, session.Target, deposit);
+        => RealEntryGate.MayConfirm(EntryCapabilities.EntryConfirmValidated, session.DryRunRequested, services.Grant(), session.Mode, session.Settings.ContentId, session.Target, deposit);
 
     private async Task ReturnToGame() => await NextFrame();
 

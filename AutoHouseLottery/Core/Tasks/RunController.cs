@@ -294,7 +294,7 @@ internal sealed class RunController
         }
 
         owner = leaseGrant.Owner;
-        var entryMode = RealEntryGate.ModeFor(EntryCapabilities.EntryConfirmValidated, dryRun, grant, context.ContentId, planned.TargetOrder.AsSpan());
+        var entryMode = RealEntryGate.ModeFor(EntryCapabilities.EntryConfirmValidated, dryRun, grant, mode, context.ContentId, planned.TargetOrder.AsSpan());
         var active = new EntryRunSession(Guid.NewGuid(), mode, entryMode, dryRun, policy, planned, chosen, context.Name, preview.Ranking);
         session = active;
         finished = RunStatus.Idle;

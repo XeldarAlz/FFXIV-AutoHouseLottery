@@ -62,8 +62,8 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 | `/autohouselottery probe approach <ward> <plot>` | Walk to a plot's placard in the district you are in |
 | `/autohouselottery probe press <enter \| results \| cancel \| no>` | Do one thing that costs nothing: press Enter Lottery or View Lottery Results on the placard, close the entry confirmation, or press No on a result dialog. Each button is checked by its own label first, and nothing is pressed while a run or a probe task is going |
 | `/autohouselottery probe stop` | Stop the probe task and the travel it started |
-| `/autohouselottery dev run <district> <ward> <plot> <deposit> [fc]` | Maintainer tool until Find a home starts runs: enter one plot on your home world for exactly that deposit. It is a dry run that stops at the lottery confirmation and closes it, unless a real-entry permission covers it |
-| `/autohouselottery dev allow-real-entry <character name> <district> <ward> <plot> <max gil>` | Maintainer tool for the one supervised real entry: allow one real entry for the logged-in character on that plot, up to that deposit. It lives only in this session and ends at logout, at unload, or after the one entry |
+| `/autohouselottery dev run <district> <ward> <plot> <deposit> [fc] [real]` | Maintainer tool for the in-game ladder: enter one plot on your home world for exactly that deposit. It is a dry run that stops at the lottery confirmation and closes it, unless the word `real` is given and a real-entry permission covers that plot |
+| `/autohouselottery dev allow-real-entry <character name> <district> <ward> <plot> <max gil>` | Maintainer tool for the one supervised real entry: allow one real entry for the logged-in character on that plot, up to that deposit, for a `dev run ... real` on exactly that plot. It never applies to a best match, lives only in this session and ends at logout, at unload, or after the one entry |
 | `/autohouselottery dev revoke-real-entry` | Withdraw the real-entry permission; every run is a dry run again |
 
 ## Languages

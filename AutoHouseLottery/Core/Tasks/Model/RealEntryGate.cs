@@ -21,44 +21,40 @@ internal sealed record RealEntryGrant(ulong ContentId, string CharacterName, Plo
 
 internal static class RealEntryGate
 {
-    // The mode a run starts in, for the badge and the trace. A grant counts only for a run that can reach its plot.
-    public static EntryMode ModeFor(bool confirmValidated, bool dryRunRequested, RealEntryGrant? grant, ulong contentId, ReadOnlySpan<PlotKey> targets)
+    // The mode a run starts in, for the badge and the trace. A requested dry run always stays one. A grant counts only
+    // for an exact-plot run on its own plot, never for a best match.
+    public static EntryMode ModeFor(bool confirmValidated, bool dryRunRequested, RealEntryGrant? grant, RunMode mode, ulong contentId, ReadOnlySpan<PlotKey> targets)
     {
-        if (confirmValidated && !dryRunRequested)
-        {
-            return EntryMode.Real;
-        }
-
-        if (grant is not { Used: false } open || open.ContentId != contentId)
+        if (dryRunRequested)
         {
             return EntryMode.DryRun;
         }
 
-        for (var targetIndex = 0; targetIndex < targets.Length; targetIndex++)
+        if (confirmValidated)
         {
-            if (targets[targetIndex] == open.Plot)
-            {
-                return EntryMode.Real;
-            }
+            return EntryMode.Real;
         }
 
-        return EntryMode.DryRun;
+        return mode == RunMode.Exact && targets.Length == 1 && grant is { Used: false } open && open.ContentId == contentId && open.Plot == targets[0]
+            ? EntryMode.Real
+            : EntryMode.DryRun;
     }
 
-    // Asked again with the live plot and deposit right before Confirm. While the capability is not validated, only a
-    // grant that names exactly this character, this plot and an amount within its ceiling opens Confirm.
-    public static bool MayConfirm(bool confirmValidated, bool dryRunRequested, RealEntryGrant? grant, ulong contentId, PlotKey plot, long deposit)
+    // Asked again with the live plot and deposit right before Confirm. A requested dry run never confirms. While the
+    // capability is not validated, only a grant that names exactly this character, this plot and an amount within its
+    // ceiling opens Confirm, and only for an exact-plot run.
+    public static bool MayConfirm(bool confirmValidated, bool dryRunRequested, RealEntryGrant? grant, RunMode mode, ulong contentId, PlotKey plot, long deposit)
     {
-        if (deposit <= 0)
+        if (dryRunRequested || deposit <= 0)
         {
             return false;
         }
 
-        if (confirmValidated && !dryRunRequested)
+        if (confirmValidated)
         {
             return true;
         }
 
-        return grant is not null && grant.Covers(contentId, plot, deposit);
+        return mode == RunMode.Exact && grant is not null && grant.Covers(contentId, plot, deposit);
     }
 }
