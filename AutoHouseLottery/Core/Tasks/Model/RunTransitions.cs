@@ -11,7 +11,7 @@ internal static class RunTransitions
 
         return from switch
         {
-            EntryStep.Ready => to is EntryStep.Preflight,
+            EntryStep.Ready => to is EntryStep.Preflight or EntryStep.Paused or EntryStep.Stopped,
             EntryStep.Preflight => to is EntryStep.SettleOutstanding or EntryStep.NeedsReconciliation or EntryStep.FinishCharacter,
             EntryStep.SettleOutstanding => to is EntryStep.ReserveFunds or EntryStep.FinishCharacter,
             EntryStep.ReserveFunds => to is EntryStep.Travel or EntryStep.FinishCharacter,

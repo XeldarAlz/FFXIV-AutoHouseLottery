@@ -5,6 +5,7 @@ using AutoHouseLottery.Core.Game.Dialogs;
 using AutoHouseLottery.Core.Game.Placard;
 using AutoHouseLottery.Core.Game.Ward;
 using AutoHouseLottery.Core.Game.Watchers;
+using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
 using AutoHouseLottery.Core.Travel;
@@ -26,6 +27,7 @@ namespace AutoHouseLottery;
 public sealed class Plugin : IDalamudPlugin
 {
     private const string ProbeVerb = "probe";
+    private const string DevVerb = "dev";
 
     [PluginService]
     internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
@@ -39,6 +41,7 @@ public sealed class Plugin : IDalamudPlugin
     internal WindowSystem WindowSystem { get; } = new("AutoHouseLottery");
     internal RunController Controller { get; }
     internal HousingObservers Housing { get; }
+    internal HousingContext HousingData { get; }
 
     private readonly DutyWatcher dutyWatcher;
     private readonly GmAlertWatcher gmAlertWatcher;
@@ -69,13 +72,9 @@ public sealed class Plugin : IDalamudPlugin
             completed.Push(CLibMain.Dispose);
 
             Configuration = LoadConfiguration();
+            HousingData = new HousingContext(Configuration, PluginInterface.GetPluginConfigDirectory());
+            completed.Push(HousingData.Dispose);
 
-            Controller = new RunController();
-            completed.Push(Controller.Shutdown);
-            dutyWatcher = new DutyWatcher();
-            completed.Push(dutyWatcher.Dispose);
-            gmAlertWatcher = new GmAlertWatcher();
-            completed.Push(gmAlertWatcher.Dispose);
             wardWindow = new AddonUpdateCounter(WardReader.AddonName);
             completed.Push(wardWindow.Dispose);
             wardPackets = new WardPortalObserver();
@@ -87,6 +86,12 @@ public sealed class Plugin : IDalamudPlugin
             housingLog = new HousingLogWatcher();
             completed.Push(housingLog.Dispose);
             Housing = new HousingObservers(wardWindow, wardPackets, placardWindow, placardSales, SignboardAgentLayout.Resolve(placardSales.SignatureFound), housingLog);
+            Controller = new RunController(HousingData, Housing);
+            completed.Push(Controller.Shutdown);
+            dutyWatcher = new DutyWatcher();
+            completed.Push(dutyWatcher.Dispose);
+            gmAlertWatcher = new GmAlertWatcher();
+            completed.Push(gmAlertWatcher.Dispose);
 
             InitializeLocalization();
             Fonts.Initialize(PluginInterface.UiBuilder, PluginDirectory);
@@ -155,6 +160,7 @@ public sealed class Plugin : IDalamudPlugin
         wardWindow.Dispose();
         dutyWatcher.Dispose();
         gmAlertWatcher.Dispose();
+        HousingData.Dispose();
 
         CLibMain.Dispose();
         ECommonsMain.Dispose();
@@ -217,9 +223,25 @@ public sealed class Plugin : IDalamudPlugin
         {
             TargetDumper.Dump();
         }
-        else if (IsProbe(trimmed))
+        else if (trimmed.Equals("stop", StringComparison.OrdinalIgnoreCase))
         {
-            HousingProbe.Run(trimmed[ProbeVerb.Length..], Housing);
+            Controller.Stop();
+        }
+        else if (trimmed.Equals("pause", StringComparison.OrdinalIgnoreCase))
+        {
+            Controller.Pause(PauseReason.Manual);
+        }
+        else if (trimmed.Equals("resume", StringComparison.OrdinalIgnoreCase))
+        {
+            Controller.Resume();
+        }
+        else if (StartsWithVerb(trimmed, ProbeVerb))
+        {
+            HousingProbe.Run(trimmed[ProbeVerb.Length..], Housing, HousingData);
+        }
+        else if (StartsWithVerb(trimmed, DevVerb))
+        {
+            DevCommands.Run(trimmed[DevVerb.Length..], Controller, HousingData);
         }
         else
         {
@@ -227,9 +249,9 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    private static bool IsProbe(string arguments)
-        => arguments.StartsWith(ProbeVerb, StringComparison.OrdinalIgnoreCase)
-        && (arguments.Length == ProbeVerb.Length || char.IsWhiteSpace(arguments[ProbeVerb.Length]));
+    private static bool StartsWithVerb(string arguments, string verb)
+        => arguments.StartsWith(verb, StringComparison.OrdinalIgnoreCase)
+        && (arguments.Length == verb.Length || char.IsWhiteSpace(arguments[verb.Length]));
 
     private void OnDraw()
     {

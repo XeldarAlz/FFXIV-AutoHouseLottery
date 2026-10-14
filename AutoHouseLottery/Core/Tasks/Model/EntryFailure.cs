@@ -33,6 +33,7 @@ internal enum EntryFailure : byte
 
     // About the character or the run rather than the plot.
     Rejected,
+    CharacterIneligible,
     AlreadyEntered,
     CollectRefundFirst,
     CheckEarlierResult,
@@ -87,6 +88,7 @@ internal static class FallbackRules
 
     public static bool IsAboutTheCharacter(EntryFailure failure)
         => failure is EntryFailure.Rejected
+            or EntryFailure.CharacterIneligible
             or EntryFailure.AlreadyEntered
             or EntryFailure.CollectRefundFirst
             or EntryFailure.CheckEarlierResult

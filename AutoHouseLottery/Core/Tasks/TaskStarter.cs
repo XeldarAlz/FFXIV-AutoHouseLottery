@@ -4,7 +4,8 @@ namespace AutoHouseLottery.Core.Tasks;
 // must not reach a command handler, so it ends in the log instead.
 internal static class TaskStarter
 {
-    public static bool TryStart(Func<AutoCommon> build)
+    // Completed runs on the framework thread once the task has ended, however it ended.
+    public static bool TryStart(Func<AutoCommon> build, Action<AutoCommon>? completed = null)
     {
         if (Busy)
         {
@@ -14,7 +15,8 @@ internal static class TaskStarter
 
         try
         {
-            clib.Services.Svc.Automation.Start(build());
+            var task = build();
+            clib.Services.Svc.Automation.Start(task, OnCompleted: completed is null ? null : () => _ = ECommons.DalamudServices.Svc.Framework.RunOnFrameworkThread(() => completed(task)));
             return true;
         }
         catch (Exception exception)

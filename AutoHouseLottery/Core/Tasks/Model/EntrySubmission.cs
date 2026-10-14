@@ -9,7 +9,9 @@ internal enum SubmissionOutcome : byte
 {
     // The gate is closed: nothing was written and nothing pressed.
     GateClosed,
-    // The journal refused the intent (slot taken, invalid); nothing pressed.
+    // The character's entry slot for the cycle is already held; nothing pressed.
+    SlotTaken,
+    // The journal refused the intent as malformed; nothing pressed.
     IntentRefused,
     // The journal could not write the intent; nothing pressed.
     JournalFault,
@@ -35,7 +37,12 @@ internal sealed class EntrySubmission(ActionJournal journal)
         var prepared = await Task.Run(() => journal.Prepare(intent));
         if (prepared != JournalWrite.Written)
         {
-            return prepared is JournalWrite.WriteFailed or JournalWrite.Faulted ? SubmissionOutcome.JournalFault : SubmissionOutcome.IntentRefused;
+            return prepared switch
+            {
+                JournalWrite.SlotTaken => SubmissionOutcome.SlotTaken,
+                JournalWrite.WriteFailed or JournalWrite.Faulted => SubmissionOutcome.JournalFault,
+                _ => SubmissionOutcome.IntentRefused,
+            };
         }
 
         await returnToGame();

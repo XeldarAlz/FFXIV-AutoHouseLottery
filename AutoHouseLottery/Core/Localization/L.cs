@@ -250,7 +250,7 @@ internal static partial class L
 
     internal static class Plugin
     {
-        public static readonly LocString CommandHelp = new("plugin.commandHelp", "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (dump the current target's BaseId) | probe (log every housing reading for this spot).");
+        public static readonly LocString CommandHelp = new("plugin.commandHelp", "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | stop | pause | resume | target (dump the current target's BaseId) | probe (log every housing reading for this spot).");
         public static readonly LocString CommandHelpAlias = new("plugin.commandHelpAlias", "Alias for /autohouselottery.");
         public static readonly LocString ConfigReset = new("plugin.configReset", "Your settings could not be read, so Auto House Lottery started with default settings. The old file is kept as {0}.");
         public static readonly LocString ConfigResetUnsaved = new("plugin.configResetUnsaved", "Your settings could not be read, so Auto House Lottery started with default settings. The old file could not be kept; the log has the details.");

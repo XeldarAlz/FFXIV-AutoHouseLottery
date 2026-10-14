@@ -5,6 +5,7 @@ using AutoHouseLottery.Core.Game.Lottery;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Placard;
 using AutoHouseLottery.Core.Game.Ward;
+using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Ipc;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
@@ -34,22 +35,23 @@ internal static unsafe class HousingProbe
 
     private static readonly ClientLanguage[] selfCheckLanguages = [ClientLanguage.English, ClientLanguage.German, ClientLanguage.French, ClientLanguage.Japanese];
     private static readonly HousingText[] dialogLabels = [HousingText.ConfirmLabel, HousingText.YesLabel, HousingText.YesLabelAlternate, HousingText.NoLabel, HousingText.NoLabelAlternate];
+    private static readonly HousingText[] checkBoxLabels = [HousingText.ProceedCheckbox];
 
-    public static void Run(string arguments, HousingObservers observers)
+    public static void Run(string arguments, HousingObservers observers, HousingContext housing)
     {
         var tokens = arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var verb = tokens.Length == 0 ? string.Empty : tokens[0].ToLowerInvariant();
         switch (verb)
         {
             case "":
-                LogReadings(observers);
+                LogReadings(observers, housing);
                 Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(L.Probe.Done)}");
                 return;
             case "scan":
-                Start(() => new WardScanTask(observers.WardWindow, observers.WardPackets));
+                Start(() => new WardScanTask(observers.WardWindow, observers.WardPackets), task => ApplyScan(task, housing));
                 return;
             case "lottery":
-                Start(() => new LotteryTimersPass());
+                Start(() => new LotteryTimersPass(), task => ImportReading(task, housing));
                 return;
             case "goto" when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: true, observers));
@@ -77,16 +79,32 @@ internal static unsafe class HousingProbe
         }
     }
 
-    private static void Start(Func<AutoCommon> build)
+    private static void Start(Func<AutoCommon> build, Action<AutoCommon>? completed = null)
     {
-        var started = !Plugin.Instance.Controller.Running && TaskStarter.TryStart(build);
+        var started = !Plugin.Instance.Controller.Busy && TaskStarter.TryStart(build, completed);
         Svc.Chat.Print($"{HouseLotteryConstants.LogPrefix} {Loc.T(started ? L.Probe.Started : L.Probe.Failed)}");
+    }
+
+    private static void ApplyScan(AutoCommon task, HousingContext housing)
+    {
+        if (task is WardScanTask { Result: { } result })
+        {
+            housing.ApplyWardScan(result);
+        }
+    }
+
+    private static void ImportReading(AutoCommon task, HousingContext housing)
+    {
+        if (task is LotteryTimersPass { Outcome: LotteryPassOutcome.Loaded } pass && Svc.PlayerState.ContentId == pass.Snapshot.ContentId)
+        {
+            _ = housing.ImportFromReading(pass.Snapshot, pass.Snapshot.ContentId, Svc.PlayerState.HomeWorld.RowId);
+        }
     }
 
     // A press while a run or a task drives the game would fight it for the same window.
     private static bool UiIsOwned()
     {
-        if (!Plugin.Instance.Controller.Running && !TaskStarter.Busy)
+        if (!Plugin.Instance.Controller.Busy && !TaskStarter.Busy)
         {
             return false;
         }
@@ -151,13 +169,13 @@ internal static unsafe class HousingProbe
         return true;
     }
 
-    private static void LogReadings(HousingObservers observers)
+    private static void LogReadings(HousingObservers observers, HousingContext housing)
     {
         RunLog.Info($"{Prefix} ---- housing probe, client language {HousingSheetText.Language} ----");
         LogCharacter();
         LogLottery();
         LogWard(observers);
-        LogPlacard(observers);
+        LogPlacard(observers, housing);
         LogDialogs();
         LogSheetRows();
         LogHousingMessages(observers.HousingLog);
@@ -249,7 +267,7 @@ internal static unsafe class HousingProbe
                   + $"purchase type {packet.PurchaseType}, tenant type {packet.TenantType}, sequence {packet.Sequence}.");
     }
 
-    private static void LogPlacard(HousingObservers observers)
+    private static void LogPlacard(HousingObservers observers, HousingContext housing)
     {
         RunLog.Info($"{Prefix} placard sources: sale hook {(observers.PlacardSales.Active ? "active" : observers.PlacardSales.SignatureFound ? "signature found, not hooked" : "signature missing")}, "
                   + $"agent layout {observers.SignboardLayout.Describe()}.");
@@ -278,6 +296,8 @@ internal static unsafe class HousingProbe
                   + $"owner FC {(reading.OwnerFreeCompanyId is { } owner ? (owner == 0 ? "none" : "set") : "unknown")}, sale {Describe(reading.Sale)} (from {reading.SaleSource}), "
                   + $"details '{reading.DetailsText ?? "missing"}'.");
         LogButtons("placard", reading.Buttons);
+        var proved = housing.ObservePlacard(reading, Svc.PlayerState.CurrentWorld.RowId);
+        RunLog.Info($"{Prefix} placard cycle {(proved is { } position ? $"{position.Cycle}, {position.Phase} until {position.PhaseEndUtc:u}" : "not proved")}.");
     }
 
     private static void LogButtons(string window, ImmutableArray<WindowButton> buttons)
@@ -290,6 +310,20 @@ internal static unsafe class HousingProbe
         }
     }
 
+    private static void LogCheckBoxes(string window, ImmutableArray<WindowCheckBox> checkBoxes)
+    {
+        if (checkBoxes.IsEmpty)
+        {
+            RunLog.Info($"{Prefix} {window}: no checkbox component found.");
+        }
+
+        for (var checkBoxIndex = 0; checkBoxIndex < checkBoxes.Length; checkBoxIndex++)
+        {
+            var checkBox = checkBoxes[checkBoxIndex];
+            RunLog.Info($"{Prefix} {window} checkbox node {checkBox.NodeId}: '{checkBox.Text}', enabled {checkBox.Enabled}, visible {checkBox.Visible}, checked {checkBox.Checked}, matches {Show(checkBox.MatchedText)}.");
+        }
+    }
+
     private static void LogDialogs()
     {
         if (HousingDialogs.IdentifyEntryConfirmation() is { } confirmation)
@@ -299,6 +333,11 @@ internal static unsafe class HousingProbe
             {
                 RunLog.Info($"{Prefix} {HousingDialogs.EntryConfirmationAddon} values: {AddonReads.Describe(addon, DescribedDialogValues)}.");
                 LogButtons(HousingDialogs.EntryConfirmationAddon, LabelledButtons.Collect(addon, dialogLabels));
+                LogCheckBoxes(HousingDialogs.EntryConfirmationAddon, LabelledButtons.CollectCheckBoxes(addon, checkBoxLabels));
+                if (HousingDialogs.ReadEntryConfirmation() is { } shown)
+                {
+                    RunLog.Info($"{Prefix} entry confirmation reads as row 7046 {shown.Identified}, deposit {Show(shown.Deposit)}, checkbox {shown.Proceed}, Confirm {(shown.ConfirmFound ? shown.ConfirmEnabled ? "enabled" : "disabled" : "missing")}.");
+                }
             }
         }
 

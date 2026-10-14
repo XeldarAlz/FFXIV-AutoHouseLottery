@@ -93,7 +93,7 @@ public sealed class EntrySubmissionTests : IDisposable
             return DialogActionResult.Pressed;
         });
 
-        Assert.Equal(SubmissionOutcome.IntentRefused, outcome);
+        Assert.Equal(SubmissionOutcome.SlotTaken, outcome);
         Assert.False(pressed);
     }
 

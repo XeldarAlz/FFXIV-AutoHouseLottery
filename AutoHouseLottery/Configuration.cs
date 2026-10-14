@@ -37,7 +37,7 @@ public sealed partial class Configuration : IPluginConfiguration
     // True when the loaded config was older or needed a repair, so the caller saves it once.
     public bool Migrate()
     {
-        var changed = RepairSafetySettings();
+        var changed = RepairSafetySettings() | RepairCharacters();
         if (Version >= CurrentVersion)
         {
             return changed;

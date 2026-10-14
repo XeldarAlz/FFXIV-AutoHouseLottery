@@ -51,6 +51,9 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 | `/autohouselottery log` | Open the Console page |
 | `/autohouselottery changelog` | Open the Changelog page |
 | `/autohouselottery about` | Open the About page |
+| `/autohouselottery stop` | Stop the running lottery run before its next step; a press that may already have reached the game is verified first |
+| `/autohouselottery pause` | Pause the running lottery run before its next game-changing step |
+| `/autohouselottery resume` | Resume a paused run, or retry one that is waiting for you, from a fresh check of the character and the plot |
 | `/autohouselottery target` | Log the targeted object's BaseId (debug helper) |
 | `/autohouselottery probe` | Log every housing reading for where you stand to the Console: character, location, lottery entry, ward list, placard, open lottery dialogs, housing messages and Lifestream (debug helper) |
 | `/autohouselottery probe scan` | Page the open ward selector through every ward and log each acknowledged ward |
@@ -59,6 +62,9 @@ Every housing plot in FFXIV is sold through a lottery: during the entry period e
 | `/autohouselottery probe approach <ward> <plot>` | Walk to a plot's placard in the district you are in |
 | `/autohouselottery probe press <enter \| results \| cancel \| no>` | Do one thing that costs nothing: press Enter Lottery or View Lottery Results on the placard, close the entry confirmation, or press No on a result dialog. Each button is checked by its own label first, and nothing is pressed while a run or a probe task is going |
 | `/autohouselottery probe stop` | Stop the probe task and the travel it started |
+| `/autohouselottery dev run <district> <ward> <plot> <deposit> [fc]` | Maintainer tool until Find a home starts runs: enter one plot on your home world for exactly that deposit. It is a dry run that stops at the lottery confirmation and closes it, unless a real-entry permission covers it |
+| `/autohouselottery dev allow-real-entry <character name> <district> <ward> <plot> <max gil>` | Maintainer tool for the one supervised real entry: allow one real entry for the logged-in character on that plot, up to that deposit. It lives only in this session and ends at logout, at unload, or after the one entry |
+| `/autohouselottery dev revoke-real-entry` | Withdraw the real-entry permission; every run is a dry run again |
 
 ## Languages
 
