@@ -1,0 +1,190 @@
+name: Bug report
+description: Something's broken or behaving unexpectedly.
+title: "[Bug] "
+labels: ["bug"]
+assignees: ["XeldarAlz"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill out as much as you can; it makes a huge difference.
+
+        If you're not sure whether it's a bug or expected behavior, prefer the [Q&A discussions](https://github.com/XeldarAlz/FFXIV-AutoHouseLottery/discussions/new?category=q-a); triage is faster there.
+
+        For security issues, please use [private vulnerability reporting](https://github.com/XeldarAlz/FFXIV-AutoHouseLottery/security/advisories/new) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see? What did you expect to see instead?
+      placeholder: "The plugin travelled to the plot but never opened its placard..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to trigger the bug. If it's intermittent, say so.
+      placeholder: |
+        1. Open `/ahl`
+        2. Pick a plot on the Find a home page
+        3. Press Enter
+        4. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Shown in `/xlplugins` next to "Auto House Lottery".
+      options:
+        - 1.0.0.0
+        - Older / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: region
+    attributes:
+      label: Region
+      description: Housing listings, lottery periods and game data differ per region, so the region is a frequent root cause.
+      options:
+        - North America
+        - Europe
+        - Japan
+        - Oceania
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client-language
+    attributes:
+      label: Game client language
+      description: The language of the game client, not of the plugin. Housing dialogs are recognized by their game data in this language.
+      options:
+        - English
+        - Japanese
+        - German
+        - French
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: district
+    attributes:
+      label: Housing district
+      description: The district of the plot involved, if any.
+      options:
+        - Mist
+        - The Lavender Beds
+        - The Goblet
+        - Shirogane
+        - Empyreum
+        - Not tied to one plot
+    validations:
+      required: true
+
+  - type: input
+    id: address
+    attributes:
+      label: World, ward and plot
+      description: Where the plot is, and whether it is in the subdivision.
+      placeholder: "Gilgamesh, ward 12, plot 35 (subdivision)"
+
+  - type: dropdown
+    id: buyer-type
+    attributes:
+      label: Private or Free Company plot
+      description: The plot's buyer type, as its placard shows it.
+      options:
+        - Private
+        - Free Company
+        - Not tied to one plot / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: lottery-phase
+    attributes:
+      label: Lottery phase
+      description: The plot's lottery phase when the bug happened.
+      options:
+        - Entry period (entries open)
+        - Results period
+        - Unavailable or next period
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dry-run
+    attributes:
+      label: Was it a dry run?
+      description: A dry run goes all the way to the lottery confirmation and presses Cancel, so it spends nothing.
+      options:
+        - Yes, it was a dry run (nothing spent)
+        - No, it entered, collected a refund or claimed for real
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: lifestream-version
+    attributes:
+      label: Lifestream version
+      description: Shown in `/xlplugins` next to "Lifestream". Write "not installed" when it isn't.
+      placeholder: "2.4.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Which step failed?
+      description: The run panel and the Console show the step a run is in. An entry goes finding plots -> the shortlist and the run preview -> travelling to the plot -> reading its placard -> entering the lottery -> confirming the entry; afterwards come checking the result, then collecting the refund or claiming the house.
+      options:
+        - Finding plots (the map, the list, filters, listings that look wrong or old)
+        - The shortlist or the run preview (Add all matching, the best match order, deposits, Enter refusing to start)
+        - Travelling to the plot (Lifestream, the wrong world, ward or subdivision, never arriving)
+        - Reading the placard (the plot's placard, its price, phase or entry count)
+        - Entering the lottery (the entry confirmation, the deposit, the receipt, an entry marked unclear)
+        - Checking a result (My lottery, the result dialog, a win or a loss read wrong)
+        - Collecting a refund (automatic or by hand, the amount, a refund marked unclear)
+        - Claiming a house
+        - Pausing, resuming or stopping a run
+        - Saved, Settings or the Console
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Attachments
+      description: |
+        **If you can provide any of these, it turns guesswork into a fix.**
+
+        - **Plugin console**: open `/ahl log`, press *Copy log* and paste the result into the console field below. It already includes the plugin version, Dalamud version and zone.
+        - **Dalamud log**: open `/xllog`, click the *Open log folder* button at the bottom-right, attach `dalamud.log`. Filter by `[AHL]` if you want to trim it down; when travel went wrong, keep Lifestream's lines too.
+        - **The plot's placard and any dialog that opened** as screenshots, if the plugin read a plot wrong, entered the wrong one, or stopped on a dialog.
+        - **Screenshots / short clip** if the issue is visual (the map, a marker, the shortlist, a frozen card, etc.)
+        - **Other plugins active** that touch dialogs, movement, teleport, or input, which helps rule out conflicts.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output (optional)
+      description: |
+        Paste what *Copy log* on the plugin's Console page (`/ahl log`) put on your clipboard. Short snippets (chat-log tail, Dalamud error text) also belong here; attach full `dalamud.log` files under **Attachments** above.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Whether you pressed Enter on one plot or Enter best match, how many plots your shortlist held, whether automatic refunds were on, hunches, anything that helps the bug land.

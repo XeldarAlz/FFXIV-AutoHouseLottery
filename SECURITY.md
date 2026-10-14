@@ -1,0 +1,33 @@
+# Security policy
+
+## Supported versions
+
+Only the latest release published to the custom Dalamud repo is supported. If you're on an older version, please update before reporting.
+
+## Reporting a vulnerability
+
+Please report security issues privately via GitHub's private vulnerability reporting:
+
+https://github.com/XeldarAlz/FFXIV-AutoHouseLottery/security/advisories/new
+
+Please don't open a public issue or Discussion for anything that could let someone else exploit users of the plugin before a fix is out.
+
+What counts:
+
+- Code execution or crashes triggerable by crafted game state, by a crafted answer from the housing listing service, or by a crafted reply from a helper plugin such as Lifestream.
+- The plugin entering a lottery it shouldn't: a plot you did not pick and that is not on your shortlist, a deposit above the amount the run showed before you pressed Enter, a buyer type (Private or Free Company) you did not choose, a second entry for the same character in one lottery period, a character you did not select, or anything at all during a dry run.
+- The plugin settling an entry the wrong way: collecting a refund on a plot you won, claiming a plot you did not choose, entering again after an entry whose result was unclear, or answering any game dialog other than the housing dialogs it recognizes by their rows in the game data.
+- The plugin teleporting, travelling, or persisting something it shouldn't, beyond the documented housing automation, which is the feature.
+- Data exfiltration: the plugin's only network calls are reads of public housing listings from the Aetherphone housing service, and the one-click helper install on the Plugins page only asks Dalamud to add that helper's repository and install it. Your characters, your gil and your entries never leave your machine. Sending them anywhere would be a bug.
+
+What it reads and keeps, so you can tell a bug from the design. Auto House Lottery is in development, and this is the design every release is held to:
+
+- **Read from the game, never sent anywhere**: your character's home world, gil and Free Company, your lottery entries and their results, and, during a run, the plot's placard, the lottery windows and any dialog that opens.
+- **Kept on disk in the plugin's config folder**: your settings, your shortlists and saved searches, and a record of every entry, refund and claim the plugin made (keyed by the character's content id, the number Dalamud uses to tell characters apart), kept until each one is settled so an interrupted run is checked instead of repeated.
+- **Copied only when you press Copy log**: the Console lines, with a header naming the plugin version, the Dalamud version and your zone.
+
+What doesn't:
+
+- The fact that Auto House Lottery enters the housing lottery, collects refunds and travels for you. That's against Square Enix's Terms of Service and is the whole feature; turning it on is the user's choice.
+
+I'll aim to acknowledge reports within a few days and to ship a fix or workaround as soon as I've verified the issue.
