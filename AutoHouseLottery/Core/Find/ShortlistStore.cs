@@ -37,6 +37,7 @@ internal sealed class ShortlistStore
         if (error != ShortlistImportError.None)
         {
             RunLog.Warning($"The saved shortlist could not be read ({error}); starting with an empty shortlist.");
+            file.BackUp(DateTime.UtcNow);
         }
 
         return true;
