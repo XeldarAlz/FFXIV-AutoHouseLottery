@@ -26,7 +26,7 @@ Every game action goes through the same safety model: the plugin checks the plot
 
 ## Validation status
 
-A press that spends gil or takes a house is enabled only after it has been validated in game on the supported game version. Until then that action runs as a dry run: the plugin does everything up to the final press, shows you what it would do, and closes the dialog instead. Current status:
+A press that spends gil or takes a house is enabled only after it has been validated in game on the supported game version. Until then that action runs as a dry run: the plugin does everything up to the final press, shows you what it would do, and closes the dialog instead. The one exception is the validation itself: the maintainer's `/ahl dev allow-real-*` permissions each allow one real press, for the logged-in character on one named plot, for the current session only, and the Plugins page shows it while one is open. Current status:
 
 - **Entering the lottery**: dry run only until validated. Enter goes as far as the lottery confirmation and closes it; no deposit is paid.
 - **Collecting refunds**: dry run only until validated. Result checks read the refund and close it; collect refunds in game.

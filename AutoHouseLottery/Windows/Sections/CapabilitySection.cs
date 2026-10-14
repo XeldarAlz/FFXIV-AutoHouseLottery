@@ -180,6 +180,7 @@ internal sealed class CapabilitySection
     {
         CapabilityState.Ready => Styling.AccentMint,
         CapabilityState.Fallback or CapabilityState.DryRunOnly => Styling.AccentAmber,
+        CapabilityState.PermittedOnce => Styling.AccentRose,
         CapabilityState.NotChecked => Styling.AccentBlue,
         _ => Styling.AccentRose,
     };

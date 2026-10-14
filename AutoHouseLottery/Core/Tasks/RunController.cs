@@ -68,6 +68,9 @@ internal sealed partial class RunController
 
     public RunStatus Status => session?.Status ?? finished;
 
+    // A maintainer's session permission for one real entry that has not been used yet.
+    public bool RealEntryAllowed => grant is { Used: false };
+
     public ReconcileReport LastReconcile { get; private set; }
 
     public StartRefusal StartExact(RunPolicy policy, bool dryRun = true) => Start(RunMode.Exact, policy, dryRun);

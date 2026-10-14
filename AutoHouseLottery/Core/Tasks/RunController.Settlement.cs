@@ -39,6 +39,11 @@ internal sealed partial class RunController
 
     public SchedulerBlock SchedulerBlock => scheduler.Block;
 
+    // A maintainer's session permission for one real refund or one real claim that has not been used yet.
+    public bool RealRefundAllowed => refundGrant is { Used: false };
+
+    public bool RealClaimAllowed => claimGrant is { Used: false };
+
     public SettlementRefusal StartSettlement(Guid id, SettlementMode mode, SettlementOrigin origin, bool dryRun)
     {
         var context = CharacterContextReader.Read();

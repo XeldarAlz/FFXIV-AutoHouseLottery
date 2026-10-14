@@ -31,6 +31,7 @@ internal static partial class L
         public static readonly LocString StateReady = new("diagnostics.state.ready", "Ready");
         public static readonly LocString StateFallback = new("diagnostics.state.fallback", "Fallback");
         public static readonly LocString StateDryRunOnly = new("diagnostics.state.dryRunOnly", "Dry run only until validated");
+        public static readonly LocString StatePermittedOnce = new("diagnostics.state.permittedOnce", "One real press allowed");
         public static readonly LocString StateNotChecked = new("diagnostics.state.notChecked", "Not checked yet");
         public static readonly LocString StateMissing = new("diagnostics.state.missing", "Missing");
         public static readonly LocString StateBlocked = new("diagnostics.state.blocked", "Blocked");
@@ -65,10 +66,13 @@ internal static partial class L
         public static readonly LocString WardPacketsOff = new("diagnostics.reason.wardPacketsOff", "Not available on this game build. Ward lists are read from their window alone.");
         public static readonly LocString EntryValidated = new("diagnostics.reason.entryValidated", "Validated in game: Enter submits the entry for the exact deposit it showed.");
         public static readonly LocString EntryDryRunOnly = new("diagnostics.reason.entryDryRunOnly", "Enter goes as far as the lottery confirmation and closes it, so no deposit is paid.");
+        public static readonly LocString EntryPermittedOnce = new("diagnostics.reason.entryPermittedOnce", "Dry run only until validated, but a permission given this session allows one real entry on one plot. /ahl dev revoke-real-entry withdraws it.");
         public static readonly LocString RefundValidated = new("diagnostics.reason.refundValidated", "Validated in game: a losing deposit is collected, by itself while automatic refunds are on.");
         public static readonly LocString RefundDryRunOnly = new("diagnostics.reason.refundDryRunOnly", "A result check reads the refund and closes it, so nothing is collected. Collect refunds in game.");
+        public static readonly LocString RefundPermittedOnce = new("diagnostics.reason.refundPermittedOnce", "Dry run only until validated, but a permission given this session allows one real refund on one plot. /ahl dev revoke-real-settlement withdraws it.");
         public static readonly LocString ClaimValidated = new("diagnostics.reason.claimValidated", "Validated in game: Claim house accepts the win you chose to claim.");
         public static readonly LocString ClaimDryRunOnly = new("diagnostics.reason.claimDryRunOnly", "A win is read and closed, so nothing is claimed. Claim your house in game.");
+        public static readonly LocString ClaimPermittedOnce = new("diagnostics.reason.claimPermittedOnce", "Dry run only until validated, but a permission given this session allows one real claim on one plot. /ahl dev revoke-real-settlement withdraws it.");
         public static readonly LocString AbsenceValidated = new("diagnostics.reason.absenceValidated", "Validated in game: an entry whose placard no longer offers a result is recorded as settled outside the plugin.");
         public static readonly LocString AbsenceDryRunOnly = new("diagnostics.reason.absenceDryRunOnly", "An entry whose placard no longer offers a result stays pending on My lottery instead of being recorded as settled, and does not hold up your next entry.");
     }

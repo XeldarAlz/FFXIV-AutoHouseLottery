@@ -24,11 +24,13 @@ internal enum CapabilityKind : byte
 
 // Fallback: it works through a slower or less direct path. DryRunOnly: the action stops before its committing press
 // until it has been validated in game. NotChecked: nothing has told yet, such as a window not opened this session.
+// PermittedOnce: still dry run only by default, but a maintainer's session permission allows one real press now.
 internal enum CapabilityState : byte
 {
     Ready,
     Fallback,
     DryRunOnly,
+    PermittedOnce,
     NotChecked,
     Missing,
     Blocked,
@@ -66,10 +68,13 @@ internal enum CapabilityReason : byte
     WardPacketsOff,
     EntryValidated,
     EntryDryRunOnly,
+    EntryPermittedOnce,
     RefundValidated,
     RefundDryRunOnly,
+    RefundPermittedOnce,
     ClaimValidated,
     ClaimDryRunOnly,
+    ClaimPermittedOnce,
     AbsenceValidated,
     AbsenceDryRunOnly,
 }
@@ -136,4 +141,10 @@ internal readonly record struct CapabilityFacts
     public bool ClaimValidated { get; init; }
 
     public bool AbsenceSettlementValidated { get; init; }
+
+    public bool EntryPermitted { get; init; }
+
+    public bool RefundPermitted { get; init; }
+
+    public bool ClaimPermitted { get; init; }
 }

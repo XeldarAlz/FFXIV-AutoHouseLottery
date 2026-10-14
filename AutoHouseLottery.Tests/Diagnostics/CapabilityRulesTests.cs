@@ -39,6 +39,23 @@ public sealed class CapabilityRulesTests
     }
 
     [Fact]
+    public void ASessionPermissionShowsOnTheActionItAllows()
+    {
+        var rows = Evaluate(Ready() with { EntryConfirmValidated = false, RefundValidated = false, ClaimValidated = false, EntryPermitted = true, ClaimPermitted = true });
+        Assert.Equal(CapabilityState.PermittedOnce, rows[(int)CapabilityKind.EntryConfirm].State);
+        Assert.Equal(CapabilityReason.EntryPermittedOnce, rows[(int)CapabilityKind.EntryConfirm].Reason);
+        Assert.Equal(CapabilityState.DryRunOnly, rows[(int)CapabilityKind.Refund].State);
+        Assert.Equal(CapabilityReason.ClaimPermittedOnce, rows[(int)CapabilityKind.Claim].Reason);
+    }
+
+    [Fact]
+    public void AValidatedActionIsReadyWhetherOrNotAPermissionIsOpen()
+    {
+        var rows = Evaluate(Ready() with { RefundPermitted = true });
+        Assert.Equal(CapabilityState.Ready, rows[(int)CapabilityKind.Refund].State);
+    }
+
+    [Fact]
     public void LifestreamThatCannotAnswerTravelIsMissingNotPartial()
     {
         var withoutBusy = Evaluate(Ready() with { Lifestream = fullLifestream with { IsBusy = false } });

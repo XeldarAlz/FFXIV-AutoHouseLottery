@@ -48,6 +48,9 @@ internal static class CapabilityReader
             RefundValidated = SettlementCapabilities.RefundConfirmValidated,
             ClaimValidated = SettlementCapabilities.ClaimConfirmValidated,
             AbsenceSettlementValidated = SettlementCapabilities.AbsenceSettlementValidated,
+            EntryPermitted = plugin.Controller.RealEntryAllowed,
+            RefundPermitted = plugin.Controller.RealRefundAllowed,
+            ClaimPermitted = plugin.Controller.RealClaimAllowed,
         };
     }
 
