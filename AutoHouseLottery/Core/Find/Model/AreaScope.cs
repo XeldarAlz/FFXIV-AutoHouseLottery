@@ -11,15 +11,15 @@ internal readonly record struct AreaScope(uint WorldId, uint DistrictMask, bool 
 
     public static uint AllDistrictsMask => (1u << HousingDistricts.All.Length) - 1;
 
-    public static AreaScope Everywhere(uint worldId) => new(worldId, AllDistrictsMask, true, 0, true, true);
-
     public bool HasDistricts => (DistrictMask & AllDistrictsMask) != 0;
 
     public bool HasWards => AllWards || WardMask != 0;
 
     public bool HasDivisions => MainDivision || Subdivision;
 
-    public bool IsEmpty => WorldId == 0 || !HasDistricts || !HasWards || !HasDivisions;
+    public bool SelectsNothing => !HasDistricts || !HasWards || !HasDivisions;
+
+    public bool IsEmpty => WorldId == 0 || SelectsNothing;
 
     public static uint DistrictBit(uint districtId)
     {

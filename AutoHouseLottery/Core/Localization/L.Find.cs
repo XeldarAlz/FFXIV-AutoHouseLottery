@@ -1,0 +1,223 @@
+namespace AutoHouseLottery.Core.Localization;
+
+internal static partial class L
+{
+    internal static class Find
+    {
+        public static readonly LocString Title = new("findHome.title", "Find a home");
+
+        public static readonly LocString NotLoggedIn = new("findHome.notLoggedIn", "Not logged in");
+        public static readonly LocString HomeWorld = new("findHome.homeWorld", "{0} (home)");
+        public static readonly LocString WorldTooltip = new("findHome.worldTooltip", "The world whose listings you browse. Your home world is the one your character can enter on; other worlds are for looking around.");
+        public static readonly LocString BuyerPrivate = new("findHome.buyerPrivate", "Private");
+        public static readonly LocString BuyerFreeCompany = new("findHome.buyerFreeCompany", "Free Company");
+        public static readonly LocString BuyerTooltip = new("findHome.buyerTooltip", "Whether you enter as a private buyer or for your Free Company. Plots that do not allow it are hidden, and the run preview needs it.");
+
+        public static readonly LocString AreasChip = new("findHome.areasChip", "Areas: {0}");
+        public static readonly LocString AreasTitle = new("findHome.areasTitle", "Areas");
+        public static readonly LocString SelectAll = new("findHome.selectAll", "Select all");
+        public static readonly LocString ClearSelection = new("findHome.clearSelection", "Clear");
+        public static readonly LocString AllWards = new("findHome.allWards", "All wards");
+        public static readonly LocString WardRange = new("findHome.wardRange", "Wards from");
+        public static readonly LocString WardRangeTo = new("findHome.wardRangeTo", "to");
+        public static readonly LocString ApplyRange = new("findHome.applyRange", "Use range");
+        public static readonly LocString Divisions = new("findHome.divisions", "Divisions");
+        public static readonly LocString DivisionMain = new("findHome.divisionMain", "Main");
+        public static readonly LocString DivisionSubdivision = new("findHome.divisionSubdivision", "Subdivision");
+        public static readonly LocString PreferDistrict = new("findHome.preferDistrict", "Prefer this district. Preferred districts come first when the list is sorted by preferred areas.");
+
+        public static readonly LocString SizeSmall = new("findHome.sizeSmall", "Small");
+        public static readonly LocString SizeMedium = new("findHome.sizeMedium", "Medium");
+        public static readonly LocString SizeLarge = new("findHome.sizeLarge", "Large");
+        public static readonly LocString UpTo = new("findHome.upTo", "Up to");
+        public static readonly LocString AnyPrice = new("findHome.anyPrice", "Any price");
+        public static readonly LocString PriceTooltip = new("findHome.priceTooltip", "The most you would pay. Plots above it, or without a reported price, are hidden, and it caps the deposit of a run.");
+
+        public static readonly LocString StatusEntryOpen = new("findHome.status.entryOpen", "Entry open");
+        public static readonly LocString StatusResults = new("findHome.status.results", "Results");
+        public static readonly LocString StatusNextCycle = new("findHome.status.nextCycle", "Next cycle");
+        public static readonly LocString StatusForSale = new("findHome.status.forSale", "For sale");
+        public static readonly LocString StatusOccupied = new("findHome.status.occupied", "Occupied");
+        public static readonly LocString StatusNotReported = new("findHome.status.notReported", "Not reported");
+        public static readonly LocString StatusNeedsRefresh = new("findHome.status.needsRefresh", "Needs refresh");
+        public static readonly LocString StatusNotLoaded = new("findHome.status.notLoaded", "Not loaded");
+        public static readonly LocString StatusEntryOpenHelp = new("findHome.status.entryOpenHelp", "Reported in its lottery entry period. Inspect it live before entering.");
+        public static readonly LocString StatusResultsHelp = new("findHome.status.resultsHelp", "Its lottery is awaiting or showing results; no new entries.");
+        public static readonly LocString StatusNextCycleHelp = new("findHome.status.nextCycleHelp", "Vacant, but not open for entry until the next lottery.");
+        public static readonly LocString StatusForSaleHelp = new("findHome.status.forSaleHelp", "Sold first come, first served rather than by lottery.");
+        public static readonly LocString StatusOccupiedHelp = new("findHome.status.occupiedHelp", "Seen with an owner.");
+        public static readonly LocString StatusNotReportedHelp = new("findHome.status.notReportedHelp", "No current listing; whether it is free is unknown.");
+        public static readonly LocString StatusNeedsRefreshHelp = new("findHome.status.needsRefreshHelp", "The last report is old or sources disagree; it shows its last observation.");
+
+        public static readonly LocString MoreFilters = new("findHome.moreFilters", "More filters");
+        public static readonly LocString MoreFiltersCount = new("findHome.moreFiltersCount", "More filters · {0}");
+        public static readonly LocString PlotNumbers = new("findHome.plotNumbers", "Plot numbers");
+        public static readonly LocString ReportedEntries = new("findHome.reportedEntries", "Reported entries");
+        public static readonly LocString AtLeast = new("findHome.atLeast", "At least");
+        public static readonly LocString AtMost = new("findHome.atMost", "At most");
+        public static readonly LocString ObservedWithin = new("findHome.observedWithin", "Observed within");
+        public static readonly LocString AnyTime = new("findHome.anyTime", "Any time");
+        public static readonly LocPlural Hours = new("findHome.hours", "{0} hour", "{0} hours");
+        public static readonly LocString AlsoShow = new("findHome.alsoShow", "Also show");
+        public static readonly LocString Reachable = new("findHome.reachable", "Only plots I can travel to");
+        public static readonly LocString ReachableLater = new("findHome.reachableLater", "Arrives with travel support.");
+        public static readonly LocString ResetFilters = new("findHome.resetFilters", "Reset filters");
+        public static readonly LocString PresetSmall = new("findHome.presetSmall", "Empty small plots");
+        public static readonly LocString PresetSmallHelp = new("findHome.presetSmallHelp", "Small plots reported vacant: open for entry, awaiting results or opening next cycle.");
+
+        public static readonly LocString ViewMap = new("findHome.viewMap", "Map");
+        public static readonly LocString ViewList = new("findHome.viewList", "List");
+        public static readonly LocString SortPreferred = new("findHome.sortPreferred", "Preferred areas");
+        public static readonly LocString SortFewest = new("findHome.sortFewest", "Fewest entries");
+        public static readonly LocString SortLowest = new("findHome.sortLowest", "Lowest deposit");
+        public static readonly LocString SortRecent = new("findHome.sortRecent", "Recently observed");
+        public static readonly LocString SortAddress = new("findHome.sortAddress", "Address");
+        public static readonly LocString Summary = new("findHome.summary", "{0} reported vacant · {1} entry open");
+
+        public static readonly LocString ListingsRead = new("findHome.listingsRead", "Listings read {0}");
+        public static readonly LocString ListingsSaved = new("findHome.listingsSaved", "Saved listings from {0}");
+        public static readonly LocString ListingsLoading = new("findHome.listingsLoading", "Loading listings…");
+        public static readonly LocString ListingsFailed = new("findHome.listingsFailed", "Listings unavailable");
+        public static readonly LocString Refresh = new("findHome.refresh", "Refresh");
+        public static readonly LocString RefreshIn = new("findHome.refreshIn", "Refresh in {0}s");
+        public static readonly LocString RefreshTooltip = new("findHome.refreshTooltip", "Asks the housing service for this world's listings again. It refreshes by itself every 20 minutes while this window is open.");
+        public static readonly LocString SavedCopyBanner = new("findHome.savedCopyBanner", "Showing saved listings from {0}. Refresh or inspect in game.");
+
+        public static readonly LocString NoWorld = new("findHome.noWorld", "Log in, or choose a world, to see its listings.");
+        public static readonly LocString Loading = new("findHome.loading", "Loading the listings for {0}…");
+        public static readonly LocString Failed = new("findHome.failed", "The housing listings could not be loaded. Refresh, or inspect plots in game.");
+        public static readonly LocString NoMatches = new("findHome.noMatches", "No reported plots match these filters. Clear filters or change areas.");
+        public static readonly LocString NoCoverage = new("findHome.noCoverage", "This area has no recent coverage. Browse in game or scan it.");
+        public static readonly LocString NoArea = new("findHome.noArea", "Choose at least one district, ward and division under Areas.");
+        public static readonly LocString ClearFilters = new("findHome.clearFilters", "Clear filters");
+
+        public static readonly LocString AddAllMatching = new("findHome.addAllMatching", "Add all matching · {0}");
+        public static readonly LocString AddAllTooltip = new("findHome.addAllTooltip", "Adds every plot that matches the filters in {0}, including wards that are not on screen. Plots already on the shortlist are not added twice.");
+        public static readonly LocPlural Added = new("findHome.added", "Added {0} plot", "Added {0} plots");
+        public static readonly LocString ScopeAllDistricts = new("findHome.scope.allDistricts", "All districts");
+        public static readonly LocString ScopeTwoDistricts = new("findHome.scope.twoDistricts", "{0} and {1}");
+        public static readonly LocPlural ScopeDistricts = new("findHome.scope.districts", "{0} district", "{0} districts");
+        public static readonly LocString ScopeAllWards = new("findHome.scope.allWards", "all wards");
+        public static readonly LocString ScopeWard = new("findHome.scope.ward", "ward {0}");
+        public static readonly LocString ScopeWardRange = new("findHome.scope.wardRange", "wards {0}–{1}");
+        public static readonly LocPlural ScopeWards = new("findHome.scope.wards", "{0} ward", "{0} wards");
+        public static readonly LocString ScopeBothDivisions = new("findHome.scope.bothDivisions", "both divisions");
+        public static readonly LocString ScopeMainDivision = new("findHome.scope.mainDivision", "main division");
+        public static readonly LocString ScopeSubdivision = new("findHome.scope.subdivision", "subdivision");
+        public static readonly LocString ScopeJoin = new("findHome.scope.join", "{0} · {1} · {2}");
+
+        public static readonly LocString Ward = new("findHome.ward", "Ward {0}");
+        public static readonly LocString WardMatches = new("findHome.wardMatches", "Ward {0} · {1}");
+        public static readonly LocString MapLoading = new("findHome.mapLoading", "Loading the district map…");
+        public static readonly LocString MapUnavailable = new("findHome.mapUnavailable", "Map unavailable for this district");
+        public static readonly LocString MapUnavailableHint = new("findHome.mapUnavailableHint", "The list shows the same plots with their exact addresses.");
+        public static readonly LocString MapHint = new("findHome.mapHint", "Drag to pan · scroll to zoom · click a plot for details");
+        public static readonly LocString NoDistrictChosen = new("findHome.noDistrictChosen", "Choose a district under Areas to see its map.");
+        public static readonly LocString LegendShortlisted = new("findHome.legendShortlisted", "On shortlist");
+        public static readonly LocString LegendSaved = new("findHome.legendSaved", "Saved");
+
+        public static readonly LocString ColumnPlot = new("findHome.columnPlot", "Plot");
+        public static readonly LocString ColumnSize = new("findHome.columnSize", "Size");
+        public static readonly LocString ColumnPrice = new("findHome.columnPrice", "Price");
+        public static readonly LocString ColumnEntries = new("findHome.columnEntries", "Entries");
+        public static readonly LocString ColumnPhase = new("findHome.columnPhase", "Phase");
+        public static readonly LocString ColumnObserved = new("findHome.columnObserved", "Observed");
+        public static readonly LocString Unknown = new("findHome.unknown", "–");
+        public static readonly LocString Address = new("findHome.address", "{0} · Ward {1} · Plot {2}");
+        public static readonly LocString AddressOnWorld = new("findHome.addressOnWorld", "{0} · Ward {1} · Plot {2} · {3}");
+        public static readonly LocString Observed = new("findHome.observed", "Observed {0}");
+        public static readonly LocString Deposit = new("findHome.deposit", "Deposit: {0}");
+        public static readonly LocString EntriesValue = new("findHome.entriesValue", "Entries: {0}");
+        public static readonly LocString ShortlistToggle = new("findHome.shortlistToggle", "On the shortlist. Click to add or remove.");
+
+        public static readonly LocString ShortlistTitle = new("findHome.shortlistTitle", "Shortlist");
+        public static readonly LocPlural PlotCount = new("findHome.plotCount", "{0} plot", "{0} plots");
+        public static readonly LocPlural EntryCount = new("findHome.entryCount", "{0} entry this cycle", "{0} entries this cycle");
+        public static readonly LocString CountsJoin = new("findHome.countsJoin", "{0} · {1}");
+        public static readonly LocString ShortlistEmpty = new("findHome.shortlistEmpty", "Plots you would accept go here. Tick them in the list, add them from the map, or add every match at once.");
+        public static readonly LocString RemoveUnavailable = new("findHome.removeUnavailable", "Remove unavailable · {0}");
+        public static readonly LocString Clear = new("findHome.clear", "Clear");
+        public static readonly LocString ConfirmClear = new("findHome.confirmClear", "Click again to clear");
+        public static readonly LocString Save = new("findHome.save", "Save");
+        public static readonly LocString SaveAsSearch = new("findHome.saveAsSearch", "Save as search");
+        public static readonly LocString SaveAsList = new("findHome.saveAsList", "Save as list");
+        public static readonly LocString SaveSearchHelp = new("findHome.saveSearchHelp", "Keeps these areas and filters. Using it again finds the plots that match then.");
+        public static readonly LocString SaveListHelp = new("findHome.saveListHelp", "Keeps exactly the plots on the shortlist.");
+        public static readonly LocString NameHint = new("findHome.nameHint", "Name");
+        public static readonly LocString DefaultName = new("findHome.defaultName", "{0}, {1}");
+        public static readonly LocString SavedSearch = new("findHome.savedSearch", "Saved the search");
+        public static readonly LocString SavedList = new("findHome.savedList", "Saved the list");
+        public static readonly LocString Remove = new("findHome.remove", "Remove");
+
+        public static readonly LocString BestMatch = new("findHome.bestMatch", "Best match");
+        public static readonly LocString Fallbacks = new("findHome.fallbacks", "Then, if it fails a live check");
+        public static readonly LocString RankingNote = new("findHome.rankingNote", "Ranked by fewest reported entries, then lowest deposit, then address. Reported counts only; no odds are promised.");
+        public static readonly LocString PreviewTitle = new("findHome.previewTitle", "Run preview");
+        public static readonly LocPlural CharacterCount = new("findHome.characterCount", "{0} character", "{0} characters");
+        public static readonly LocString MaximumDeposit = new("findHome.maximumDeposit", "Maximum deposit");
+        public static readonly LocString Reserve = new("findHome.reserve", "Keep in reserve");
+        public static readonly LocString ReserveTooltip = new("findHome.reserveTooltip", "Gil this character keeps after the deposit. A plot that would leave less is skipped.");
+        public static readonly LocString Eligibility = new("findHome.eligibility", "Eligibility");
+        public static readonly LocString EligibilityUnknown = new("findHome.eligibilityUnknown", "Unknown until checked in game");
+        public static readonly LocString EligibilityEligible = new("findHome.eligibilityEligible", "Eligible");
+        public static readonly LocString EligibilityIneligible = new("findHome.eligibilityIneligible", "Not eligible");
+        public static readonly LocString Unresolved = new("findHome.unresolved", "Still to check: {0}");
+        public static readonly LocString Excluded = new("findHome.excluded", "{0} cannot enter: {1}");
+        public static readonly LocString ReasonJoin = new("findHome.reasonJoin", "{0}, {1}");
+        public static readonly LocString ReasonAlreadyEntered = new("findHome.reason.alreadyEntered", "already entered this cycle");
+        public static readonly LocString ReasonOwnsLand = new("findHome.reason.ownsLand", "the account owns land on this world");
+        public static readonly LocString ReasonOutstanding = new("findHome.reason.outstanding", "an earlier refund or house is waiting");
+        public static readonly LocString ReasonGil = new("findHome.reason.gil", "gil on hand");
+        public static readonly LocString ReasonOverCap = new("findHome.reason.overCap", "the deposit is above the maximum price");
+        public static readonly LocString ReasonWrongWorld = new("findHome.reason.wrongWorld", "the plot is not on the home world");
+        public static readonly LocString ReasonBuyer = new("findHome.reason.buyer", "the plot does not take this buyer type");
+        public static readonly LocString ReasonRequirements = new("findHome.reason.requirements", "buyer requirements");
+        public static readonly LocString ReasonUnavailable = new("findHome.reason.unavailable", "the plot is not open for entry");
+        public static readonly LocString ReasonProfile = new("findHome.reason.profile", "character details");
+        public static readonly LocString ReasonVerification = new("findHome.reason.verification", "sources disagree about the plot");
+        public static readonly LocString BlockerCycle = new("findHome.blockerCycle", "The listings have not confirmed the lottery cycle yet.");
+        public static readonly LocString BlockerClosed = new("findHome.blockerClosed", "The entry period is not open.");
+        public static readonly LocString BlockerExpired = new("findHome.blockerExpired", "This lottery phase has ended.");
+        public static readonly LocString BlockerNoAssignment = new("findHome.blockerNoAssignment", "No shortlisted plot can take an entry from this character.");
+        public static readonly LocString NeedBuyer = new("findHome.needBuyer", "Choose Private or Free Company to plan the run.");
+        public static readonly LocString NeedCeiling = new("findHome.needCeiling", "Set a maximum price to plan the run.");
+        public static readonly LocString NeedCharacter = new("findHome.needCharacter", "Log in to plan a run for your character.");
+        public static readonly LocString EnterBestMatch = new("findHome.enterBestMatch", "Enter best match");
+        public static readonly LocString EnterFor = new("findHome.enterFor", "Enter for {0}");
+        public static readonly LocString EnteringLater = new("findHome.enteringLater", "Entering arrives with the entry update");
+
+        public static readonly LocString Back = new("findHome.back", "Shortlist");
+        public static readonly LocString AddToShortlist = new("findHome.addToShortlist", "Add to shortlist");
+        public static readonly LocString RemoveFromShortlist = new("findHome.removeFromShortlist", "Remove from shortlist");
+        public static readonly LocString SaveToList = new("findHome.saveToList", "Save to list");
+        public static readonly LocString CopyAddress = new("findHome.copyAddress", "Copy address");
+        public static readonly LocString Copied = new("findHome.copied", "Address copied");
+        public static readonly LocString NewList = new("findHome.newList", "New list");
+        public static readonly LocString InspectPlot = new("findHome.inspectPlot", "Inspect plot");
+        public static readonly LocString InspectLater = new("findHome.inspectLater", "Visiting arrives with the travel update");
+        public static readonly LocString FieldSize = new("findHome.fieldSize", "Size");
+        public static readonly LocString FieldDeposit = new("findHome.fieldDeposit", "Deposit");
+        public static readonly LocString FieldBuyers = new("findHome.fieldBuyers", "Allowed buyers");
+        public static readonly LocString FieldPhase = new("findHome.fieldPhase", "Phase");
+        public static readonly LocString FieldEntries = new("findHome.fieldEntries", "Reported entries");
+        public static readonly LocString FieldMap = new("findHome.fieldMap", "On the map");
+        public static readonly LocString BuyersPrivate = new("findHome.buyersPrivate", "Private only");
+        public static readonly LocString BuyersFreeCompany = new("findHome.buyersFreeCompany", "Free Company only");
+        public static readonly LocString BuyersBoth = new("findHome.buyersBoth", "Private or Free Company");
+        public static readonly LocString MainDivisionLong = new("findHome.mainDivisionLong", "Main division");
+        public static readonly LocString SubdivisionLong = new("findHome.subdivisionLong", "Subdivision");
+        public static readonly LocString PhaseEnds = new("findHome.phaseEnds", "ends {0} ({1} left)");
+        public static readonly LocString CountdownDays = new("findHome.countdownDays", "{0}d {1}h");
+        public static readonly LocString CountdownHours = new("findHome.countdownHours", "{0}h {1}m");
+        public static readonly LocString CountdownMinutes = new("findHome.countdownMinutes", "{0}m");
+        public static readonly LocString ForCharacter = new("findHome.forCharacter", "For {0}");
+        public static readonly LocString SourceDetails = new("findHome.sourceDetails", "Source details");
+        public static readonly LocString SourceLine = new("findHome.sourceLine", "{0}: {1} · seen {2} · received {3}");
+        public static readonly LocString SourceFeed = new("findHome.sourceFeed", "housing service");
+        public static readonly LocString SourceWardScan = new("findHome.sourceWardScan", "ward scan");
+        public static readonly LocString SourcePlacard = new("findHome.sourcePlacard", "placard");
+        public static readonly LocString SourceCycle = new("findHome.sourceCycle", "cycle {0}");
+        public static readonly LocString ConflictNote = new("findHome.conflictNote", "Sources disagree about this plot. Refresh, or inspect it in game.");
+        public static readonly LocString NoListing = new("findHome.noListing", "No listing has been loaded for this plot yet.");
+    }
+}

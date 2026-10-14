@@ -19,6 +19,17 @@ internal sealed class NoticeLedger
 
     public void Restore(string key, DateTime recordedUtc) => delivered[key] = recordedUtc;
 
+    public NoticeLedger Copy()
+    {
+        var copy = new NoticeLedger();
+        foreach (var entry in delivered)
+        {
+            copy.delivered[entry.Key] = entry.Value;
+        }
+
+        return copy;
+    }
+
     public int Prune(DateTime nowUtc)
     {
         var expired = new List<string>();

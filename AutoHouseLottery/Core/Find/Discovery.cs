@@ -1,0 +1,112 @@
+using System.Collections.Immutable;
+using System.IO;
+using AutoHouseLottery.Core.Eligibility.Model;
+using AutoHouseLottery.Core.Maps;
+using AutoHouseLottery.Core.Providers;
+using AutoHouseLottery.Core.Providers.Model;
+using AutoHouseLottery.Core.Saved;
+using Dalamud.Plugin.Services;
+using ECommons.DalamudServices;
+
+namespace AutoHouseLottery.Core.Find;
+
+// Owns the housing discovery services and drives them from the framework update: the character and the Find a home view
+// every frame, which only compares numbers, and the listings and saved notices once a second. Nothing here acts in game.
+internal sealed class Discovery : IDisposable
+{
+    private const long TickIntervalMs = 1_000;
+    private const string CacheFolder = "housing-cache";
+    private const string ScheduleFile = "lottery-schedules.json";
+
+    private readonly Func<bool> windowOpen;
+    private readonly CurrentCharacter character = new();
+    private readonly NoticeAnnouncer announcer;
+    private readonly List<uint> watched = [];
+    private ImmutableArray<uint> scope = [];
+    private (uint World, int Library, int Shortlist) scopeInputs = (uint.MaxValue, -1, -1);
+    private long nextTickMs;
+
+    public Discovery(Configuration configuration, string directory, string version, Func<bool> windowOpen)
+    {
+        this.windowOpen = windowOpen;
+        Names = new GameNames(Svc.Data);
+        Maps = new HousingGameMaps(Svc.Data);
+        Feed = new HousingFeedService(new HousingFeedClient(version), new HousingFeedCache(Path.Combine(directory, CacheFolder)), Path.Combine(directory, ScheduleFile));
+        Find = new FindState(configuration, new ShortlistStore(directory));
+        Saved = new SavedService(directory);
+        announcer = new NoticeAnnouncer(configuration, Names);
+        Svc.Framework.Update += OnUpdate;
+    }
+
+    public HousingFeedService Feed { get; }
+
+    public FindState Find { get; }
+
+    public SavedService Saved { get; }
+
+    public HousingGameMaps Maps { get; }
+
+    public GameNames Names { get; }
+
+    public CharacterProfile? Character { get; private set; }
+
+    public uint World => Find.WorldFor(Character);
+
+    public void Dispose()
+    {
+        Svc.Framework.Update -= OnUpdate;
+        Feed.Dispose();
+        Find.Flush();
+        Saved.Flush();
+    }
+
+    private void OnUpdate(IFramework framework)
+    {
+        var now = DateTime.UtcNow;
+        Character = character.Read();
+        var snapshot = Feed.Snapshot;
+        Find.Update(now, Character, snapshot);
+        if (Environment.TickCount64 < nextTickMs)
+        {
+            return;
+        }
+
+        nextTickMs = Environment.TickCount64 + TickIntervalMs;
+        Feed.Tick(now, Mode(), Scope());
+        Saved.Update(now, snapshot, announcer.Announce);
+    }
+
+    private RefreshMode Mode()
+    {
+        if (windowOpen())
+        {
+            return RefreshMode.Active;
+        }
+
+        return Saved.Library.IsEmpty && Find.Shortlist.Count == 0 ? RefreshMode.Paused : RefreshMode.Idle;
+    }
+
+    private ImmutableArray<uint> Scope()
+    {
+        var inputs = (World, Saved.Library.Revision, Find.Shortlist.Revision);
+        if (inputs == scopeInputs)
+        {
+            return scope;
+        }
+
+        scopeInputs = inputs;
+        watched.Clear();
+        Saved.Library.CollectWorlds(watched);
+        var shortlist = Find.Shortlist.Plots;
+        for (var index = 0; index < shortlist.Count; index++)
+        {
+            if (!watched.Contains(shortlist[index].WorldId))
+            {
+                watched.Add(shortlist[index].WorldId);
+            }
+        }
+
+        scope = FetchScope.Worlds(inputs.Item1, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(watched));
+        return scope;
+    }
+}

@@ -42,25 +42,11 @@ internal static partial class L
         public static readonly LocString ResumeBlocked = new("shell.resumeBlocked", "Resumes automatically once you leave the duty");
     }
 
-    internal static class FindHome
-    {
-        public static readonly LocString Title = new("findHome.title", "Find a home");
-        public static readonly LocString Subtitle = new("findHome.subtitle", "Reported empty plots from public listings, on a map and in a list.");
-        public static readonly LocString Empty = new("findHome.empty", "Reported empty plots for your home world will appear here.");
-    }
-
     internal static class MyLottery
     {
         public static readonly LocString Title = new("myLottery.title", "My lottery");
         public static readonly LocString Subtitle = new("myLottery.subtitle", "Your lottery entries, their results, and the refunds and houses waiting to be collected.");
         public static readonly LocString Empty = new("myLottery.empty", "Your lottery entries will appear here.");
-    }
-
-    internal static class Saved
-    {
-        public static readonly LocString Title = new("saved.title", "Saved");
-        public static readonly LocString Subtitle = new("saved.subtitle", "Searches and plot lists you keep for the next lottery cycle.");
-        public static readonly LocString Empty = new("saved.empty", "Searches and plot lists you save will appear here.");
     }
 
     internal static class Dock
