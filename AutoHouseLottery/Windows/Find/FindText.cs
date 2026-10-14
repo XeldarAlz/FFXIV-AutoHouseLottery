@@ -137,6 +137,7 @@ internal static class FindText
         Append(text, reasons, EligibilityReason.PlotUnavailable, L.Find.ReasonUnavailable);
         Append(text, reasons, EligibilityReason.ProfileUnavailable, L.Find.ReasonProfile);
         Append(text, reasons, EligibilityReason.PlotNeedsVerification, L.Find.ReasonVerification);
+        Append(text, reasons, EligibilityReason.GroupOnAnotherPlot, L.Find.ReasonGroupPlot);
         return text.ToString();
     }
 

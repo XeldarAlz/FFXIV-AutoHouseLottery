@@ -243,23 +243,7 @@ internal sealed class HousingContext : IDisposable
     // An entry attempt in question for this cycle holds its entry slot. One from an earlier cycle cannot hold this cycle's
     // slot; it waits for a result check instead (ResultChecks). A refund or claim in question is the settlement's to read
     // back, not the entry run's.
-    public bool HasPendingAttempt(ulong contentId, CycleKey cycle)
-    {
-        var attempts = JournalSnapshot.Attempts;
-        for (var index = 0; index < attempts.Length; index++)
-        {
-            var attempt = attempts[index];
-            if (attempt.Kind == ActionKind.Entry
-                && attempt.CharacterContentId == contentId
-                && attempt.Cycle == cycle
-                && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public bool HasPendingAttempt(ulong contentId, CycleKey cycle) => JournalLookups.HasPendingEntry(JournalSnapshot, contentId, cycle);
 
     // An entry the reading shows that no attempt or receipt of this plugin holds is kept as an imported receipt, and a
     // refund the reading proves collected outside the plugin is recorded as settled.

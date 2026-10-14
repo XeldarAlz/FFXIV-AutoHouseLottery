@@ -45,7 +45,7 @@ internal static partial class L
         public static readonly LocString RefundFirst = new("batch.refundFirst", "collects an earlier refund first");
         public static readonly LocString TotalDeposits = new("batch.totalDeposits", "All deposits at most");
         public static readonly LocString NotPooled = new("batch.notPooled", "Each character pays from its own gil. Nothing is pooled.");
-        public static readonly LocString SwitchingOn = new("batch.switchingOn", "Character switching is on: the run logs in each character in turn through Lifestream.");
+        public static readonly LocString SwitchingOn = new("batch.switchingOn", "Character switching is allowed for this batch: the run logs in each character in turn through Lifestream.");
         public static readonly LocString SwitchingOff = new("batch.switchingOff", "The logged-in character enters now. The others wait for their own login, then press Continue.");
         public static readonly LocString TargetNotOnShortlist = new("batch.targetNotOnShortlist", "A character's chosen plot is not on the shortlist.");
         public static readonly LocPlural Enter = new("batch.enter", "Enter for {0} character", "Enter for {0} characters");
@@ -76,6 +76,8 @@ internal static partial class L
         public static readonly LocString HaltCheckpoint = new("batch.halt.checkpoint", "The batch could not be saved before the switch, so it did not switch.");
         public static readonly LocString HaltReloaded = new("batch.halt.reloaded", "The plugin reloaded during the batch. Nothing restarts on its own.");
         public static readonly LocString HaltCycleEnded = new("batch.halt.cycleEnded", "The entry period ended.");
+        public static readonly LocString HaltSwitchBlocked = new("batch.halt.switchBlocked", "Another task was using the game (a queue, a vnavmesh path or AutoRetainer's multi-mode), so the batch did not switch characters. Continue once it is done.");
+        public static readonly LocString DryRunOnly = new("batch.dryRunOnly", "Dry run for every character: each goes as far as its lottery confirmation and closes it. Real batch entries stay off until batches are validated in game.");
         public static readonly LocString LoginNotice = new("batch.loginNotice", "{0} is waiting in your lottery batch. Open /ahl and press Continue to enter for it.");
     }
 }

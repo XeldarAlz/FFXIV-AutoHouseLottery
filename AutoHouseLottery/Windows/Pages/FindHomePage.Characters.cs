@@ -35,7 +35,7 @@ internal sealed partial class FindHomePage
             return;
         }
 
-        charactersText.Refresh(view, Discovery, State, plugin.Controller.SwitchingAllowed);
+        charactersText.Refresh(view, Discovery, State, plugin.Controller.BatchSwitchingAllowed);
         if (!ImGui.CollapsingHeader(charactersText.HeaderLabel))
         {
             return;
@@ -281,8 +281,8 @@ internal sealed partial class FindHomePage
         }
     }
 
-    // Enter for N characters always asks for a dry run, like every Enter, from the frozen batch policy; while the controller
-    // would refuse it, the button is locked and its reason is shown under it.
+    // Enter for N characters always asks for a dry run, like every Enter, and a batch stays one until batches are validated
+    // in game, whatever is granted; while the controller would refuse it, the button is locked and its reason is shown.
     private void DrawBatchEnter(FindView view, BatchView batch)
     {
         var controller = plugin.Controller;
@@ -309,7 +309,7 @@ internal sealed partial class FindHomePage
         ImGui.PushTextWrapPos();
         using (ImRaii.PushColor(ImGuiCol.Text, enabled ? Styling.TextDim : Styling.TextMuted))
         {
-            ImGui.TextUnformatted(enabled ? Loc.T(L.Run.DryRunHint) : reason);
+            ImGui.TextUnformatted(enabled ? Loc.T(L.Batch.DryRunOnly) : reason);
         }
 
         ImGui.PopTextWrapPos();

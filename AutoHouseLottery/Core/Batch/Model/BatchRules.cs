@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Housing.Model;
+using AutoHouseLottery.Core.Integration.Model;
+using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Selection.Model;
 using AutoHouseLottery.Core.Shared;
 using AutoHouseLottery.Core.Tasks.Model;
@@ -16,16 +18,18 @@ internal readonly record struct BatchStep(BatchStepKind Kind, int MemberIndex);
 // another home world than the batch recorded.
 internal enum LoginVerdict : byte { NotInBatch, RequestedCharacter, QueuedCharacter, WrongCharacter, WrongHomeWorld }
 
-internal readonly record struct BatchReport(int Entered, int DryRun, int NotEntered, int Excluded, int Uncertain, int Queued, int Running, long Deposited)
-{
-    public int Total => Entered + DryRun + NotEntered + Excluded + Uncertain + Queued + Running;
-}
+internal readonly record struct BatchReport(int Entered, int DryRun, int NotEntered, int Excluded, int Uncertain, int Queued, int Running, long Deposited);
 
 // The batch of TECHNICAL_DESIGN sections 10 and 14 as plain data: each selected character makes at most one entry, one
 // after another, through the same entry run as a single character; nothing is pooled between them, and every step that
 // changes the batch returns a new checkpoint.
 internal static class BatchRules
 {
+    // Members freed by the journal go back in the queue before the entries it confirms are recorded, so they follow those.
+    private const int RequeuePass = 0;
+    private const int RecordPass = 1;
+    private const int ReevaluationPasses = 2;
+
     // The preview's assignments in their planned order, exact targets first, then the characters the plan left out.
     public static BatchCheckpoint Create(Guid batchId, RunPolicy policy, RunPreview preview, ReadOnlySpan<CharacterProfile> roster, bool dryRunRequested, DateTime nowUtc)
     {
@@ -141,8 +145,9 @@ internal static class BatchRules
         };
     }
 
-    // Records a member's outcome. An entry, or a dry run that reached its confirmation, on a Same plot assignment fixes
-    // that plot for the members of its group still waiting, as a real entry would (AssignmentPlanner.FollowConfirmedEntry).
+    // Records a member's outcome. An entry, or a dry run that reached its confirmation, on a Same plot assignment keeps its
+    // ownership group on that plot: members still waiting whose own targets hold it are pinned to it, and every other one,
+    // an exact member included, is left out rather than entering a second plot the group could not claim with the first.
     public static BatchCheckpoint Record(BatchCheckpoint checkpoint, int index, BatchMemberState state, EntryFailure failure, PlotKey? plot, long? deposit, DateTime nowUtc)
     {
         var member = checkpoint.Members[index] with
@@ -156,11 +161,94 @@ internal static class BatchRules
         var members = checkpoint.Members.SetItem(index, member);
         if (state is BatchMemberState.Entered or BatchMemberState.DryRun && plot is { } entered && member.Assignment is { Placement: PlacementMode.SamePlot } lead && lead.TargetOrder.IndexOf(entered) >= 0)
         {
-            members = Follow(members, lead.ContentId, entered);
+            members = KeepGroupOnPlot(Follow(members, lead.ContentId, entered), lead, entered, nowUtc);
         }
 
         return checkpoint with { Members = members, UpdatedUtc = nowUtc };
     }
+
+    // A member a fresh check before its run rules out: its character blockers, then its funds against its targets.
+    public static (EligibilityReason Reasons, EntryFailure Failure) Recheck(EligibilityReason characterBlockers, BudgetCheck funds)
+    {
+        var reasons = characterBlockers
+            | (funds == BudgetCheck.BelowReserve ? EligibilityReason.InsufficientGil : EligibilityReason.None)
+            | (funds is BudgetCheck.OverDepositCap or BudgetCheck.Overflow ? EligibilityReason.DepositOverCap : EligibilityReason.None);
+        if (reasons == EligibilityReason.None)
+        {
+            return (EligibilityReason.None, EntryFailure.None);
+        }
+
+        var failure = (reasons & EligibilityReason.AlreadyEnteredThisCycle) != 0 ? EntryFailure.AlreadyEntered
+            : (reasons & EligibilityReason.OutstandingRefundOrProperty) != 0 ? EntryFailure.CollectRefundFirst
+            : (reasons & (EligibilityReason.InsufficientGil | EligibilityReason.DepositOverCap)) != 0 ? EntryFailure.OverBudget
+            : EntryFailure.CharacterIneligible;
+        return (reasons, failure);
+    }
+
+    // The member's own balance against its whole target order, before its run travels anywhere: it fits when any target it
+    // may still enter fits its own cap, reserve and gil. A target with no known deposit, or a balance that cannot be read,
+    // leaves the answer to the run's checks at the confirmation; nothing is pooled with another member.
+    public static BudgetCheck Affordable(in CharacterBudget budget, ImmutableArray<PlotKey> targets, ImmutableArray<RankedPlot> ranking, long? gil)
+    {
+        var depositUnknown = false;
+        var worst = BudgetCheck.Fits;
+        for (var targetIndex = 0; targetIndex < targets.Length; targetIndex++)
+        {
+            if (DepositOf(ranking, targets[targetIndex]) is not { } deposit)
+            {
+                depositUnknown = true;
+                continue;
+            }
+
+            var check = BudgetRules.Check(budget, default, deposit, gil);
+            if (check is BudgetCheck.Fits or BudgetCheck.BalanceUnknown)
+            {
+                return check;
+            }
+
+            worst = worst == BudgetCheck.BelowReserve ? worst : check;
+        }
+
+        return depositUnknown ? BudgetCheck.DepositUnknown : worst;
+    }
+
+    // Members whose entry was in question are looked at again on the player's Continue, from the journal: an entry it now
+    // holds is recorded as entered, a slot it shows free again puts the member back in the queue for a fresh check, and
+    // an attempt still in question leaves the member as it is.
+    public static BatchCheckpoint Reevaluate(BatchCheckpoint checkpoint, in JournalSnapshot journal, DateTime nowUtc)
+    {
+        var cycle = checkpoint.Policy.Cycle.Cycle;
+        var updated = checkpoint;
+        for (var pass = 0; pass < ReevaluationPasses; pass++)
+        {
+            for (var index = 0; index < updated.Members.Length; index++)
+            {
+                var member = updated.Members[index];
+                if (member.State != BatchMemberState.Uncertain || JournalLookups.HasPendingEntry(journal, member.ContentId, cycle))
+                {
+                    continue;
+                }
+
+                var slot = ParticipationRules.FromJournal(journal, member.ContentId, member.HomeWorldId, cycle);
+                var entered = slot.State == EntrySlotState.Entered;
+                if (pass == RequeuePass && !entered)
+                {
+                    updated = updated with { Members = updated.Members.SetItem(index, member with { State = BatchMemberState.Queued, Failure = EntryFailure.None, UpdatedUtc = nowUtc }) };
+                }
+                else if (pass == RecordPass && entered)
+                {
+                    updated = Record(updated, index, BatchMemberState.Entered, EntryFailure.None, slot.Plot, JournalLookups.EntryDeposit(journal, member.ContentId, member.HomeWorldId, cycle), nowUtc);
+                }
+            }
+        }
+
+        return updated;
+    }
+
+    // A maintainer's batch switching grant serves one batch: it ends when that batch is finished or dropped, or when a
+    // switch of it failed.
+    public static bool EndsSwitchGrant(BatchCheckpoint? checkpoint)
+        => checkpoint is null || checkpoint.Phase == BatchPhase.Finished || checkpoint.Halt is BatchHalt.WrongCharacter or BatchHalt.SwitchFailed;
 
     public static BatchCheckpoint Halt(BatchCheckpoint checkpoint, BatchHalt halt, DateTime nowUtc)
         => checkpoint with { Members = Requeue(checkpoint.Members, nowUtc), Phase = BatchPhase.Halted, Halt = halt, SwitchTarget = null, UpdatedUtc = nowUtc };
@@ -313,6 +401,38 @@ internal static class BatchRules
         }
 
         return updated.MoveToImmutable();
+    }
+
+    private static ImmutableArray<BatchMember> KeepGroupOnPlot(ImmutableArray<BatchMember> members, in RunAssignment lead, PlotKey plot, DateTime nowUtc)
+    {
+        var updated = members.ToBuilder();
+        for (var index = 0; index < updated.Count; index++)
+        {
+            var member = updated[index];
+            if (member.Waiting
+                && member.ContentId != lead.ContentId
+                && member.Assignment is { Placement: PlacementMode.SamePlot } assignment
+                && assignment.Group == lead.Group
+                && assignment.TargetOrder.IndexOf(plot) < 0)
+            {
+                updated[index] = member with { State = BatchMemberState.NotEntered, Failure = EntryFailure.GroupEnteredElsewhere, UpdatedUtc = nowUtc };
+            }
+        }
+
+        return updated.MoveToImmutable();
+    }
+
+    private static long? DepositOf(ImmutableArray<RankedPlot> ranking, PlotKey plot)
+    {
+        for (var index = 0; index < ranking.Length; index++)
+        {
+            if (ranking[index].Key == plot)
+            {
+                return ranking[index].Deposit;
+            }
+        }
+
+        return null;
     }
 
     private static ImmutableArray<BatchMember> Requeue(ImmutableArray<BatchMember> members, DateTime nowUtc)

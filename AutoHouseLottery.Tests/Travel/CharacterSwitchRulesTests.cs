@@ -10,7 +10,7 @@ public sealed class CharacterSwitchRulesTests
     private const uint HomeWorld = 63;
     private const uint OtherHomeWorld = 79;
 
-    private static readonly SwitchRequest request = new(Requested, HomeWorld, Previous);
+    private static readonly SwitchRequest request = new(Requested, HomeWorld);
 
     private static readonly SwitchObservation loggedIn = new(
         LoggedIn: true,
@@ -74,9 +74,17 @@ public sealed class CharacterSwitchRulesTests
     }
 
     [Fact]
-    public void OnlySwitchingIsNotTerminal()
+    public void TheSwitchIsDoneOnlyOnceLifestreamHasFinishedItsOwnWork()
     {
-        Assert.False(CharacterSwitchRules.IsTerminal(SwitchState.Switching));
-        Assert.True(CharacterSwitchRules.IsTerminal(SwitchState.Cancelled));
+        Assert.Equal(SwitchState.Switching, CharacterSwitchRules.Evaluate(request, loggedIn with { Dependency = TravelPhase.Running }));
+        Assert.Equal(SwitchState.Switching, CharacterSwitchRules.Evaluate(request, loggedIn with { Dependency = TravelPhase.Requested }));
+        Assert.Equal(SwitchState.Switched, CharacterSwitchRules.Evaluate(request, loggedIn with { Dependency = TravelPhase.NeverStarted }));
+    }
+
+    [Fact]
+    public void LifestreamTakenOverByOtherWorkEndsTheSwitchAsNotStarted()
+    {
+        Assert.Equal(SwitchState.NotStarted, CharacterSwitchRules.Evaluate(request, loggedIn with { Dependency = TravelPhase.TakenOver }));
+        Assert.Equal(SwitchState.NotStarted, CharacterSwitchRules.Evaluate(request, loggedIn with { ContentId = Previous, SawLogout = false, Dependency = TravelPhase.TakenOver, ElapsedMs = 10_000 }));
     }
 }

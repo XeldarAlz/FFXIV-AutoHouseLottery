@@ -15,7 +15,17 @@ internal static class CharacterSwitch
     private static long lastToken;
     private static Operation? current;
 
-    public static long? CurrentToken => current?.Token;
+    // A duty, match or world visit queue, a vnavmesh path or AutoRetainer's multi-mode that a logout would cut short.
+    public static SwitchBlock Blocked()
+    {
+        var condition = Svc.Condition;
+        var queued = condition[ConditionFlag.InDutyQueue]
+            || condition[ConditionFlag.WaitingForDuty]
+            || condition[ConditionFlag.WaitingForDutyFinder]
+            || condition[ConditionFlag.WaitingForRaceOrMatch]
+            || condition[ConditionFlag.WaitingToVisitOtherWorld];
+        return SwitchSafety.Check(new SwitchSafetyFacts(queued, NavmeshIpc.Instance.MovingOrUnknown(), AutoRetainerIpc.Instance.MultiModeEnabled()));
+    }
 
     public static SwitchStart Begin(ulong contentId, string name, uint homeWorldId, string homeWorldName)
     {
@@ -32,10 +42,15 @@ internal static class CharacterSwitch
             return new SwitchStart(SwitchStartResult.NotInstalled, 0);
         }
 
-        var previous = LoggedIn() ? Svc.PlayerState.ContentId : 0;
-        if (previous == contentId)
+        if (LoggedIn() && Svc.PlayerState.ContentId == contentId)
         {
             return new SwitchStart(SwitchStartResult.AlreadyThatCharacter, 0);
+        }
+
+        if (Blocked() is var blocked and not SwitchBlock.None)
+        {
+            RunLog.Warning($"Character switch: {blocked} is using the game; not logging out.");
+            return new SwitchStart(SwitchStartResult.OtherWork, 0);
         }
 
         if (lifestream.IsBusy() != false)
@@ -60,7 +75,7 @@ internal static class CharacterSwitch
         }
 
         var token = ++lastToken;
-        current = new Operation(token, new SwitchRequest(contentId, homeWorldId, previous), new TravelOwnership(now), now);
+        current = new Operation(token, new SwitchRequest(contentId, homeWorldId), new TravelOwnership(now), now);
         return new SwitchStart(SwitchStartResult.Started, token);
     }
 

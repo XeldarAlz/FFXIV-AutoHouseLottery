@@ -1,79 +1,102 @@
-using System.Collections.Immutable;
 using AutoHouseLottery.Core.Batch.Model;
-using AutoHouseLottery.Core.Eligibility.Model;
-using AutoHouseLottery.Core.Housing.Model;
-using AutoHouseLottery.Core.Selection.Model;
 using AutoHouseLottery.Core.Tasks.Model;
 using AutoHouseLottery.Core.Travel.Model;
 using static AutoHouseLottery.Tests.HousingFixtures;
 
 namespace AutoHouseLottery.Tests.Batch;
 
-// Batching must not widen a grant or bypass a flag: each character goes through the single-character gate with its own
-// assignment, and switching needs its own flag or a session grant.
+// Batching must not widen a grant or get past a flag: a batch goes real only with both the entry and the batch
+// validated, a one-plot grant never makes a member real, and switching needs its own flag or a scoped, expiring grant.
 public sealed class BatchGateTests
 {
-    private const ulong Granted = 1;
-    private const ulong Other = 2;
-
-    private static readonly PlotKey grantedPlot = Plot(3, 7);
-    private static readonly RealEntryGrant grant = new(Granted, "Granted Character", grantedPlot, Deposit, ObservedAt);
+    private static readonly DateTime issued = ObservedAt;
+    private static readonly Guid batchId = Guid.NewGuid();
 
     [Fact]
     public void NoCapabilityFlagIsValidatedYet()
     {
         Assert.False(EntryCapabilities.EntryConfirmValidated);
+        Assert.False(BatchCapabilities.BatchEntryValidated);
         Assert.False(SwitchCapabilities.CharacterSwitchValidated);
     }
 
-    [Fact]
-    public void ARequestedDryRunStaysDryForEveryMemberWhateverIsGranted()
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, true)]
+    public void ABatchGoesRealOnlyWithTheEntryAndTheBatchBothValidated(bool confirmValidated, bool batchValidated, bool real)
     {
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(confirmValidated: true, dryRunRequested: true, grant, Exact(Granted, grantedPlot)));
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(false, true, grant, Exact(Granted, grantedPlot)));
+        Assert.Equal(real ? EntryMode.Real : EntryMode.DryRun, BatchGate.EntryModeFor(confirmValidated, batchValidated, dryRunRequested: false));
+        Assert.Equal(!real, BatchGate.MemberDryRun(confirmValidated, batchValidated, dryRunRequested: false));
+        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(confirmValidated, batchValidated, dryRunRequested: true));
     }
 
     [Fact]
-    public void OnlyTheGrantedCharactersOwnExactTargetOnTheGrantedPlotCanBeReal()
+    public void AOnePlotGrantNeverMakesAMemberReal()
     {
-        Assert.Equal(EntryMode.Real, BatchGate.EntryModeFor(false, false, grant, Exact(Granted, grantedPlot)));
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(false, false, grant, Exact(Other, grantedPlot)));
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(false, false, grant, Exact(Granted, Plot(3, 8))));
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(false, false, null, Exact(Granted, grantedPlot)));
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(false, false, grant with { Used = true }, Exact(Granted, grantedPlot)));
+        var plot = Plot(3, 7);
+        var grant = new RealEntryGrant(1, "Granted Character", plot, Deposit, ObservedAt);
+        var memberDryRun = BatchGate.MemberDryRun(EntryCapabilities.EntryConfirmValidated, BatchCapabilities.BatchEntryValidated, dryRunRequested: false);
+
+        Assert.True(memberDryRun);
+        Assert.False(RealEntryGate.MayConfirm(EntryCapabilities.EntryConfirmValidated, memberDryRun, grant, RunMode.Exact, 1, plot, Deposit));
+        Assert.Equal(EntryMode.DryRun, RealEntryGate.ModeFor(EntryCapabilities.EntryConfirmValidated, memberDryRun, grant, RunMode.Exact, 1, [plot]));
     }
 
     [Fact]
-    public void ABestMatchOrAPlotPinnedByAnotherMemberIsNeverGranted()
+    public void ABatchGrantServesOneBatchOnlyAndEndsAfterTwoHours()
     {
-        var bestMatch = Assignment(Granted, [grantedPlot, Plot(3, 8)], exact: false);
-        var pinned = Assignment(Granted, [grantedPlot], exact: false);
+        var unbound = new SwitchGrant(SwitchScope.Batch, issued);
+        var bound = unbound with { BatchId = batchId };
 
-        Assert.Equal(RunMode.BestMatch, BatchGate.ModeOf(bestMatch));
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(false, false, grant, bestMatch));
-        Assert.Equal(EntryMode.DryRun, BatchGate.EntryModeFor(false, false, grant, pinned));
-        Assert.False(RealEntryGate.MayConfirm(false, false, grant, BatchGate.ModeOf(pinned), Granted, grantedPlot, Deposit));
+        Assert.True(SwitchGate.AllowsBatch(false, unbound, null, dependencyCanSwitch: true, issued));
+        Assert.True(SwitchGate.AllowsBatch(false, unbound, batchId, true, issued));
+        Assert.True(SwitchGate.AllowsBatch(false, bound, batchId, true, issued));
+        Assert.False(SwitchGate.AllowsBatch(false, bound, Guid.NewGuid(), true, issued));
+        Assert.False(SwitchGate.AllowsBatch(false, bound, null, true, issued));
+        Assert.False(SwitchGate.AllowsBatch(false, bound, batchId, true, issued + SwitchGrant.Lifetime));
+        Assert.False(SwitchGate.AllowsBatch(false, null, batchId, true, issued));
+        Assert.True(SwitchGate.AllowsBatch(validated: true, null, batchId, true, issued));
+        Assert.False(SwitchGate.AllowsBatch(validated: true, bound, batchId, dependencyCanSwitch: false, issued));
     }
 
     [Fact]
-    public void ConfirmIsCheckedAgainWithTheMembersOwnCharacterPlotAndAmount()
+    public void EachGrantCoversOnlyItsOwnScope()
     {
-        var mode = BatchGate.ModeOf(Exact(Granted, grantedPlot));
+        var batchGrant = new SwitchGrant(SwitchScope.Batch, issued);
+        var refundGrant = new SwitchGrant(SwitchScope.RefundQueue, issued);
 
-        Assert.True(RealEntryGate.MayConfirm(false, false, grant, mode, Granted, grantedPlot, Deposit));
-        Assert.False(RealEntryGate.MayConfirm(false, false, grant, mode, Other, grantedPlot, Deposit));
-        Assert.False(RealEntryGate.MayConfirm(false, false, grant, mode, Granted, grantedPlot, Deposit + 1));
+        Assert.False(SwitchGate.AllowsRefundQueue(false, batchGrant, true, issued));
+        Assert.False(SwitchGate.AllowsBatch(false, refundGrant, batchId, true, issued));
+        Assert.True(SwitchGate.AllowsRefundQueue(false, refundGrant, true, issued));
+        Assert.False(SwitchGate.AllowsRefundQueue(false, refundGrant, true, issued + SwitchGrant.Lifetime));
+        Assert.False(SwitchGate.AllowsRefundQueue(false, refundGrant, dependencyCanSwitch: false, issued));
     }
 
     [Fact]
-    public void SwitchingNeedsTheFlagOrASessionGrantAndLifestreamsChangeCharacter()
+    public void ABatchGrantEndsWhenItsBatchFinishesIsDroppedOrFailsASwitch()
     {
-        var switching = new SwitchGrant(ObservedAt);
+        var running = BatchRulesTests.Batch(out _);
 
-        Assert.False(SwitchGate.Allowed(SwitchCapabilities.CharacterSwitchValidated, null, dependencyCanSwitch: true));
-        Assert.True(SwitchGate.Allowed(SwitchCapabilities.CharacterSwitchValidated, switching, dependencyCanSwitch: true));
-        Assert.True(SwitchGate.Allowed(validated: true, null, dependencyCanSwitch: true));
-        Assert.False(SwitchGate.Allowed(validated: true, switching, dependencyCanSwitch: false));
+        Assert.True(BatchRules.EndsSwitchGrant(null));
+        Assert.False(BatchRules.EndsSwitchGrant(running));
+        Assert.True(BatchRules.EndsSwitchGrant(BatchRules.Finish(running, BatchHalt.None, issued)));
+        Assert.True(BatchRules.EndsSwitchGrant(BatchRules.Halt(running, BatchHalt.WrongCharacter, issued)));
+        Assert.True(BatchRules.EndsSwitchGrant(BatchRules.Halt(running, BatchHalt.SwitchFailed, issued)));
+        Assert.False(BatchRules.EndsSwitchGrant(BatchRules.Halt(running, BatchHalt.StoppedByPlayer, issued)));
+        Assert.False(BatchRules.EndsSwitchGrant(BatchRules.Halt(running, BatchHalt.SwitchBlocked, issued)));
+    }
+
+    [Fact]
+    public void NoSwitchCutsShortAQueueAPathOrMultiMode()
+    {
+        Assert.Equal(SwitchBlock.None, SwitchSafety.Check(new SwitchSafetyFacts(false, false, false)));
+        Assert.Equal(SwitchBlock.Queue, SwitchSafety.Check(new SwitchSafetyFacts(true, false, false)));
+        Assert.Equal(SwitchBlock.Navigation, SwitchSafety.Check(new SwitchSafetyFacts(false, true, false)));
+        Assert.Equal(SwitchBlock.Navigation, SwitchSafety.Check(new SwitchSafetyFacts(false, null, false)));
+        Assert.Equal(SwitchBlock.MultiMode, SwitchSafety.Check(new SwitchSafetyFacts(false, false, true)));
+        Assert.Equal(SwitchBlock.MultiMode, SwitchSafety.Check(new SwitchSafetyFacts(false, false, null)));
     }
 
     [Fact]
@@ -86,9 +109,4 @@ public sealed class BatchGateTests
         Assert.False((complete with { IsBusy = false }).CanSwitchCharacters);
         Assert.False((complete with { Installed = false }).CanSwitchCharacters);
     }
-
-    private static RunAssignment Exact(ulong contentId, PlotKey plot) => Assignment(contentId, [plot], exact: true);
-
-    private static RunAssignment Assignment(ulong contentId, ImmutableArray<PlotKey> targets, bool exact)
-        => new(contentId, default, PlacementMode.SamePlot, targets, Deposit, false, new EligibilityResult(EligibilityReason.None, EligibilityReason.None, ObservedAt)) { Exact = exact };
 }

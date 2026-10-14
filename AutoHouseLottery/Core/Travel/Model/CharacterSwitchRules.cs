@@ -10,13 +10,54 @@ internal static class SwitchCapabilities
     public const bool CharacterSwitchValidated = false;
 }
 
+internal enum SwitchScope : byte { Batch, RefundQueue }
+
 // A maintainer's permission to switch characters, kept in memory only. Switching logs out by design, so it outlives a
-// logout and ends at unload or when revoked.
-internal sealed record SwitchGrant(DateTime IssuedUtc);
+// logout. A batch grant serves the next batch started and that batch only (BatchId, bound when it starts); a refund grant
+// serves the refund queue. Each ends after two hours, when revoked, or at unload.
+internal sealed record SwitchGrant(SwitchScope Scope, DateTime IssuedUtc)
+{
+    public static readonly TimeSpan Lifetime = TimeSpan.FromHours(2);
+
+    public Guid? BatchId { get; init; }
+
+    public bool Expired(DateTime nowUtc) => nowUtc - IssuedUtc >= Lifetime;
+}
 
 internal static class SwitchGate
 {
-    public static bool Allowed(bool validated, SwitchGrant? grant, bool dependencyCanSwitch) => dependencyCanSwitch && (validated || grant is not null);
+    // BatchId is the batch asking, or null for a batch not started yet; a grant already bound to another batch is not its.
+    public static bool AllowsBatch(bool validated, SwitchGrant? grant, Guid? batchId, bool dependencyCanSwitch, DateTime nowUtc)
+        => dependencyCanSwitch
+        && (validated || (grant is { Scope: SwitchScope.Batch } batchGrant && !batchGrant.Expired(nowUtc) && (batchGrant.BatchId is null || batchGrant.BatchId == batchId)));
+
+    public static bool AllowsRefundQueue(bool validated, SwitchGrant? grant, bool dependencyCanSwitch, DateTime nowUtc)
+        => dependencyCanSwitch && (validated || (grant is { Scope: SwitchScope.RefundQueue } refundGrant && !refundGrant.Expired(nowUtc)));
+}
+
+// What else may be using the game right before a switch would log out. Null: the helper is loaded but could not answer,
+// which counts as busy; a helper that is not loaded is never busy.
+internal readonly record struct SwitchSafetyFacts(bool InQueue, bool? NavigationRunning, bool? MultiModeEnabled);
+
+internal enum SwitchBlock : byte { None, Queue, Navigation, MultiMode }
+
+internal static class SwitchSafety
+{
+    // A logout must never cut short a duty, match or world visit queue, a vnavmesh path or AutoRetainer's multi-mode.
+    public static SwitchBlock Check(in SwitchSafetyFacts facts)
+    {
+        if (facts.InQueue)
+        {
+            return SwitchBlock.Queue;
+        }
+
+        if (facts.NavigationRunning != false)
+        {
+            return SwitchBlock.Navigation;
+        }
+
+        return facts.MultiModeEnabled != false ? SwitchBlock.MultiMode : SwitchBlock.None;
+    }
 }
 
 internal enum SwitchStartResult : byte
@@ -28,6 +69,7 @@ internal enum SwitchStartResult : byte
     AlreadyThatCharacter,
     InvalidWorld,
     Refused,
+    OtherWork,
 }
 
 internal readonly record struct SwitchStart(SwitchStartResult Result, long Token);
@@ -59,7 +101,7 @@ internal readonly record struct SwitchObservation(
     long ReadyForMs,
     long IdleLoggedOutMs);
 
-internal readonly record struct SwitchRequest(ulong ContentId, uint HomeWorldId, ulong PreviousContentId);
+internal readonly record struct SwitchRequest(ulong ContentId, uint HomeWorldId);
 
 internal static class CharacterSwitchRules
 {
@@ -74,9 +116,15 @@ internal static class CharacterSwitchRules
     public const int LoginFailedGraceMs = 60_000;
 
     // Only a character that logged in after the previous one logged out counts; the previous one is never taken for it.
-    // The requested content ID and home world must both match before the switch is done.
+    // The requested content ID and home world must both match, and Lifestream must have finished its own work, before the
+    // switch is done. Lifestream busy again with work that is not ours means the switch is not ours to finish either.
     public static SwitchState Evaluate(in SwitchRequest request, in SwitchObservation observation)
     {
+        if (observation.Dependency == TravelPhase.TakenOver)
+        {
+            return SwitchState.NotStarted;
+        }
+
         if (observation.LoggedIn && observation.Ready && observation.SawLogout)
         {
             if (observation.ContentId != request.ContentId)
@@ -89,7 +137,7 @@ internal static class CharacterSwitchRules
                 return SwitchState.WrongHomeWorld;
             }
 
-            if (observation.ReadyForMs >= SettleMs)
+            if (observation.ReadyForMs >= SettleMs && observation.Dependency is TravelPhase.Finished or TravelPhase.NeverStarted)
             {
                 return SwitchState.Switched;
             }
@@ -105,6 +153,4 @@ internal static class CharacterSwitchRules
 
         return observation.ElapsedMs >= DeadlineMs ? SwitchState.TimedOut : SwitchState.Switching;
     }
-
-    public static bool IsTerminal(SwitchState state) => state != SwitchState.Switching;
 }

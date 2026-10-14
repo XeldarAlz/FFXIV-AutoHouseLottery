@@ -20,6 +20,7 @@ internal enum StartRefusal : byte
     NoAssignment,
     MultipleWinsNeedConfirmation,
     AutoAnswerPlugin,
+    BatchWaiting,
 }
 
 // Facts the controller reads before it takes the lease. Blockers are the preview's, for the logged-in character.

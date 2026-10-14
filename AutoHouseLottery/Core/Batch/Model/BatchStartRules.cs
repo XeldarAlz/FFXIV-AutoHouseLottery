@@ -4,11 +4,12 @@ using AutoHouseLottery.Core.Tasks.Model;
 namespace AutoHouseLottery.Core.Batch.Model;
 
 // Facts the controller reads before a batch takes the lease. Blockers and PolicyError are the batch preview's.
-// LoggedInAssigned: the logged-in character is one of the planned entries. LoggedInPending: that character has an entry
-// attempt still in question.
+// UnfinishedBatch: an earlier batch waits for a login or was halted and has not been discarded. LoggedInAssigned: the
+// logged-in character is one of the planned entries. LoggedInPending: that character has an entry attempt in question.
 internal readonly record struct BatchStartFacts(
     bool Running,
     bool OtherWorkBusy,
+    bool UnfinishedBatch,
     bool LoggedIn,
     bool AutoAnswerLoaded,
     bool InContent,
@@ -23,9 +24,9 @@ internal readonly record struct BatchStartFacts(
 
 internal static class BatchStartRules
 {
-    // The single-run checks, applied to the whole batch. The cycle is confirmed at each placard, so an estimated cycle does
-    // not stop a start. Without switching, the batch starts only from one of its own characters, since nothing else could
-    // run now.
+    // The single-run checks, applied to the whole batch. A batch never replaces one that still waits; the player continues
+    // or discards it first. The cycle is confirmed at each placard, so an estimated cycle does not stop a start. Without
+    // switching, the batch starts only from one of its own characters, since nothing else could run now.
     public static StartRefusal Check(in BatchStartFacts facts)
     {
         if (facts.Running)
@@ -36,6 +37,11 @@ internal static class BatchStartRules
         if (facts.OtherWorkBusy)
         {
             return StartRefusal.Busy;
+        }
+
+        if (facts.UnfinishedBatch)
+        {
+            return StartRefusal.BatchWaiting;
         }
 
         if (!facts.LoggedIn)

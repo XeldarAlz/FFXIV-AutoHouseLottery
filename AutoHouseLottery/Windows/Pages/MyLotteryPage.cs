@@ -460,7 +460,7 @@ internal sealed class MyLotteryPage
             Tooltip.Show(Loc.T(L.Settlement.SwitchForRefundsHelp));
         }
 
-        if (enabled && !plugin.Controller.SwitchingAllowed)
+        if (enabled && !plugin.Controller.RefundSwitchingAllowed)
         {
             ImGui.SameLine();
             ImGui.TextColored(Styling.TextDim, Loc.T(L.Settlement.SwitchingNotAllowed));

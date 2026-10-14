@@ -39,6 +39,7 @@ internal static class RunText
         StartRefusal.AlreadyEntered => L.RunStart.AlreadyEntered,
         StartRefusal.EntryPeriodClosed => L.RunStart.EntryPeriodClosed,
         StartRefusal.MultipleWinsNeedConfirmation => L.RunStart.MultipleWins,
+        StartRefusal.BatchWaiting => L.RunStart.BatchWaiting,
         _ => L.RunStart.NoAssignment,
     });
 
@@ -78,6 +79,7 @@ internal static class RunText
             EntryFailure.JournalUnavailable => L.RunFailure.JournalUnavailable,
             EntryFailure.CharacterChanged => L.RunFailure.CharacterChanged,
             EntryFailure.InspectionsExhausted => L.RunFailure.InspectionsExhausted,
+            EntryFailure.GroupEnteredElsewhere => L.RunFailure.GroupEnteredElsewhere,
             EntryFailure.SubmissionUncertain => L.RunFailure.SubmissionUncertain,
             _ => L.RunFailure.Rejected,
         });

@@ -1,6 +1,7 @@
 using AutoHouseLottery.Core.Batch.Model;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Housing.Model;
+using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Selection.Model;
 using AutoHouseLottery.Core.Tasks.Model;
 using static AutoHouseLottery.Tests.Batch.BatchPlanningTests;
@@ -212,24 +213,147 @@ public sealed class BatchRulesTests
         var report = BatchRules.Report(batch);
 
         Assert.Equal(new BatchReport(1, 0, 1, 1, 0, 1, 0, Deposit), report);
-        Assert.Equal(4, report.Total);
         Assert.True(BatchRules.DisplayRank(BatchMemberState.Entered) < BatchRules.DisplayRank(BatchMemberState.NotEntered));
         Assert.True(BatchRules.DisplayRank(BatchMemberState.Entered) < BatchRules.DisplayRank(BatchMemberState.Excluded));
     }
 
     [Fact]
-    public void EachMemberKeepsItsOwnCapAndReserveSoNothingIsPooled()
+    public void EachMemberReservesItsOwnMaximumAgainstItsOwnCapAndGilSoNothingIsPooled()
     {
         var keys = Ward(2);
-        var roster = new[] { Character(1), Character(2) };
-        var policy = Policy(keys, Settings(1) with { DepositCap = 4_000_000, GilReserve = 10 }, Settings(2) with { DepositCap = 3_500_000, GilReserve = 20 });
+        var roster = new[] { Character(1, accountGroup: 1), Character(2, accountGroup: 2) };
+        var policy = Policy(keys, Settings(1), Settings(2));
+        var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, true, now);
+        var first = batch.Members[batch.IndexOf(1)];
+        var second = batch.Members[batch.IndexOf(2)];
+        var firstBudget = new CharacterBudget(first.Settings.DepositCap, first.Settings.GilReserve, 0);
+        var ownGil = Deposit + first.Settings.GilReserve;
 
+        Assert.True(default(DepositLedger).TryReserve(first.Assignment!.Value.MaximumDeposit, out var firstLedger));
+        Assert.True(default(DepositLedger).TryReserve(second.Assignment!.Value.MaximumDeposit, out _));
+        Assert.True(firstLedger.TryReserve(second.Assignment.Value.MaximumDeposit, out var pooled));
+        Assert.Equal(BudgetCheck.Fits, BudgetRules.Check(firstBudget, default, Deposit, ownGil));
+        Assert.Equal(BudgetCheck.OverDepositCap, BudgetRules.Check(firstBudget, pooled, Deposit, 10 * ownGil));
+        Assert.Equal(BudgetCheck.Fits, BatchRules.Affordable(firstBudget, first.Assignment.Value.TargetOrder, batch.Ranking, ownGil));
+        Assert.Equal(BudgetCheck.BelowReserve, BatchRules.Affordable(firstBudget, first.Assignment.Value.TargetOrder, batch.Ranking, ownGil - 1));
+    }
+
+    [Fact]
+    public void TheFreshBalanceIsCheckedAgainstTheWholeTargetOrder()
+    {
+        PlotKey[] targets = [Plot(1, 1), Plot(1, 2), Plot(1, 3)];
+        System.Collections.Immutable.ImmutableArray<RankedPlot> ranking =
+        [
+            new(targets[0], 1, 3 * Deposit),
+            new(targets[1], 2, Deposit),
+            new(targets[2], 3, null),
+        ];
+        var budget = new CharacterBudget(3 * Deposit, 0, 0);
+
+        Assert.Equal(BudgetCheck.Fits, BatchRules.Affordable(budget, [targets[0], targets[1]], ranking, Deposit));
+        Assert.Equal(BudgetCheck.BelowReserve, BatchRules.Affordable(budget, [targets[0], targets[1]], ranking, Deposit - 1));
+        Assert.Equal(BudgetCheck.DepositUnknown, BatchRules.Affordable(budget, [targets[0], targets[2]], ranking, Deposit));
+        Assert.Equal(BudgetCheck.BalanceUnknown, BatchRules.Affordable(budget, [targets[0], targets[1]], ranking, null));
+        Assert.Equal(BudgetCheck.OverDepositCap, BatchRules.Affordable(budget with { DepositCap = Deposit - 1 }, [targets[0], targets[1]], ranking, 10 * Deposit));
+    }
+
+    [Fact]
+    public void AFreshCheckNamesWhyAMemberIsLeftOut()
+    {
+        Assert.Equal((EligibilityReason.None, EntryFailure.None), BatchRules.Recheck(EligibilityReason.None, BudgetCheck.Fits));
+        Assert.Equal((EligibilityReason.None, EntryFailure.None), BatchRules.Recheck(EligibilityReason.None, BudgetCheck.DepositUnknown));
+        Assert.Equal((EligibilityReason.InsufficientGil, EntryFailure.OverBudget), BatchRules.Recheck(EligibilityReason.None, BudgetCheck.BelowReserve));
+        Assert.Equal((EligibilityReason.DepositOverCap, EntryFailure.OverBudget), BatchRules.Recheck(EligibilityReason.None, BudgetCheck.OverDepositCap));
+        Assert.Equal(EntryFailure.AlreadyEntered, BatchRules.Recheck(EligibilityReason.AlreadyEnteredThisCycle, BudgetCheck.BelowReserve).Failure);
+        Assert.Equal(EntryFailure.CollectRefundFirst, BatchRules.Recheck(EligibilityReason.OutstandingRefundOrProperty, BudgetCheck.Fits).Failure);
+        Assert.Equal(EntryFailure.CharacterIneligible, BatchRules.Recheck(EligibilityReason.AccountOwnsLandOnWorld, BudgetCheck.Fits).Failure);
+    }
+
+    [Fact]
+    public void WithAnExactMemberTheLoggedInCharacterGoesFirstButNeverFallsBackToAnotherPlot()
+    {
+        var keys = Ward(5);
+        var roster = new[] { Character(1), Character(2), Character(3) };
+        var policy = Policy(keys, Settings(1) with { Target = keys[3] }, Settings(2), Settings(3));
         var batch = BatchRules.Create(Guid.NewGuid(), policy, AssignmentPlanner.Build(policy, roster, Listed(keys), now), roster, true, now);
 
-        Assert.Equal(policy.Characters[0], batch.Members[batch.IndexOf(1)].Settings);
-        Assert.Equal(policy.Characters[1], batch.Members[batch.IndexOf(2)].Settings);
-        Assert.Equal(Deposit, batch.Members[0].Assignment!.Value.MaximumDeposit);
-        Assert.Equal(Deposit, batch.Members[1].Assignment!.Value.MaximumDeposit);
+        var first = BatchRules.Next(batch, loggedIn: 2, switchingAllowed: true);
+        Assert.Equal(2UL, batch.Members[first.MemberIndex].ContentId);
+        Assert.Equal<PlotKey>([keys[3]], batch.Members[first.MemberIndex].Assignment!.Value.TargetOrder);
+        batch = BatchRules.Record(batch, first.MemberIndex, BatchMemberState.NotEntered, EntryFailure.ChangedPrice, null, null, now);
+        batch = BatchRules.Record(batch, batch.IndexOf(3), BatchMemberState.DryRun, EntryFailure.None, keys[3], Deposit, now);
+
+        var exact = batch.Members[batch.IndexOf(1)];
+        Assert.Equal(BatchMemberState.Queued, exact.State);
+        Assert.Equal<PlotKey>([keys[3]], exact.Assignment!.Value.TargetOrder);
+    }
+
+    [Fact]
+    public void AnEntryLeavesOutEveryWaitingGroupMemberWhosePlanLacksThatPlot()
+    {
+        var batch = Batch(out _);
+        var lead = batch.Members[0].Assignment!.Value;
+        var entered = lead.TargetOrder[0];
+        var other = lead.TargetOrder[1];
+        var lacking = batch.Members[1] with { Assignment = batch.Members[1].Assignment!.Value with { TargetOrder = [other] } };
+        var exactElsewhere = batch.Members[2] with { Assignment = batch.Members[2].Assignment!.Value with { TargetOrder = [other], Exact = true } };
+        batch = batch with { Members = [batch.Members[0], lacking, exactElsewhere] };
+
+        var recorded = BatchRules.Record(batch, 0, BatchMemberState.Entered, EntryFailure.None, entered, Deposit, now);
+
+        Assert.Equal(BatchMemberState.NotEntered, recorded.Members[1].State);
+        Assert.Equal(EntryFailure.GroupEnteredElsewhere, recorded.Members[1].Failure);
+        Assert.Equal<PlotKey>([other], recorded.Members[1].Assignment!.Value.TargetOrder);
+        Assert.Equal(BatchMemberState.NotEntered, recorded.Members[2].State);
+        Assert.Equal(EntryFailure.GroupEnteredElsewhere, recorded.Members[2].Failure);
+    }
+
+    [Fact]
+    public void AnEntryInQuestionIsLookedAtAgainFromTheJournalOnContinue()
+    {
+        var batch = Batch(out _);
+        var cycle = batch.Policy.Cycle.Cycle;
+        var plot = batch.Members[0].Assignment!.Value.TargetOrder[0];
+        batch = BatchRules.Record(batch, 0, BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
+        batch = BatchRules.Record(batch, 1, BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
+        batch = BatchRules.Record(batch, 2, BatchMemberState.Uncertain, EntryFailure.SubmissionUncertain, null, null, now);
+        var receipt = new EntryReceipt
+        {
+            ReceiptId = Guid.NewGuid(),
+            CharacterContentId = batch.Members[0].ContentId,
+            HomeWorldId = HomeWorld,
+            Cycle = cycle,
+            Plot = plot,
+            Buyer = BuyerType.Private,
+            Evidence = ReceiptEvidence.Reconciled,
+            Deposit = Deposit,
+            EnteredUtc = ObservedAt,
+        };
+        var pending = new ActionAttempt
+        {
+            AttemptId = Guid.NewGuid(),
+            Kind = ActionKind.Entry,
+            RunId = Guid.NewGuid(),
+            CharacterContentId = batch.Members[2].ContentId,
+            HomeWorldId = HomeWorld,
+            Cycle = cycle,
+            Plot = plot,
+            Buyer = BuyerType.Private,
+            Amount = Deposit,
+            PreparedUtc = ObservedAt,
+            State = AttemptState.NeedsReconciliation,
+            UpdatedUtc = ObservedAt,
+        };
+        var journal = new JournalSnapshot([pending], [receipt], [EntrySettlement.Entered(receipt.ReceiptId, ObservedAt)]);
+
+        var reevaluated = BatchRules.Reevaluate(batch, journal, now);
+
+        Assert.Equal(BatchMemberState.Entered, reevaluated.Members[0].State);
+        Assert.Equal(plot, reevaluated.Members[0].Plot);
+        Assert.Equal(Deposit, reevaluated.Members[0].Deposit);
+        Assert.Equal(BatchMemberState.Queued, reevaluated.Members[1].State);
+        Assert.Equal<PlotKey>([plot], reevaluated.Members[1].Assignment!.Value.TargetOrder);
+        Assert.Equal(BatchMemberState.Uncertain, reevaluated.Members[2].State);
     }
 
     // Three ungrouped private characters on one world: one ownership group, Same plot, in policy order.

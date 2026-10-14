@@ -3,6 +3,7 @@ using AutoHouseLottery.Core.Batch.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
+using AutoHouseLottery.Core.Tasks.Model;
 using AutoHouseLottery.Windows.Components;
 using AutoHouseLottery.Windows.Find;
 using Dalamud.Interface;
@@ -14,6 +15,11 @@ namespace AutoHouseLottery.Windows.Sections;
 // action that fits. A batch that waits for a login or was halted goes on only from Continue; a finished one is dismissed.
 internal static class BatchPanel
 {
+    private const long RecheckMs = Core.TimeUnits.MillisecondsPerSecond;
+
+    private static StartRefusal continueRefusal = StartRefusal.NoAssignment;
+    private static long continueCheckedMs;
+
     public static bool Visible(RunController controller) => controller.Batch is not null;
 
     public static void Draw(Plugin plugin)
@@ -24,7 +30,9 @@ internal static class BatchPanel
             return;
         }
 
-        var text = BatchPanelText.Shared.For(batch);
+        var waiting = batch.Phase is BatchPhase.WaitingForLogin or BatchPhase.Halted;
+        var refusal = waiting ? ContinueRefusal(controller) : StartRefusal.None;
+        var text = BatchPanelText.Shared.For(batch, refusal);
         var card = NoticeCard.Begin(text.Icon, text.Title, text.Body, text.Members, text.Accent, hasButtons: true);
         switch (batch.Phase)
         {
@@ -36,14 +44,10 @@ internal static class BatchPanel
 
                 break;
             case BatchPhase.WaitingForLogin or BatchPhase.Halted:
-                if (NoticeCard.Button(ref card, "##ahl_batch_continue", Loc.T(L.Batch.Continue), Styling.AccentMint, PillButton.Emphasis.Filled, FontAwesomeIcon.Play, controller.BatchContinuable(),
-                        controller.BatchContinuable() ? null : Loc.T(L.Batch.WaitingBody)))
+                if (NoticeCard.Button(ref card, "##ahl_batch_continue", Loc.T(L.Batch.Continue), Styling.AccentMint, PillButton.Emphasis.Filled, FontAwesomeIcon.Play, refusal == StartRefusal.None))
                 {
-                    var refusal = controller.ContinueBatch();
-                    if (refusal != Core.Tasks.Model.StartRefusal.None)
-                    {
-                        Core.RunLog.Info($"Batch continue refused: {refusal}.");
-                    }
+                    continueRefusal = controller.ContinueBatch();
+                    continueCheckedMs = Environment.TickCount64;
                 }
 
                 if (NoticeCard.Button(ref card, "##ahl_batch_discard", Loc.T(L.Batch.Discard), Styling.AccentNebula, PillButton.Emphasis.Ghost, FontAwesomeIcon.Times))
@@ -63,6 +67,19 @@ internal static class BatchPanel
 
         NoticeCard.End(card);
     }
+
+    // The same checks Continue makes, asked once a second rather than every frame.
+    private static StartRefusal ContinueRefusal(RunController controller)
+    {
+        var now = Environment.TickCount64;
+        if (now - continueCheckedMs >= RecheckMs)
+        {
+            continueRefusal = controller.ContinueCheck();
+            continueCheckedMs = now;
+        }
+
+        return continueRefusal;
+    }
 }
 
 // The batch card's words, formatted once per checkpoint and language, so a frame allocates nothing.
@@ -71,6 +88,7 @@ internal sealed class BatchPanelText
     public static readonly BatchPanelText Shared = new();
 
     private BatchCheckpoint? builtFor;
+    private StartRefusal builtRefusal;
     private LanguageInfo? builtLanguage;
 
     public FontAwesomeIcon Icon { get; private set; }
@@ -83,14 +101,16 @@ internal sealed class BatchPanelText
 
     public string Members { get; private set; } = string.Empty;
 
-    public BatchPanelText For(BatchCheckpoint batch)
+    // Refusal: why Continue would not go on now, said on the card itself; None while Continue would go on.
+    public BatchPanelText For(BatchCheckpoint batch, StartRefusal refusal)
     {
-        if (ReferenceEquals(batch, builtFor) && ReferenceEquals(Loc.Current, builtLanguage))
+        if (ReferenceEquals(batch, builtFor) && refusal == builtRefusal && ReferenceEquals(Loc.Current, builtLanguage))
         {
             return this;
         }
 
         builtFor = batch;
+        builtRefusal = refusal;
         builtLanguage = Loc.Current;
         var report = BatchRules.Report(batch);
         var summary = Loc.T(L.Batch.Summary, report.Entered, report.DryRun, report.Queued + report.Running, report.NotEntered + report.Excluded);
@@ -103,6 +123,11 @@ internal sealed class BatchPanelText
             _ => (FontAwesomeIcon.CheckCircle, report.Entered + report.DryRun > 0 ? Styling.AccentMint : Styling.AccentAmber, Loc.T(L.Batch.TitleFinished),
                 batch.Halt == BatchHalt.None ? summary : string.Concat(HaltText(batch.Halt), " ", summary)),
         };
+        if (refusal != StartRefusal.None && !(batch.Phase == BatchPhase.WaitingForLogin && refusal == StartRefusal.CharacterNotInPolicy))
+        {
+            Body = string.Concat(Body, " ", refusal == StartRefusal.CharacterNotInPolicy ? Loc.T(L.Batch.WaitingBody) : RunText.Refusal(refusal));
+        }
+
         Members = MemberLines(batch);
         return this;
     }
@@ -145,7 +170,7 @@ internal sealed class BatchPanelText
             BatchMemberState.DryRun => Loc.T(L.Batch.MemberDryRun, name, address, deposit),
             BatchMemberState.Running => Loc.T(L.Batch.MemberRunning, name),
             BatchMemberState.Uncertain => Loc.T(L.Batch.MemberUncertain, name),
-            BatchMemberState.NotEntered when member.Failure != Core.Tasks.Model.EntryFailure.None => Loc.T(L.Batch.MemberNotEntered, name, RunText.Failure(member.Failure, null)),
+            BatchMemberState.NotEntered when member.Failure != EntryFailure.None => Loc.T(L.Batch.MemberNotEntered, name, RunText.Failure(member.Failure, null)),
             BatchMemberState.NotEntered or BatchMemberState.Excluded => Loc.T(L.Batch.MemberExcluded, name, FindText.Reasons(member.Reasons)),
             _ => Loc.T(L.Batch.MemberQueued, name),
         };
@@ -168,8 +193,9 @@ internal sealed class BatchPanelText
         BatchHalt.CheckpointNotSaved => L.Batch.HaltCheckpoint,
         BatchHalt.Reloaded => L.Batch.HaltReloaded,
         BatchHalt.CycleEnded => L.Batch.HaltCycleEnded,
+        BatchHalt.SwitchBlocked => L.Batch.HaltSwitchBlocked,
         _ => L.Batch.HaltInterrupted,
     });
 
-    private static string HaltText(BatchHalt halt) => halt == BatchHalt.AutoAnswerPlugin ? RunText.Refusal(Core.Tasks.Model.StartRefusal.AutoAnswerPlugin) : Halt(halt);
+    private static string HaltText(BatchHalt halt) => halt == BatchHalt.AutoAnswerPlugin ? RunText.Refusal(StartRefusal.AutoAnswerPlugin) : Halt(halt);
 }

@@ -9,6 +9,7 @@ public sealed class BatchStartRulesTests
     private static readonly BatchStartFacts ready = new(
         Running: false,
         OtherWorkBusy: false,
+        UnfinishedBatch: false,
         LoggedIn: true,
         AutoAnswerLoaded: false,
         InContent: false,
@@ -33,6 +34,12 @@ public sealed class BatchStartRulesTests
     {
         Assert.Equal(StartRefusal.CharacterNotInPolicy, BatchStartRules.Check(ready with { LoggedInAssigned = false }));
         Assert.Equal(StartRefusal.None, BatchStartRules.Check(ready with { LoggedInAssigned = false, SwitchingAllowed = true }));
+    }
+
+    [Fact]
+    public void ANewBatchNeverReplacesOneThatStillWaits()
+    {
+        Assert.Equal(StartRefusal.BatchWaiting, BatchStartRules.Check(ready with { UnfinishedBatch = true }));
     }
 
     [Theory]

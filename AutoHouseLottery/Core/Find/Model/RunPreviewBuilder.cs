@@ -37,8 +37,8 @@ internal static class RunPreviewBuilder
     public static bool IsBatch(ReadOnlySpan<RosterEntry> selected) => !selected.IsEmpty;
 
     // The batch plan: the frozen shortlist and one settings row per selected character, each taking the filters' buyer,
-    // the price ceiling and the shared reserve unless the player set its own. Revision follows the shortlist, so a changed
-    // shortlist is a new plan.
+    // the price ceiling and the shared reserve unless the player set its own, and its own automatic refund setting, as its
+    // run will. Revision follows the shortlist, so a changed shortlist is a new plan.
     public static RunPolicy BatchPolicy(
         ReadOnlySpan<RosterEntry> selected,
         BuyerType filterBuyer,
@@ -55,7 +55,11 @@ internal static class RunPreviewBuilder
             var choice = selected[index].Selection;
             var buyer = choice.Buyer == BuyerType.Unknown ? filterBuyer : choice.Buyer;
             var cap = choice.DepositCap > 0 ? choice.DepositCap : priceCeiling;
-            characters[index] = new CharacterRunSettings(selected[index].ContentId, buyer, cap, choice.Reserve ?? sharedReserve) { Target = choice.Target };
+            characters[index] = new CharacterRunSettings(selected[index].ContentId, buyer, cap, choice.Reserve ?? sharedReserve)
+            {
+                Target = choice.Target,
+                ManualRefunds = selected[index].ManualRefunds,
+            };
         }
 
         return new RunPolicy

@@ -42,6 +42,18 @@ internal sealed class BatchCheckpointFile(string path, Action<Exception, string>
         return null;
     }
 
+    // The last write queued, which every earlier one precedes; an unload waits for it.
+    public Task Pending
+    {
+        get
+        {
+            lock (gate)
+            {
+                return tail;
+            }
+        }
+    }
+
     public Task<bool> Save(BatchCheckpoint? checkpoint)
     {
         lock (gate)

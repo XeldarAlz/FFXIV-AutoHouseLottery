@@ -82,6 +82,22 @@ public sealed class BatchCheckpointTests : IDisposable
     }
 
     [Fact]
+    public void AnInconsistentFileIsRefusedRatherThanActedOn()
+    {
+        var batch = BatchRulesTests.Batch(out _);
+        var stranger = batch.Members[0] with { ContentId = 99, Settings = batch.Members[0].Settings with { ContentId = 99 } };
+        var text = Encoding.UTF8.GetString(BatchCodec.Serialize(batch));
+
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch with { Members = batch.Members.SetItem(0, batch.Members[0] with { Assignment = null }) }), out _));
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch with { Members = batch.Members.SetItem(0, stranger) }), out _));
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch with { Members = batch.Members.Add(batch.Members[0]) }), out _));
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch with { Phase = BatchPhase.Switching }), out _));
+        Assert.False(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch with { SwitchTarget = 99 }), out _));
+        Assert.False(BatchCodec.TryDeserialize(Encoding.UTF8.GetBytes(text.Replace("\"state\": \"Queued\"", "\"state\": 42")), out _));
+        Assert.True(BatchCodec.TryDeserialize(BatchCodec.Serialize(batch), out _));
+    }
+
+    [Fact]
     public void ADamagedCheckpointIsKeptAsideAndTheBatchIsDropped()
     {
         var path = Path.Combine(directory, BatchCheckpointFile.FileName);

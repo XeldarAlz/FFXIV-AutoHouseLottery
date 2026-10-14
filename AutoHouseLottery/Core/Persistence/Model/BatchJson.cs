@@ -103,6 +103,8 @@ internal readonly struct SettingsJson
     public long? Reserve { get; init; }
 
     public PlotKeyJson? Target { get; init; }
+
+    public bool? ManualRefunds { get; init; }
 }
 
 internal readonly struct RankedPlotJson

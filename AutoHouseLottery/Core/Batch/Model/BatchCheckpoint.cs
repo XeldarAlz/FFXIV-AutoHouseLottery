@@ -23,6 +23,7 @@ internal enum BatchHalt : byte
     Reloaded,
     CycleEnded,
     AutoAnswerPlugin,
+    SwitchBlocked,
 }
 
 // How a member's run ended, as the controller saw it: on its own, by the player's Stop, or cut short by a logout, an

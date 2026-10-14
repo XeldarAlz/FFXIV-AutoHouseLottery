@@ -126,7 +126,7 @@ internal sealed partial class RunController
         if (session is not { } active)
         {
             PauseReason = PauseReason.None;
-            if (BatchContinuable())
+            if (ContinueCheck() == StartRefusal.None)
             {
                 ContinueBatch();
             }
@@ -242,7 +242,7 @@ internal sealed partial class RunController
             RunLog.Warning("The last journal write did not finish before unload; the attempt is read back as uncertain at the next load.");
         }
 
-        if (batchSave is { IsCompleted: false } saving && !saving.Wait(JournalWriteWaitMs))
+        if (batchFile.Pending is { IsCompleted: false } saving && !saving.Wait(JournalWriteWaitMs))
         {
             RunLog.Warning("The batch checkpoint did not finish saving before unload; the batch is read back from its previous checkpoint.");
         }

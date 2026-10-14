@@ -9,11 +9,14 @@ using AutoHouseLottery.Core.Tasks.Model;
 
 namespace AutoHouseLottery.Core.Persistence.Model;
 
-// The batch checkpoint file's format. A file that is not complete in every field the batch needs is refused whole: a
-// checkpoint only orders the work, the journal holds what happened, so a refused file loses the batch and nothing else.
+// The batch checkpoint file's format. A file that is not complete and consistent in every field the batch needs is
+// refused whole: a checkpoint only orders the work, the journal holds what happened, so a refused file loses the batch and
+// nothing else, and a batch that is read back can always be acted on.
 internal static class BatchCodec
 {
     public const int Schema = 1;
+
+    private static readonly EligibilityReason knownReasons = KnownReasons();
 
     public static byte[] Serialize(BatchCheckpoint checkpoint)
     {
@@ -66,11 +69,14 @@ internal static class BatchCodec
             || batch.UpdatedUtc is not { } updated
             || batch.DryRun is not { } dryRun
             || batch.Phase is not { } phase
+            || !Enum.IsDefined(phase)
             || batch.Halt is not { } halt
+            || !Enum.IsDefined(halt)
             || batch.Policy is not { } storedPolicy
             || !TryPolicy(storedPolicy, out var policy)
             || !TryRanking(batch.Ranking, out var ranking)
-            || !TryMembers(batch.Members, out var members))
+            || !TryMembers(batch.Members, out var members)
+            || !Consistent(policy, ranking, members, phase, batch.SwitchTarget))
         {
             return false;
         }
@@ -129,6 +135,7 @@ internal static class BatchCodec
         DepositCap = settings.DepositCap,
         Reserve = settings.GilReserve,
         Target = settings.Target is { } target ? PlotKeyJson.From(target) : null,
+        ManualRefunds = settings.ManualRefunds,
     };
 
     private static MemberJson ToJson(BatchMember member) => new()
@@ -178,13 +185,16 @@ internal static class BatchCodec
             || cycle.Cycle is not { } cycleKey
             || !cycleKey.TryToKey(out var key)
             || cycle.Phase is not { } phase
+            || !Enum.IsDefined(phase)
             || cycle.StartUtc is not { } start
             || cycle.EndUtc is not { } end
             || cycle.ScheduleRevision is not { } scheduleRevision
             || cycle.Evidence is not { } evidence
+            || !Enum.IsDefined(evidence)
             || stored.Characters is not { Length: > 0 } characters
             || stored.TravelAllowance is not { } travel
             || stored.Placement is not { } placement
+            || !Enum.IsDefined(placement)
             || stored.MultipleWinRiskAccepted is not { } accepted
             || stored.MaxInspections is not { } inspections
             || stored.CollectRefundsFirst is not { } collectFirst)
@@ -230,7 +240,12 @@ internal static class BatchCodec
     private static bool TrySettings(in SettingsJson stored, out CharacterRunSettings settings)
     {
         settings = default;
-        if (stored.Character is not { } contentId || stored.Buyer is not { } buyer || stored.DepositCap is not { } cap || stored.Reserve is not { } reserve)
+        if (stored.Character is not { } contentId
+            || stored.Buyer is not { } buyer
+            || !Enum.IsDefined(buyer)
+            || stored.DepositCap is not { } cap
+            || stored.Reserve is not { } reserve
+            || stored.ManualRefunds is not { } manualRefunds)
         {
             return false;
         }
@@ -246,7 +261,7 @@ internal static class BatchCodec
             target = key;
         }
 
-        settings = new CharacterRunSettings(contentId, buyer, cap, reserve) { Target = target };
+        settings = new CharacterRunSettings(contentId, buyer, cap, reserve) { Target = target, ManualRefunds = manualRefunds };
         return true;
     }
 
@@ -262,7 +277,7 @@ internal static class BatchCodec
         for (var index = 0; index < plots.Length; index++)
         {
             var plot = stored[index];
-            if (plot.Plot is not { } storedKey || !storedKey.TryToKey(out var key) || plot.Availability is not { } availability)
+            if (plot.Plot is not { } storedKey || !storedKey.TryToKey(out var key) || plot.Availability is not { } availability || !Enum.IsDefined(availability))
             {
                 return false;
             }
@@ -292,8 +307,11 @@ internal static class BatchCodec
                 || member.Settings is not { } storedSettings
                 || !TrySettings(storedSettings, out var settings)
                 || member.State is not { } state
+                || !Enum.IsDefined(state)
                 || member.Failure is not { } failure
+                || !Enum.IsDefined(failure)
                 || member.Reasons is not { } reasons
+                || (reasons & ~knownReasons) != 0
                 || member.UpdatedUtc is not { } updated)
             {
                 return false;
@@ -346,16 +364,21 @@ internal static class BatchCodec
         assignment = default;
         if (stored.Group is not { } group
             || group.Kind is not { } kind
+            || !Enum.IsDefined(kind)
             || group.Region is not { } region
+            || !Enum.IsDefined(region)
             || group.HomeWorld is not { } homeWorld
             || group.Id is not { } groupId
             || stored.Placement is not { } placement
+            || !Enum.IsDefined(placement)
             || !TryPlots(stored.Targets, out var targets)
             || targets.IsEmpty
             || stored.MaximumDeposit is not { } maximum
             || stored.CollectsRefundFirst is not { } collectFirst
             || stored.Blockers is not { } blockers
+            || (blockers & ~knownReasons) != 0
             || stored.Unresolved is not { } unresolved
+            || (unresolved & ~knownReasons) != 0
             || stored.Exact is not { } exact)
         {
             return false;
@@ -373,6 +396,88 @@ internal static class BatchCodec
             Exact = exact,
         };
         return true;
+    }
+
+    // Every member is one of the policy's characters, once, with the policy's settings; a member still to run, running or
+    // in question has an assignment on ranked plots and a left-out one has none; a switch names one of the members.
+    private static bool Consistent(RunPolicy policy, ImmutableArray<RankedPlot> ranking, ImmutableArray<BatchMember> members, BatchPhase phase, ulong? switchTarget)
+    {
+        var switchTargetFound = switchTarget is null;
+        for (var index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (!PolicyHas(policy, member.Settings))
+            {
+                return false;
+            }
+
+            switchTargetFound |= member.ContentId == switchTarget;
+
+            for (var earlierIndex = 0; earlierIndex < index; earlierIndex++)
+            {
+                if (members[earlierIndex].ContentId == member.ContentId)
+                {
+                    return false;
+                }
+            }
+
+            var needsAssignment = member.State is BatchMemberState.Queued or BatchMemberState.Running or BatchMemberState.Uncertain;
+            if ((needsAssignment && member.Assignment is null) || (member.State == BatchMemberState.Excluded && member.Assignment is not null))
+            {
+                return false;
+            }
+
+            if (member.Assignment is { } assignment && !Ranked(ranking, assignment.TargetOrder))
+            {
+                return false;
+            }
+        }
+
+        return switchTargetFound && (phase == BatchPhase.Switching) == switchTarget.HasValue;
+    }
+
+    private static bool PolicyHas(RunPolicy policy, in CharacterRunSettings settings)
+    {
+        for (var index = 0; index < policy.Characters.Length; index++)
+        {
+            if (policy.Characters[index] == settings)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool Ranked(ImmutableArray<RankedPlot> ranking, ImmutableArray<PlotKey> targets)
+    {
+        for (var targetIndex = 0; targetIndex < targets.Length; targetIndex++)
+        {
+            var found = false;
+            for (var index = 0; index < ranking.Length && !found; index++)
+            {
+                found = ranking[index].Key == targets[targetIndex];
+            }
+
+            if (!found)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static EligibilityReason KnownReasons()
+    {
+        var known = EligibilityReason.None;
+        var values = Enum.GetValues<EligibilityReason>();
+        for (var index = 0; index < values.Length; index++)
+        {
+            known |= values[index];
+        }
+
+        return known;
     }
 
     private static bool TryPlots(PlotKeyJson[]? stored, out ImmutableArray<PlotKey> plots)

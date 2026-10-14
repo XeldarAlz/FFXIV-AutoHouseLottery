@@ -10,11 +10,13 @@ using ECommons.DalamudServices;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-// Switch characters to collect refunds (UX section 10): with its explicit option on and switching allowed, once the
-// logged-in character has nothing left the scheduler can do and the player has left the game alone, the refund queue
-// logs in the next character of the selected roster that has result checks or refunds due, and the scheduler then works
-// for that character under its usual rules and gates. Each character is switched to at most once a session; a switch
-// that ends anywhere but on the requested character stops the queue for the session.
+// Switch characters to collect refunds (UX section 10): with its explicit option on and a refund switching grant (or the
+// validated contract), once the logged-in character has nothing left the scheduler can do, the player has left the game
+// alone and nothing else uses it, the refund queue logs in the next character of the selected roster that has result
+// checks due, and the scheduler then works for that character under its usual rules and gates; until refunds are
+// validated, that means checking results and dry-run collection. Each character is switched to at most once until the
+// plugin is unloaded or a new grant is given; a switch that ends anywhere but on the requested character stops the queue
+// until then.
 internal sealed partial class RunController
 {
     private readonly HashSet<ulong> refundSwitchVisited = [];
@@ -23,13 +25,28 @@ internal sealed partial class RunController
     private LeaseOwner? refundSwitchOwner;
     private RosterFacts refundSwitchTarget;
     private bool refundSwitchStopped;
+    private SwitchGrant? refundSwitchGrant;
 
     public bool RefundSwitching => refundSwitchToken != 0;
+
+    public bool RefundSwitchingAllowed
+        => SwitchGate.AllowsRefundQueue(SwitchCapabilities.CharacterSwitchValidated, refundSwitchGrant, switchCapable, DateTime.UtcNow);
+
+    // A maintainer's permission for the refund queue's switches, for two hours. It also gives back the characters already
+    // visited and a queue stopped by a failed switch.
+    public SwitchGrant AllowRefundSwitching()
+    {
+        refundSwitchGrant = new SwitchGrant(SwitchScope.RefundQueue, DateTime.UtcNow);
+        refundSwitchVisited.Clear();
+        refundSwitchStopped = false;
+        RunLog.Warning("REFUND QUEUE SWITCHING ALLOWED for two hours: with Switch characters to collect refunds on, the refund queue may log out and log in your ticked characters through Lifestream.");
+        return refundSwitchGrant;
+    }
 
     private void TryStartRefundSwitch(DateTime nowUtc)
     {
         var configuration = Plugin.Instance.Configuration;
-        if (refundSwitchStopped || !configuration.SwitchForRefunds || !SwitchingAllowed || !RefundSwitchRules.SessionFree(scheduler.Facts))
+        if (refundSwitchStopped || !configuration.SwitchForRefunds || !RefundSwitchingAllowed || !RefundSwitchRules.SessionFree(scheduler.Facts) || CharacterSwitch.Blocked() != SwitchBlock.None)
         {
             return;
         }
@@ -57,14 +74,14 @@ internal sealed partial class RunController
         if (start.Result != SwitchStartResult.Started)
         {
             lease.Release(leaseGrant.Owner);
-            RunLog.Info($"Refund queue: the switch to {facts.Name} did not start ({start.Result}); it is not tried again this session.");
+            RunLog.Info($"Refund queue: the switch to {facts.Name} did not start ({start.Result}); it is not tried again until the plugin is unloaded or a new grant is given.");
             return;
         }
 
         refundSwitchToken = start.Token;
         refundSwitchOwner = leaseGrant.Owner;
         refundSwitchTarget = facts;
-        RunLog.Info($"Refund queue: {Svc.PlayerState.CharacterName} has nothing left to collect, so switching to {facts.Name} of {worldName} for its due result checks and refunds (switch {start.Token}).");
+        RunLog.Info($"Refund queue: {Svc.PlayerState.CharacterName} has nothing left to settle, so switching to {facts.Name} of {worldName} for its due result checks (switch {start.Token}).");
     }
 
     // Once a second, logged in or not.
@@ -94,7 +111,7 @@ internal sealed partial class RunController
         }
 
         refundSwitchStopped = true;
-        RunLog.Warning($"Refund queue: the switch to {refundSwitchTarget.Name} ended {state}; refund switching stops for this session and each character collects at its own login.");
+        RunLog.Warning($"Refund queue: the switch to {refundSwitchTarget.Name} ended {state}; refund switching stops until the plugin is unloaded or a new grant is given, and each character is settled at its own login.");
     }
 
     private void StopRefundSwitch(string reason)
@@ -108,7 +125,7 @@ internal sealed partial class RunController
         refundSwitchToken = 0;
         refundSwitchStopped = true;
         ReleaseRefundSwitchLease();
-        RunLog.Info($"Refund queue: the switch to {refundSwitchTarget.Name} stopped ({reason}); refund switching stops for this session.");
+        RunLog.Info($"Refund queue: the switch to {refundSwitchTarget.Name} stopped ({reason}); refund switching stops until the plugin is unloaded or a new grant is given.");
     }
 
     private void ReleaseRefundSwitchLease()

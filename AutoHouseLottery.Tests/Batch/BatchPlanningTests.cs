@@ -49,32 +49,87 @@ public sealed class BatchPlanningTests
     }
 
     [Fact]
-    public void TheGroupFollowsItsMembersExactTargetOnSamePlot()
+    public void AGroupAnchoredOnAnExactTargetHasNoFallbackForAnyMember()
     {
         var keys = Ward(5);
-        var preview = Plan(Policy(keys, Settings(1), Settings(2) with { Target = keys[4] }, Settings(3)), [Character(1), Character(2), Character(3)], Listed(keys));
+        var roster = new[] { Character(1), Character(2), Character(3) };
+
+        var preview = Plan(Policy(keys, Settings(1), Settings(2) with { Target = keys[4] }, Settings(3)), roster, Listed(keys));
 
         Assert.Equal(3, preview.MaxNewEntries);
         for (var index = 0; index < preview.Assignments.Length; index++)
         {
-            Assert.Equal(keys[4], preview.Assignments[index].TargetOrder[0]);
+            Assert.Equal<PlotKey>([keys[4]], preview.Assignments[index].TargetOrder);
         }
 
         Assert.True(preview.Assignments[0].Exact);
+        Assert.Equal(2UL, preview.Assignments[0].ContentId);
         Assert.Empty(preview.GroupOdds);
         Assert.True(preview.CanRun);
     }
 
     [Fact]
-    public void AnotherMembersEntryNeverMovesAnExactTarget()
+    public void AMemberThatCannotEnterTheAnchoredPlotIsLeftOutRatherThanEnteringAnother()
     {
         var keys = Ward(5);
-        var preview = Plan(Policy(keys, Settings(1), Settings(2) with { Target = keys[4] }), [Character(1), Character(2)], Listed(keys));
-        var follower = Find(preview.Assignments, 1);
+        var plots = Listed(keys);
+        plots[keys[4]] = ListedPlot(keys[4], 4, price: 2 * Deposit);
+        var policy = Policy(keys, Settings(1) with { Target = keys[4], DepositCap = 2 * Deposit }, Settings(2));
 
-        var followed = AssignmentPlanner.FollowConfirmedEntry(preview.Assignments, 1, follower.TargetOrder[1]);
+        var preview = Plan(policy, [Character(1), Character(2)], plots);
 
-        Assert.Equal<PlotKey>([keys[4]], Find(followed, 2).TargetOrder);
+        Assert.Equal<PlotKey>([keys[4]], Assert.Single(preview.Assignments).TargetOrder);
+        var left = Assert.Single(preview.Exclusions);
+        Assert.Equal(2UL, left.ContentId);
+        Assert.Equal(EligibilityReason.GroupOnAnotherPlot | EligibilityReason.DepositOverCap, left.Reasons);
+    }
+
+    [Fact]
+    public void ASecondExactTargetOnAnotherPlotInOneGroupIsLeftOut()
+    {
+        var keys = Ward(5);
+
+        var preview = Plan(Policy(keys, Settings(1) with { Target = keys[4] }, Settings(2) with { Target = keys[1] }), [Character(1), Character(2)], Listed(keys));
+
+        Assert.Equal<PlotKey>([keys[4]], Assert.Single(preview.Assignments).TargetOrder);
+        Assert.Equal(new CharacterExclusion(2, EligibilityReason.GroupOnAnotherPlot), Assert.Single(preview.Exclusions));
+        Assert.Empty(preview.GroupOdds);
+    }
+
+    [Fact]
+    public void AMemberAlreadyEnteredThisCycleAnchorsItsGroupOnThatPlot()
+    {
+        var keys = Ward(5);
+        var entered = Character(3) with
+        {
+            Participation = new CycleParticipation(FirstCycle, EntrySlotState.Entered) { EnteredPlot = keys[2], EnteredUtc = ObservedAt },
+        };
+        var elsewhere = entered with { Participation = entered.Participation with { EnteredPlot = Plot(9, 9) } };
+
+        var onShortlist = Plan(Policy(keys, Settings(1), Settings(2), Settings(3)), [Character(1), Character(2), entered], Listed(keys));
+        var offShortlist = Plan(Policy(keys, Settings(1), Settings(2), Settings(3)), [Character(1), Character(2), elsewhere], Listed(keys));
+
+        Assert.Equal(2, onShortlist.MaxNewEntries);
+        for (var index = 0; index < onShortlist.Assignments.Length; index++)
+        {
+            Assert.Equal<PlotKey>([keys[2]], onShortlist.Assignments[index].TargetOrder);
+        }
+
+        Assert.Empty(offShortlist.Assignments);
+        Assert.Equal(2, CountReason(offShortlist, EligibilityReason.GroupOnAnotherPlot));
+    }
+
+    [Fact]
+    public void EachCharactersOwnRefundSettingDecidesWhetherAnEarlierRefundRulesItOut()
+    {
+        var keys = Ward(2);
+        var refundDue = Character(1) with { Outstanding = OutstandingSettlement.RefundDue };
+
+        var automatic = Plan(Policy(keys, Settings(1)), [refundDue], Listed(keys));
+        var manual = Plan(Policy(keys, Settings(1) with { ManualRefunds = true }), [refundDue], Listed(keys));
+
+        Assert.True(Assert.Single(automatic.Assignments).CollectsRefundFirst);
+        Assert.Equal(EligibilityReason.OutstandingRefundOrProperty, Assert.Single(manual.Exclusions).Reasons);
     }
 
     [Fact]
@@ -261,14 +316,14 @@ public sealed class BatchPlanningTests
         RosterEntry[] selected =
         [
             new(Facts(1), new RosterSelection(true, BuyerType.Unknown, 0, null, null)),
-            new(Facts(2), new RosterSelection(true, BuyerType.FreeCompany, 2_000_000, 50_000, keys[2])),
+            new(Facts(2), new RosterSelection(true, BuyerType.FreeCompany, 2_000_000, 50_000, keys[2])) { ManualRefunds = true },
         ];
         var shortlist = new ShortlistSnapshot(Guid.NewGuid(), 4, [.. keys]);
 
         var policy = RunPreviewBuilder.BatchPolicy(selected, BuyerType.Private, 4_000_000, 300_000, shortlist, VerifiedEntryPhase(), PlacementChoice.Spread, multipleWinRiskAccepted: false);
 
         Assert.Equal(new CharacterRunSettings(1, BuyerType.Private, 4_000_000, 300_000), policy.Characters[0]);
-        Assert.Equal(new CharacterRunSettings(2, BuyerType.FreeCompany, 2_000_000, 50_000) { Target = keys[2] }, policy.Characters[1]);
+        Assert.Equal(new CharacterRunSettings(2, BuyerType.FreeCompany, 2_000_000, 50_000) { Target = keys[2], ManualRefunds = true }, policy.Characters[1]);
         Assert.Equal(PlacementChoice.Spread, policy.Placement);
         Assert.Equal(RunPolicyError.None, RunPolicyRules.Validate(policy));
     }
@@ -297,6 +352,17 @@ public sealed class BatchPlanningTests
         };
 
     private static int Percent(double value) => (int)Math.Round(value * 100);
+
+    private static int CountReason(RunPreview preview, EligibilityReason reason)
+    {
+        var count = 0;
+        for (var index = 0; index < preview.Exclusions.Length; index++)
+        {
+            count += (preview.Exclusions[index].Reasons & reason) != 0 ? 1 : 0;
+        }
+
+        return count;
+    }
 
     private static RunAssignment Find(ImmutableArray<RunAssignment> assignments, ulong contentId)
     {

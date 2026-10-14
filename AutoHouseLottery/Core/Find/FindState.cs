@@ -196,7 +196,7 @@ internal sealed class FindState
                 ? plot
                 : null;
             var selection = new RosterSelection(choice.Selected, (BuyerType)choice.Buyer, choice.DepositCap, choice.Reserve, target);
-            entries.Add(new RosterEntry(HousingContext.FactsOf(contentId, known), selection));
+            entries.Add(new RosterEntry(HousingContext.FactsOf(contentId, known), selection) { ManualRefunds = !configuration.AutomaticRefunds(contentId) });
         }
 
         entries.Sort((left, right) => CompareRoster(left, right, loggedIn));
