@@ -13,7 +13,19 @@ internal sealed class EntryRunSession
 {
     private readonly ImmutableArray<RankedPlot> ranking;
 
-    public EntryRunSession(Guid runId, RunMode mode, EntryMode entryMode, bool dryRunRequested, RunPolicy policy, RunAssignment assignment, CharacterRunSettings settings, string characterName, ImmutableArray<RankedPlot> ranking)
+    // CharacterNumber and CharacterCount place this character in a batch; a single run is character 1 of 1.
+    public EntryRunSession(
+        Guid runId,
+        RunMode mode,
+        EntryMode entryMode,
+        bool dryRunRequested,
+        RunPolicy policy,
+        RunAssignment assignment,
+        CharacterRunSettings settings,
+        string characterName,
+        ImmutableArray<RankedPlot> ranking,
+        int characterNumber = 1,
+        int characterCount = 1)
     {
         RunId = runId;
         Mode = mode;
@@ -24,6 +36,8 @@ internal sealed class EntryRunSession
         Settings = settings;
         CharacterName = characterName;
         StartedUtc = DateTime.UtcNow;
+        CharacterNumber = characterNumber;
+        CharacterCount = characterCount;
         this.ranking = ranking;
         Publish();
     }
@@ -45,6 +59,10 @@ internal sealed class EntryRunSession
     public string CharacterName { get; }
 
     public DateTime StartedUtc { get; }
+
+    public int CharacterNumber { get; }
+
+    public int CharacterCount { get; }
 
     public EntryStep Step { get; private set; } = EntryStep.Ready;
 
@@ -182,6 +200,8 @@ internal sealed class EntryRunSession
             Step = Step,
             ContentId = Settings.ContentId,
             CharacterName = CharacterName,
+            CharacterNumber = CharacterNumber,
+            CharacterCount = CharacterCount,
             Target = Target,
             Inspection = InspectionsUsed,
             InspectionLimit = Assignment.TargetOrder.Length,

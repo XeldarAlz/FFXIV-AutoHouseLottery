@@ -1,16 +1,21 @@
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
+using AutoHouseLottery.Core.Integration;
+using AutoHouseLottery.Core.Integration.Model;
+using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Providers.Model;
 using AutoHouseLottery.Core.Selection.Model;
 
 namespace AutoHouseLottery.Core.Find;
 
 // The Find a home page's state: the selection (area, filters and the one shared shortlist), kept in the settings and
-// the shortlist file. Update runs every frame on the framework thread and only compares a few numbers; when one changes,
-// the whole view is rebuilt on a task and swapped in when it is done.
+// the shortlist file, and the character roster with each character's batch settings. Update runs every frame on the
+// framework thread and only compares a few numbers; when one changes, the whole view is rebuilt on a task and swapped in
+// when it is done. The roster is copied out of the settings on the framework thread, so the task never reads them.
 internal sealed class FindState
 {
     private const string ShortlistName = "Shortlist";
@@ -18,16 +23,22 @@ internal sealed class FindState
     private readonly Configuration configuration;
     private readonly ShortlistStore store;
     private readonly FindSelection selection;
+    private readonly Func<JournalSnapshot> journal;
+    private ImmutableArray<RosterEntry> roster = [];
+    private int selectedCount;
+    private (int Revision, ulong LoggedIn) rosterBuiltFor = (-1, 0);
+    private (int Roster, int Shortlist, PlacementChoice Placement)? multipleWinsAcceptedFor;
     private bool shortlistLoaded;
     private int savedShortlistRevision;
     private int viewRevision;
     private ViewInputs lastInputs;
     private Task<FindView>? building;
 
-    public FindState(Configuration configuration, ShortlistStore store)
+    public FindState(Configuration configuration, ShortlistStore store, Func<JournalSnapshot> journal)
     {
         this.configuration = configuration;
         this.store = store;
+        this.journal = journal;
         selection = LoadSelection(configuration.Find);
     }
 
@@ -49,6 +60,19 @@ internal sealed class FindState
 
     public int QueryRevision => selection.QueryRevision;
 
+    // Every known character, the logged-in one first, with what the player chose for it.
+    public ImmutableArray<RosterEntry> Roster => roster;
+
+    public int SelectedCount => selectedCount;
+
+    public int RosterRevision => configuration.RosterRevision;
+
+    public PlacementChoice Placement => (PlacementChoice)configuration.BatchPlacement;
+
+    // The player's confirmation that only one win per ownership group can be claimed. It holds only for the roster,
+    // shortlist and placement it was given for, so any change to the plan asks again.
+    public bool MultipleWinRiskAccepted => multipleWinsAcceptedFor == (configuration.RosterRevision, Shortlist.Revision, Placement);
+
     public uint WorldFor(CharacterProfile? character) => configuration.Find.WorldId != 0 ? configuration.Find.WorldId : character?.HomeWorldId ?? 0;
 
     public void Update(DateTime nowUtc, CharacterProfile? character, DiscoverySnapshot snapshot)
@@ -68,7 +92,9 @@ internal sealed class FindState
             }
         }
 
+        RefreshRoster(character?.ContentId ?? 0);
         var world = WorldFor(character);
+        var journalSnapshot = journal();
         var inputs = new ViewInputs(
             snapshot.PlotsRevision,
             selection.QueryRevision,
@@ -76,7 +102,10 @@ internal sealed class FindState
             CharacterKey.Of(character),
             world,
             configuration.Find.GilReserve,
-            nowUtc.Ticks / TimeSpan.TicksPerMinute);
+            nowUtc.Ticks / TimeSpan.TicksPerMinute,
+            configuration.RosterRevision,
+            MultipleWinRiskAccepted,
+            journalSnapshot);
         if (building is not null || inputs == lastInputs)
         {
             return;
@@ -95,8 +124,89 @@ internal sealed class FindState
             character,
             configuration.Find.GilReserve,
             selection.QueryRevision,
-            nowUtc);
+            nowUtc,
+            roster,
+            journalSnapshot,
+            Placement,
+            MultipleWinRiskAccepted,
+            configuration.RosterRevision);
         building = Task.Run(() => Build(request));
+    }
+
+    public void SetSelected(ulong contentId, bool chosen) => SetChoice(contentId, ChoiceOf(contentId) with { Selected = chosen });
+
+    public void SetBuyer(ulong contentId, BuyerType buyer) => SetChoice(contentId, ChoiceOf(contentId) with { Buyer = (byte)buyer });
+
+    public void SetDepositCap(ulong contentId, long cap) => SetChoice(contentId, ChoiceOf(contentId) with { DepositCap = Math.Max(0, cap) });
+
+    public void SetReserve(ulong contentId, long? reserve) => SetChoice(contentId, ChoiceOf(contentId) with { Reserve = reserve is { } amount ? Math.Max(0, amount) : null });
+
+    public void SetTarget(ulong contentId, PlotKey? target)
+        => SetChoice(contentId, ChoiceOf(contentId) with { TargetDistrict = target?.DistrictId ?? 0, TargetWard = target?.Ward ?? 0, TargetPlot = target?.Plot ?? 0 });
+
+    public void SetAccountGroup(ulong contentId, int? accountGroup)
+    {
+        configuration.SetAccountGroup(contentId, accountGroup);
+        RunLog.Info($"Account group of character {contentId:X} set to {accountGroup?.ToString() ?? "none"}.");
+    }
+
+    public void SetPlacement(PlacementChoice placement) => configuration.SetBatchPlacement((byte)placement);
+
+    public void AcceptMultipleWins(bool accepted)
+    {
+        multipleWinsAcceptedFor = accepted ? (configuration.RosterRevision, Shortlist.Revision, Placement) : null;
+        RunLog.Info(accepted ? "The player confirmed that only one win per ownership group can be claimed for this plan." : "The multiple-win confirmation was withdrawn.");
+    }
+
+    private static int CompareRoster(in RosterEntry left, in RosterEntry right, ulong loggedIn)
+    {
+        if (left.ContentId == right.ContentId)
+        {
+            return 0;
+        }
+
+        if (left.ContentId == loggedIn || right.ContentId == loggedIn)
+        {
+            return left.ContentId == loggedIn ? -1 : 1;
+        }
+
+        var byName = string.Compare(left.Facts.Name, right.Facts.Name, StringComparison.CurrentCulture);
+        return byName != 0 ? byName : left.ContentId.CompareTo(right.ContentId);
+    }
+
+    private RosterChoice ChoiceOf(ulong contentId) => configuration.ChoiceFor(contentId);
+
+    private void SetChoice(ulong contentId, RosterChoice choice) => configuration.SetChoice(contentId, choice);
+
+    // Copied from the settings whenever they change or another character logs in: the logged-in character first, then
+    // the rest by name. A target is a plot on the character's own home world.
+    private void RefreshRoster(ulong loggedIn)
+    {
+        var key = (configuration.RosterRevision, loggedIn);
+        if (key == rosterBuiltFor)
+        {
+            return;
+        }
+
+        rosterBuiltFor = key;
+        var entries = new List<RosterEntry>(configuration.Characters.Count);
+        foreach (var (contentId, known) in configuration.Characters)
+        {
+            var choice = configuration.ChoiceFor(contentId);
+            PlotKey? target = choice.TargetDistrict != 0 && PlotKey.TryCreate(HousingContext.Region, known.HomeWorldId, choice.TargetDistrict, choice.TargetWard, choice.TargetPlot, out var plot)
+                ? plot
+                : null;
+            var selection = new RosterSelection(choice.Selected, (BuyerType)choice.Buyer, choice.DepositCap, choice.Reserve, target);
+            entries.Add(new RosterEntry(HousingContext.FactsOf(contentId, known), selection));
+        }
+
+        entries.Sort((left, right) => CompareRoster(left, right, loggedIn));
+        roster = [.. entries];
+        selectedCount = 0;
+        for (var index = 0; index < roster.Length; index++)
+        {
+            selectedCount += roster[index].Selection.Selected ? 1 : 0;
+        }
     }
 
     public void SetWorld(uint worldId)
@@ -246,6 +356,8 @@ internal sealed class FindState
         var ranking = preview is { PolicyError: RunPolicyError.None } planned
             ? planned.Ranking
             : BestMatchRanking.Rank(request.Shortlist.Plots.AsSpan(), plots, position);
+        var rosterProfiles = RosterProfilesOf(request, position);
+        var batch = request.Shortlist.Plots.IsEmpty ? null : BuildBatch(request, rosterProfiles, plots, position);
         return new FindView
         {
             Revision = request.Revision,
@@ -260,7 +372,49 @@ internal sealed class FindState
             Preview = preview,
             PreviewPolicy = preview is { PolicyError: RunPolicyError.None } ? policy : null,
             UnavailableCount = ShortlistRules.Unavailable(rows).Length,
+            Batch = batch,
+            RosterProfiles = rosterProfiles,
         };
+    }
+
+    // Every known character as the planner sees it: the logged-in one from its live profile, the others from their last
+    // login and the journal. In roster order.
+    private static ImmutableArray<CharacterProfile> RosterProfilesOf(ViewRequest request, in CyclePosition position)
+    {
+        var roster = request.Roster;
+        var profiles = new CharacterProfile[roster.Length];
+        for (var index = 0; index < profiles.Length; index++)
+        {
+            profiles[index] = request.Character is { } live && live.ContentId == roster[index].ContentId
+                ? live
+                : RosterProfiles.Offline(roster[index].Facts, HousingContext.Region, request.Journal, position);
+        }
+
+        return ImmutableCollectionsMarshal.AsImmutableArray(profiles);
+    }
+
+    private static BatchView? BuildBatch(ViewRequest request, ImmutableArray<CharacterProfile> rosterProfiles, IReadOnlyDictionary<PlotKey, PlotSnapshot> plots, in CyclePosition position)
+    {
+        var chosen = new List<RosterEntry>();
+        var profiles = new List<CharacterProfile>();
+        for (var index = 0; index < request.Roster.Length; index++)
+        {
+            if (request.Roster[index].Selection.Selected)
+            {
+                chosen.Add(request.Roster[index]);
+                profiles.Add(rosterProfiles[index]);
+            }
+        }
+
+        var selected = CollectionsMarshal.AsSpan(chosen);
+        if (!RunPreviewBuilder.IsBatch(selected, request.Character?.ContentId))
+        {
+            return null;
+        }
+
+        var policy = RunPreviewBuilder.BatchPolicy(selected, request.Filter.Buyer, request.Filter.PriceCeiling, request.GilReserve, request.Shortlist, position, request.Placement, request.MultipleWinRiskAccepted);
+        var preview = AssignmentPlanner.Build(policy, CollectionsMarshal.AsSpan(profiles), plots, request.NowUtc);
+        return new BatchView(preview, preview.PolicyError == RunPolicyError.None ? policy : null, [.. profiles], request.RosterRevision);
     }
 
     private void TakeLoadedShortlist()
@@ -310,7 +464,17 @@ internal sealed class FindState
         return new FindSelection(shortlist, area, filter, sort, AreaScope.DistrictMaskOf([.. settings.PreferredDistricts]));
     }
 
-    private readonly record struct ViewInputs(int PlotsRevision, int QueryRevision, int ShortlistRevision, CharacterKey? Character, uint WorldId, long GilReserve, long Minute);
+    private readonly record struct ViewInputs(
+        int PlotsRevision,
+        int QueryRevision,
+        int ShortlistRevision,
+        CharacterKey? Character,
+        uint WorldId,
+        long GilReserve,
+        long Minute,
+        int RosterRevision,
+        bool MultipleWinRiskAccepted,
+        JournalSnapshot Journal);
 
     private sealed record ViewRequest(
         int Revision,
@@ -323,5 +487,10 @@ internal sealed class FindState
         CharacterProfile? Character,
         long GilReserve,
         int QueryRevision,
-        DateTime NowUtc);
+        DateTime NowUtc,
+        ImmutableArray<RosterEntry> Roster,
+        JournalSnapshot Journal,
+        PlacementChoice Placement,
+        bool MultipleWinRiskAccepted,
+        int RosterRevision);
 }

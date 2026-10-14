@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Providers.Model;
@@ -25,6 +26,8 @@ internal sealed class FindView
         Preview = null,
         PreviewPolicy = null,
         UnavailableCount = 0,
+        Batch = null,
+        RosterProfiles = [],
     };
 
     public required int Revision { get; init; }
@@ -52,7 +55,35 @@ internal sealed class FindView
 
     public required int UnavailableCount { get; init; }
 
+    // The batch plan, when the Characters expander selects more than the logged-in character; null otherwise.
+    public required BatchView? Batch { get; init; }
+
+    // Every known character's profile, in the roster's order when the view was built.
+    public required ImmutableArray<CharacterProfile> RosterProfiles { get; init; }
+
+    public CharacterProfile? RosterProfile(ulong contentId)
+    {
+        for (var index = 0; index < RosterProfiles.Length; index++)
+        {
+            if (RosterProfiles[index].ContentId == contentId)
+            {
+                return RosterProfiles[index];
+            }
+        }
+
+        return null;
+    }
+
     public PlotSnapshot? Plot(PlotKey key) => Plots.TryGetValue(key, out var plot) ? plot : null;
 
     public PlotStatus? StatusOf(PlotKey key) => Plots.TryGetValue(key, out var plot) ? PlotStatuses.Classify(plot, Position) : null;
 }
+
+// The batch preview of UX section 8: the plan for every selected character, the profiles it was planned from (offline
+// characters with their last login's gil as an estimate), and the frozen policy Enter for N characters starts. Revision is
+// the roster revision the plan was built from, so Enter waits until it describes what is on screen.
+internal sealed record BatchView(
+    RunPreview Preview,
+    RunPolicy? Policy,
+    ImmutableArray<CharacterProfile> Profiles,
+    int RosterRevision);

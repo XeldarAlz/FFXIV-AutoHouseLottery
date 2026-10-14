@@ -2,6 +2,7 @@ using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Travel.Model;
 using Dalamud.Plugin.Ipc;
+using ECommons;
 using ECommons.DalamudServices;
 using System.Numerics;
 using HousingAddress = (string Name, int World, int City, int Ward, int PropertyType, int Plot, int Apartment, bool ApartmentSubdivision, bool AliasEnabled, string Alias);
@@ -24,6 +25,7 @@ internal sealed class LifestreamIpc
     private const string QuickTravelFailed = "Lifestream IsQuickTravelAvailable failed";
     private const string PlotEntranceFailed = "Lifestream GetPlotEntrance failed";
     private const string CurrentPlotFailed = "Lifestream GetCurrentPlotInfo failed";
+    private const string ChangeCharacterFailed = "Lifestream ChangeCharacter failed";
 
     private static LifestreamIpc? instance;
 
@@ -35,6 +37,8 @@ internal sealed class LifestreamIpc
     private readonly ICallGateSubscriber<uint, int, Vector3?> getPlotEntrance;
     // Lifestream returns (ResidentialAetheryteKind Kind, int Ward, int Plot)?; the enum crosses the gate as its int value.
     private readonly ICallGateSubscriber<(int Kind, int Ward, int Plot)?> getCurrentPlotInfo;
+    // Lifestream's own ECommons ErrorCode crosses the gate into this plugin's copy of the same enum by its value.
+    private readonly ICallGateSubscriber<string, string, ErrorCode> changeCharacter;
 
     private readonly Func<bool?> isBusyCall;
 
@@ -48,6 +52,7 @@ internal sealed class LifestreamIpc
         isQuickTravelAvailable = pluginInterface.GetIpcSubscriber<HousingAddress, bool>("Lifestream.IsQuickTravelAvailable");
         getPlotEntrance = pluginInterface.GetIpcSubscriber<uint, int, Vector3?>("Lifestream.GetPlotEntrance");
         getCurrentPlotInfo = pluginInterface.GetIpcSubscriber<(int Kind, int Ward, int Plot)?>("Lifestream.GetCurrentPlotInfo");
+        changeCharacter = pluginInterface.GetIpcSubscriber<string, string, ErrorCode>("Lifestream.ChangeCharacter");
 
         isBusyCall = () => isBusy.InvokeFunc();
     }
@@ -63,7 +68,10 @@ internal sealed class LifestreamIpc
             isHere.HasFunction,
             isQuickTravelAvailable.HasFunction,
             getPlotEntrance.HasFunction,
-            getCurrentPlotInfo.HasFunction);
+            getCurrentPlotInfo.HasFunction)
+        {
+            ChangeCharacter = changeCharacter.HasFunction,
+        };
 
     // Null when the gate is missing or failed, which callers treat as "cannot tell", never as idle.
     public bool? IsBusy() => IpcGate.Invoke(isBusy.HasFunction, isBusyCall, null, IsBusyFailed);
@@ -99,6 +107,13 @@ internal sealed class LifestreamIpc
     // Zero-based ward and plot, as Lifestream reads them from HousingManager.
     public (int Kind, int Ward, int Plot)? CurrentPlotInfo()
         => IpcGate.Invoke(getCurrentPlotInfo.HasFunction, () => getCurrentPlotInfo.InvokeFunc(), null, CurrentPlotFailed);
+
+    // Logs the current character out and the named one in, by its name and home world's name; Lifestream finds the service
+    // account and data center itself and stores nothing of ours. Success means the request was queued, never that the
+    // character is in: the switch is proved by the game's own content ID and home world. Null when the gate is missing or
+    // failed.
+    public ErrorCode? ChangeCharacter(string name, string homeWorldName)
+        => IpcGate.Invoke<ErrorCode?>(changeCharacter.HasFunction, () => changeCharacter.InvokeFunc(name, homeWorldName), null, ChangeCharacterFailed);
 
     // Lifestream's Abort stops all of its work, so only HousingTravel calls it, and only for work it can attribute.
     public bool Abort()

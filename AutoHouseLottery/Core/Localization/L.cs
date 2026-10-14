@@ -123,6 +123,15 @@ internal static partial class L
         public static readonly LocString New = new("changelog.new", "New");
         public static readonly LocPlural Changes = new("changelog.changes", "{0} change", "{0} changes");
 
+        public static readonly LocString[] Release1100 =
+        [
+            new("changelog.r1100.1", "A Characters list on Find a home: tick several characters, each with its own buyer type, target, deposit cap, reserve and service account"),
+            new("changelog.r1100.2", "Enter for N characters makes one entry per character, on the same plot inside an ownership group and spread across groups, with an estimate of the chance to win"),
+            new("changelog.r1100.3", "Each character pays from its own gil, and the plugin enters only for the logged-in character; the others wait for their own login and a Continue"),
+            new("changelog.r1100.4", "Several wins in one ownership group ask you to choose which plot to claim, and a second claim in that group is refused"),
+            new("changelog.r1100.5", "Character switching through Lifestream, for batches and for collecting refunds, is built in and stays off until it has been validated in game"),
+        ];
+
         public static readonly LocString[] Release1000 =
         [
             new("changelog.r1000.1", "A new window with three pages, Find a home, My lottery and Saved, that fill in as the housing features arrive"),

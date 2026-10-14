@@ -33,11 +33,13 @@ internal sealed class MyLotteryPage
     private const float RowTint = 0.06f;
     private const string Separator = " · ";
     private const string DateFormat = "g";
+    private const int ClaimConfirmWindowMs = 4_000;
 
     // The logged-in character and the estates it holds, read without building a whole character context each frame.
     private readonly record struct CharacterKey(ulong ContentId, ulong? PersonalEstate, ulong? FreeCompanyEstate);
 
-    private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State, string LogInAs, string? SettleHint);
+    // Group: for a win, how its ownership group stands, so several wins ask for a choice and a claimed group locks the rest.
+    private readonly record struct RowView(LotteryRow Row, string Id, string Title, string Facts, string Receipt, string State, string LogInAs, string? SettleHint, ClaimGroupState Group, string? GroupHint);
 
     private ImmutableArray<RowView> rows = [];
     private ImmutableArray<ActionAttempt> cachedAttempts;
@@ -45,7 +47,7 @@ internal sealed class MyLotteryPage
     private ImmutableArray<EntrySettlement> cachedSettlements;
     private CyclePosition cachedPosition;
     private System.Globalization.CultureInfo? cachedCulture;
-    private int cachedCharacterCount;
+    private int cachedRosterRevision;
     private bool historyOpen;
     private ReconcileReport reconcileFor;
     private LanguageInfo? reconcileLanguage;
@@ -58,6 +60,8 @@ internal sealed class MyLotteryPage
     private ulong statusCharacter;
     private LanguageInfo? statusLanguage;
     private string statusText = string.Empty;
+    private Guid armedClaim;
+    private long armedClaimUntil;
 
     public void Draw(Plugin plugin)
     {
@@ -104,14 +108,14 @@ internal sealed class MyLotteryPage
         var housing = plugin.HousingData;
         var snapshot = housing.JournalSnapshot;
         var position = housing.CurrentPosition(DateTime.UtcNow);
-        var characters = plugin.Configuration.Characters.Count;
+        var rosterRevision = plugin.Configuration.RosterRevision;
         var character = Svc.ClientState.IsLoggedIn && Svc.PlayerState.IsLoaded
             ? new CharacterKey(Svc.PlayerState.ContentId, CharacterContextReader.ReadPersonalEstateId(), CharacterContextReader.ReadFreeCompanyEstateId())
             : default;
         var sightings = plugin.Configuration.AbsenceSightings.Count;
         if (snapshot.Attempts == cachedAttempts && snapshot.Receipts == cachedReceipts && snapshot.Settlements == cachedSettlements
             && position.Cycle == cachedPosition.Cycle && position.Phase == cachedPosition.Phase
-            && ReferenceEquals(Loc.Culture, cachedCulture) && characters == cachedCharacterCount && character == cachedCharacter && sightings == cachedSightings)
+            && ReferenceEquals(Loc.Culture, cachedCulture) && rosterRevision == cachedRosterRevision && character == cachedCharacter && sightings == cachedSightings)
         {
             return;
         }
@@ -126,15 +130,20 @@ internal sealed class MyLotteryPage
         cachedSettlements = snapshot.Settlements;
         cachedPosition = position;
         cachedCulture = Loc.Culture;
-        cachedCharacterCount = characters;
+        cachedRosterRevision = rosterRevision;
         var built = LotteryRows.Build(snapshot, position, housing.Schedule);
         var views = ImmutableArray.CreateBuilder<RowView>(built.Length);
         for (var index = 0; index < built.Length; index++)
         {
             var row = built[index];
             var name = CharacterName(plugin, row.ContentId);
+            var group = row.State == LotteryRowState.Won && SettlementLookups.Receipt(snapshot, row.Id) is { } won ? ClaimGroups.Of(snapshot, won, housing.Owner) : default;
+            var settleHint = SettleHint(snapshot, row, context);
+            var groupHint = group.Claimed ? Loc.T(L.Settlement.GroupClaimed)
+                : group.NeedsChoice ? (settleHint is null ? Loc.T(L.Settlement.GroupChoice, group.Wins) : string.Concat(Loc.T(L.Settlement.GroupChoice, group.Wins), " ", settleHint))
+                : null;
             views.Add(new RowView(row, $"##ahl_lottery_action_{row.Id:N}", string.Concat(name, Separator, Address(row)), Facts(row, plugin.Configuration.AbsenceSighting(row.Id)), Receipt(row), StateLabel(row.State), Loc.T(L.Lottery.LogInAs, name),
-                SettleHint(snapshot, row, context)));
+                settleHint, group, groupHint));
         }
 
         rows = views.MoveToImmutable();
@@ -196,7 +205,7 @@ internal sealed class MyLotteryPage
         ImGui.SetCursorScreenPos(new Vector2(right - actionWidth, midY - Layout.ActionPillHeight * scale * 0.5f));
         if (PillButton.Draw(view.Id, actionLabel, accent, PillButton.Emphasis.Tinted, actionIcon, actionEnabled, Layout.ActionPillHeight, actionTooltip))
         {
-            Act(plugin, row);
+            Act(plugin, view);
         }
 
         if (expanded)
@@ -208,8 +217,9 @@ internal sealed class MyLotteryPage
         ImGui.Dummy(new Vector2(width, height + RowGap * scale));
     }
 
-    private void Act(Plugin plugin, LotteryRow row)
+    private void Act(Plugin plugin, in RowView view)
     {
+        var row = view.Row;
         switch (row.Action)
         {
             case LotteryAction.ViewPlot:
@@ -222,7 +232,7 @@ internal sealed class MyLotteryPage
                 Settle(plugin, row, SettlementMode.Refund);
                 return;
             case LotteryAction.ClaimHouse:
-                Settle(plugin, row, SettlementMode.Claim);
+                Claim(plugin, view);
                 return;
             case LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending:
                 Settle(plugin, row, SettlementMode.Inspect);
@@ -243,7 +253,7 @@ internal sealed class MyLotteryPage
         {
         LotteryAction.ViewPlot => (Loc.T(L.Lottery.ViewPlot), true, null),
         LotteryAction.CheckResult => SettleAction(plugin, view, Loc.T(L.Lottery.CheckResult)),
-        LotteryAction.ClaimHouse => SettleAction(plugin, view, Loc.T(L.Lottery.ClaimHouse)),
+        LotteryAction.ClaimHouse => ClaimAction(plugin, view),
         LotteryAction.CollectRefund => SettleAction(plugin, view, Loc.T(L.Lottery.CollectRefund)),
         LotteryAction.VerifyOutcome when row.State == LotteryRowState.SettlementPending => SettleAction(plugin, view, Loc.T(L.Lottery.VerifyOutcome)),
         LotteryAction.VerifyOutcome => (Loc.T(L.Lottery.VerifyOutcome), !plugin.Controller.Busy && row.ContentId == Svc.PlayerState.ContentId,
@@ -259,6 +269,43 @@ internal sealed class MyLotteryPage
     {
         var mine = view.Row.ContentId == Svc.PlayerState.ContentId;
         return (label, mine && !plugin.Controller.Busy && plugin.HousingData.JournalWritable, mine ? view.SettleHint : view.LogInAs);
+    }
+
+    // Several wins in one ownership group can be claimed only once: the claim asks for a second press naming this plot as
+    // the choice, and once one of them is claimed the others stay locked.
+    private (string Label, bool Enabled, string? Tooltip) ClaimAction(Plugin plugin, in RowView view)
+    {
+        var (label, enabled, tooltip) = SettleAction(plugin, view, Loc.T(L.Lottery.ClaimHouse));
+        if (view.Group.Claimed)
+        {
+            return (label, false, view.GroupHint);
+        }
+
+        if (!view.Group.NeedsChoice)
+        {
+            return (label, enabled, tooltip);
+        }
+
+        var armed = armedClaim == view.Row.Id && Environment.TickCount64 < armedClaimUntil;
+        return (armed ? Loc.T(L.Settlement.ChooseThisPlot) : label, enabled, view.Row.ContentId == Svc.PlayerState.ContentId ? view.GroupHint : tooltip);
+    }
+
+    private void Claim(Plugin plugin, in RowView view)
+    {
+        if (view.Group.NeedsChoice && (armedClaim != view.Row.Id || Environment.TickCount64 >= armedClaimUntil))
+        {
+            armedClaim = view.Row.Id;
+            armedClaimUntil = Environment.TickCount64 + ClaimConfirmWindowMs;
+            return;
+        }
+
+        armedClaim = Guid.Empty;
+        if (view.Group.NeedsChoice)
+        {
+            Core.RunLog.Info($"The player chose {Address(view.Row)} to claim out of {view.Group.Wins} wins in one ownership group.");
+        }
+
+        Settle(plugin, view.Row, SettlementMode.Claim);
     }
 
     private static void Settle(Plugin plugin, LotteryRow row, SettlementMode mode)
@@ -318,6 +365,7 @@ internal sealed class MyLotteryPage
 
             ImGui.SameLine();
             ImGui.TextColored(Styling.TextDim, SchedulerStatus(plugin.Controller.SchedulerBlock, contentId));
+            DrawSwitchForRefunds(plugin);
         }
 
         if (summary.Length > 0)
@@ -326,6 +374,37 @@ internal sealed class MyLotteryPage
         }
 
         Styling.VSpace(RowGap);
+    }
+
+    // UX section 10: a separate, explicit option tied to the roster selected on Find a home. It is shown once the plugin
+    // knows more than one character, and says so while switching is not allowed.
+    private static void DrawSwitchForRefunds(Plugin plugin)
+    {
+        var configuration = plugin.Configuration;
+        if (configuration.Characters.Count < 2)
+        {
+            return;
+        }
+
+        var enabled = configuration.SwitchForRefunds;
+        if (ToggleSwitch.Draw("##ahl_lottery_switch_refunds", ref enabled))
+        {
+            configuration.SetSwitchForRefunds(enabled);
+            Core.RunLog.Info($"Switch characters to collect refunds turned {(enabled ? "on" : "off")}.");
+        }
+
+        ImGui.SameLine();
+        ImGui.TextUnformatted(Loc.T(L.Settlement.SwitchForRefunds));
+        if (ImGui.IsItemHovered())
+        {
+            Tooltip.Show(Loc.T(L.Settlement.SwitchForRefundsHelp));
+        }
+
+        if (enabled && !plugin.Controller.SwitchingAllowed)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(Styling.TextDim, Loc.T(L.Settlement.SwitchingNotAllowed));
+        }
     }
 
     private string SchedulerStatus(SchedulerBlock block, ulong contentId)

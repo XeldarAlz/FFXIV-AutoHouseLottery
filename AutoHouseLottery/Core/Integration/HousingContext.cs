@@ -139,6 +139,38 @@ internal sealed class HousingContext : IDisposable
         return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position));
     }
 
+    // What the last login of a known character showed. Framework thread only, since the settings are changed there.
+    public RosterFacts? Facts(ulong contentId)
+        => configuration.Characters.TryGetValue(contentId, out var known) ? FactsOf(contentId, known) : null;
+
+    public static RosterFacts FactsOf(ulong contentId, KnownCharacter known)
+        => new(contentId, known.Name, known.HomeWorldId, known.AccountGroup, known.FreeCompanyId, known.OwnsLand, known.Gil, known.GilSeenUtc, known.SeenUtc);
+
+    public OwnerFacts Owner(ulong contentId)
+        => configuration.Characters.TryGetValue(contentId, out var known) ? new OwnerFacts(known.AccountGroup, known.FreeCompanyId) : default;
+
+    // Every character of a policy as the planner sees it: the logged-in one from its live context, the others from their
+    // last login and the journal. A character the plugin never saw is left out, and the planner reports it unavailable.
+    public CharacterProfile[] Roster(ReadOnlySpan<ulong> contentIds, CharacterContext? loggedIn, in CyclePosition position)
+    {
+        var profiles = new List<CharacterProfile>(contentIds.Length);
+        var journal = JournalSnapshot;
+        for (var index = 0; index < contentIds.Length; index++)
+        {
+            var contentId = contentIds[index];
+            if (loggedIn is { } context && context.ContentId == contentId)
+            {
+                profiles.Add(Profile(context, LastReading(contentId), position));
+            }
+            else if (Facts(contentId) is { } facts)
+            {
+                profiles.Add(RosterProfiles.Offline(facts, Region, journal, position));
+            }
+        }
+
+        return [.. profiles];
+    }
+
     // An entry attempt in question for this cycle holds its entry slot. One from an earlier cycle cannot hold this cycle's
     // slot; it waits for a result check instead (ResultChecks). A refund or claim in question is the settlement's to read
     // back, not the entry run's.

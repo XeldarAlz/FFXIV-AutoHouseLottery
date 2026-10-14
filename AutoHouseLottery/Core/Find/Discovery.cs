@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Maps;
+using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Providers;
 using AutoHouseLottery.Core.Providers.Model;
 using AutoHouseLottery.Core.Saved;
@@ -22,6 +23,7 @@ internal sealed class Discovery : IDisposable
     private const string ScheduleFile = "lottery-schedules.json";
 
     private readonly Func<bool> windowOpen;
+    private readonly Configuration configuration;
     private readonly CurrentCharacter character;
     private readonly NoticeAnnouncer announcer;
     private readonly List<uint> watched = [];
@@ -29,14 +31,15 @@ internal sealed class Discovery : IDisposable
     private (uint World, int Library, int Shortlist) scopeInputs = (uint.MaxValue, -1, -1);
     private long nextTickMs;
 
-    public Discovery(Configuration configuration, string directory, HousingFeedService feed, CurrentCharacter character, Func<bool> windowOpen)
+    public Discovery(Configuration configuration, string directory, HousingFeedService feed, CurrentCharacter character, Func<JournalSnapshot> journal, Func<bool> windowOpen)
     {
         this.windowOpen = windowOpen;
+        this.configuration = configuration;
         this.character = character;
         Names = new GameNames(Svc.Data);
         Maps = new HousingGameMaps(Svc.Data);
         Feed = feed;
-        Find = new FindState(configuration, new ShortlistStore(directory));
+        Find = new FindState(configuration, new ShortlistStore(directory), journal);
         Saved = new SavedService(directory);
         announcer = new NoticeAnnouncer(configuration, Names);
         Svc.Framework.Update += OnUpdate;
@@ -78,6 +81,11 @@ internal sealed class Discovery : IDisposable
         }
 
         nextTickMs = Environment.TickCount64 + TickIntervalMs;
+        if (Character is { } loggedIn)
+        {
+            configuration.RememberFacts(loggedIn.ContentId, loggedIn.ObservedGil, loggedIn.FreeCompanyId, loggedIn.AccountOwnsLandOnHomeWorld, now);
+        }
+
         Feed.Tick(now, Mode(), Scope());
         Saved.Update(now, snapshot, announcer.Announce);
     }

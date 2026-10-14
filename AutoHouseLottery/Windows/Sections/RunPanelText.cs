@@ -14,7 +14,6 @@ internal sealed class RunPanelText
     public static readonly RunPanelText Shared = new();
 
     private const string Separator = " · ";
-    private const int SingleCharacter = 1;
 
     private RunStatus? builtFor;
     private bool builtPaused;
@@ -69,7 +68,7 @@ internal sealed class RunPanelText
 
     private void Build(RunStatus status, bool paused)
     {
-        Title = Loc.T(L.Run.Title, SingleCharacter, SingleCharacter);
+        Title = Loc.T(L.Run.Title, status.CharacterNumber, status.CharacterCount);
         Address = status.Target is { } target ? PlotNames.Address(target) : string.Empty;
         StepLine = status.FinishingVerification ? Loc.T(L.Run.FinishingVerification) : paused ? Loc.T(L.Run.PausedLabel) : RunText.StepLine(status.Step);
         Summary = string.Concat(

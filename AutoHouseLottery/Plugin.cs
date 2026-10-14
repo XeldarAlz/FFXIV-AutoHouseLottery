@@ -95,9 +95,9 @@ public sealed class Plugin : IDalamudPlugin
             completed.Push(housingFeed.Dispose);
             HousingData = new HousingContext(Configuration, directory, housingFeed);
             completed.Push(HousingData.Dispose);
-            Discovery = new Discovery(Configuration, directory, housingFeed, new CurrentCharacter(HousingData), () => appWindow?.IsOpen == true);
+            Discovery = new Discovery(Configuration, directory, housingFeed, new CurrentCharacter(HousingData), () => HousingData.JournalSnapshot, () => appWindow?.IsOpen == true);
             completed.Push(Discovery.Dispose);
-            Controller = new RunController(HousingData, Housing);
+            Controller = new RunController(HousingData, Housing, directory);
             completed.Push(Controller.Shutdown);
             dutyWatcher = new DutyWatcher();
             completed.Push(dutyWatcher.Dispose);
