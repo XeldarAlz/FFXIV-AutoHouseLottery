@@ -141,6 +141,8 @@ public sealed class FindResultsTests
         Assert.Equal(PlotStatus.NeedsRefresh, PlotStatuses.Classify(Listing(Plot(1, 5), cycle: SecondCycle), position));
         Assert.Equal(PlotStatus.NeedsRefresh, PlotStatuses.Classify(Listing(Plot(1, 6), PlotSale.LotteryResults), position));
         Assert.Equal(PlotStatus.NeedsRefresh, PlotStatuses.Classify(conflicted, position));
+        Assert.Equal(PlotStatus.NeedsRefresh, PlotStatuses.Classify(Listing(Plot(1, 8)) with { Sale = null }, position));
+        Assert.Equal(PlotStatus.NotReported, PlotStatuses.Classify(new PlotSnapshot(Plot(1, 9)), position));
     }
 
     [Fact]

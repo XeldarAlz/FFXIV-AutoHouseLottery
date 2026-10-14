@@ -2,6 +2,7 @@ using AutoHouseLottery.Core.Housing.Model;
 
 namespace AutoHouseLottery.Core.Find.Model;
 
+// A listed plot whose lottery phase nobody reported is not "not reported": it is listed, so it needs a closer look.
 internal static class PlotStatuses
 {
     public static PlotStatus Classify(PlotSnapshot plot, in CyclePosition position)
@@ -19,7 +20,7 @@ internal static class PlotStatuses
             PlotAvailability.FirstComeOpen => PlotStatus.ForSale,
             PlotAvailability.Occupied => PlotStatus.Occupied,
             PlotAvailability.NotReported => PlotStatus.NotReported,
-            _ => plot.Sale is null ? PlotStatus.NotReported : PlotStatus.NeedsRefresh,
+            _ => plot.Sale is null && plot.Occupancy is not { Value: PlotOccupancy.Vacant } ? PlotStatus.NotReported : PlotStatus.NeedsRefresh,
         };
     }
 
