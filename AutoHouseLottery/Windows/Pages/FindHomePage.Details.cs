@@ -88,8 +88,8 @@ internal sealed partial class FindHomePage
     {
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
-        TextDraw.At(field.Label, origin, Styling.TextDim);
         var valueWidth = MathF.Min(TextDraw.Measure(field.Value).X, width * 0.6f);
+        TextDraw.At(TextDraw.Truncate(field.Label, width - valueWidth - FieldGap * ImGuiHelpers.GlobalScale), origin, Styling.TextDim);
         TextDraw.At(TextDraw.Truncate(field.Value, width * 0.6f), new Vector2(origin.X + width - valueWidth, origin.Y), Styling.TextStrong);
         var height = TextDraw.LineHeight();
         if (field.Age is { } age)
@@ -121,14 +121,14 @@ internal sealed partial class FindHomePage
         }
 
         DrawSaveToListPopup(key);
-        ImGui.SameLine();
+        SameLineIfRoom(ImGui.GetFrameHeight());
         if (IconButton.Draw(FontAwesomeIcon.Copy, "##ahl_find_detail_copy", ImGui.GetFrameHeight(), Styling.TextSecondary, Loc.T(L.Find.CopyAddress)))
         {
             ImGui.SetClipboardText(PlotLabels.AddressOnWorld(Discovery.Names, key));
             notice.Show(Loc.T(L.Find.Copied), Styling.AccentMint);
         }
 
-        ImGui.SameLine();
+        SameLineIfRoom(ImGui.GetFrameHeight());
         var district = key.DistrictId;
         var preferred = State.IsPreferred(district);
         if (IconButton.Draw(FontAwesomeIcon.Heart, "##ahl_find_detail_prefer", ImGui.GetFrameHeight(), preferred ? Styling.AccentRose : Styling.TextMuted, Loc.T(L.Find.PreferDistrict)))
@@ -136,20 +136,6 @@ internal sealed partial class FindHomePage
             State.TogglePreferred(district);
         }
 
-        Styling.VSpace(6f);
-        if (detailsText.EnterTitle is { } enterTitle)
-        {
-            DrawEnterAction(enterTitle, RunMode.Exact, detailsText.EnterPolicy, detailsText.EnterMissing, exactCheck);
-            return;
-        }
-
-        ImGui.PushTextWrapPos();
-        using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextMuted))
-        {
-            ImGui.TextUnformatted(Loc.T(L.Find.EnterWhenOpen));
-        }
-
-        ImGui.PopTextWrapPos();
     }
 
     // Enter asks for a dry run until entries are validated in game, and a requested dry run no grant can turn real; it

@@ -24,7 +24,7 @@ internal static class SettlementPanel
         {
             var verifying = status.FinishingVerification;
             var active = NoticeCard.Begin(text.Icon, text.Title, text.Body, text.Facts, verifying ? Styling.AccentMint : Styling.AccentBlue, hasButtons: true);
-            if (NoticeCard.Button(ref active, "##ahl_settlement_stop", Loc.T(L.Common.StopRun), Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop, !verifying))
+            if (NoticeCard.TrailingButton(active, "##ahl_settlement_stop", Loc.T(L.Common.StopRun), Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop, !verifying))
             {
                 controller.StopSettlement();
             }

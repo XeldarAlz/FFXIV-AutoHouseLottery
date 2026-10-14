@@ -256,7 +256,7 @@ public sealed class Plugin : IDalamudPlugin
     private void OnDraw()
     {
         var status = Controller.Status;
-        runStrip.IsOpen = !appWindow.IsOpen && (Controller.Busy || (status.RunId != Guid.Empty && status.Step == Core.Tasks.Model.EntryStep.NeedsReconciliation));
+        runStrip.IsOpen = (!appWindow.IsOpen || appWindow.Compact) && (Controller.Busy || (status.RunId != Guid.Empty && status.Step == Core.Tasks.Model.EntryStep.NeedsReconciliation));
         WindowSystem.Draw();
         Configuration.FlushPendingSave();
     }

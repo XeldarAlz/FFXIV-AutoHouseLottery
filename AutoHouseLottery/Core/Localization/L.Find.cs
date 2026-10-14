@@ -86,7 +86,7 @@ internal static partial class L
         public static readonly LocString Loading = new("findHome.loading", "Loading the listings for {0}…");
         public static readonly LocString Failed = new("findHome.failed", "The housing listings could not be loaded. Refresh, or inspect plots in game.");
         public static readonly LocString NoMatches = new("findHome.noMatches", "No reported plots match these filters. Clear filters or change areas.");
-        public static readonly LocString NoCoverage = new("findHome.noCoverage", "This area has no recent coverage. Browse in game or scan it.");
+        public static readonly LocString NoCoverage = new("findHome.noCoverage", "No recent report covers this area. Look around in game, or refresh later.");
         public static readonly LocString NoArea = new("findHome.noArea", "Choose at least one district, ward and division under Areas.");
         public static readonly LocString ClearFilters = new("findHome.clearFilters", "Clear filters");
 

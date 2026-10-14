@@ -13,8 +13,9 @@ using ECommons.DalamudServices;
 
 namespace AutoHouseLottery.Core.Find;
 
-// Owns the housing discovery services and drives them from the framework update: the character and the Find a home view
-// every frame, which only compares numbers, and the listings and saved notices once a second. Nothing here acts in game.
+// Owns the housing discovery services and drives them from the framework update: the character and, while the window is
+// open, the Find a home view every frame, which only compares numbers, and the listings and saved notices once a second.
+// Nothing here acts in game.
 // The feed service, which holds the one plot store and lottery calendar, is the plugin's, shared with the housing context.
 internal sealed class Discovery : IDisposable
 {
@@ -75,7 +76,7 @@ internal sealed class Discovery : IDisposable
         var now = DateTime.UtcNow;
         Character = character.Read();
         var snapshot = Feed.Snapshot;
-        Find.Update(now, Character, snapshot);
+        Find.Update(now, Character, snapshot, windowOpen());
         if (Environment.TickCount64 < nextTickMs)
         {
             return;

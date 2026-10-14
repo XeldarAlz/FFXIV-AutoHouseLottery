@@ -83,6 +83,14 @@ internal static class NoticeCard
         return clicked;
     }
 
+    // Stop sits at the card's right edge, so a long translation of the other buttons can never push it off the card.
+    public static bool TrailingButton(in Card card, string id, string label, Vector4 accent, PillButton.Emphasis emphasis, FontAwesomeIcon icon, bool enabled = true, string? tooltip = null)
+    {
+        var right = card.Origin.X + card.Width - PadX * ImGuiHelpers.GlobalScale;
+        ImGui.SetCursorScreenPos(new Vector2(right - PillButton.Width(label, icon), card.ButtonY));
+        return PillButton.Draw(id, label, accent, emphasis, icon, enabled, Layout.ActionPillHeight, tooltip);
+    }
+
     public static void End(in Card card)
     {
         ImGui.SetCursorScreenPos(card.Origin);

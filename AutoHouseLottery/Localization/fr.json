@@ -355,7 +355,7 @@
   "findHome.loading": "Chargement des annonces de {0}…",
   "findHome.failed": "Les annonces de logement n'ont pas pu être chargées. Actualisez ou inspectez les terrains en jeu.",
   "findHome.noMatches": "Aucun terrain signalé ne correspond à ces filtres. Effacez les filtres ou changez de zones.",
-  "findHome.noCoverage": "Cette zone n'a pas de signalement récent. Parcourez-la en jeu ou scannez-la.",
+  "findHome.noCoverage": "Aucun signalement récent ne couvre cette zone. Parcourez-la en jeu ou actualisez plus tard.",
   "findHome.noArea": "Choisissez au moins un quartier, un secteur et une partie dans Zones.",
   "findHome.clearFilters": "Effacer les filtres",
   "findHome.addAllMatching": "Ajouter tous les résultats · {0}",

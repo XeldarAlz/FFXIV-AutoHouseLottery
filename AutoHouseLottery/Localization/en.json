@@ -355,7 +355,7 @@
   "findHome.loading": "Loading the listings for {0}…",
   "findHome.failed": "The housing listings could not be loaded. Refresh, or inspect plots in game.",
   "findHome.noMatches": "No reported plots match these filters. Clear filters or change areas.",
-  "findHome.noCoverage": "This area has no recent coverage. Browse in game or scan it.",
+  "findHome.noCoverage": "No recent report covers this area. Look around in game, or refresh later.",
   "findHome.noArea": "Choose at least one district, ward and division under Areas.",
   "findHome.clearFilters": "Clear filters",
   "findHome.addAllMatching": "Add all matching · {0}",

@@ -355,7 +355,7 @@
   "findHome.loading": "正在加载 {0} 的信息…",
   "findHome.failed": "无法加载房屋信息。请刷新或在游戏内确认地块。",
   "findHome.noMatches": "没有符合这些筛选条件的已报告地块。请清空筛选或更改区域。",
-  "findHome.noCoverage": "此区域没有近期报告。请在游戏内浏览或扫描。",
+  "findHome.noCoverage": "此区域没有近期报告。请在游戏内浏览，或稍后刷新。",
   "findHome.noArea": "请在区域中至少选择一个住宅区、小区和分区。",
   "findHome.clearFilters": "清空筛选",
   "findHome.addAllMatching": "添加全部匹配 · {0}",

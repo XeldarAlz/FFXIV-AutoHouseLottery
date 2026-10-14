@@ -9,7 +9,7 @@ namespace AutoHouseLottery.Windows.Shell;
 // the work is never invisible. Clicking it opens the main window; it never starts anything itself.
 public sealed class RunStatusWindow : Window
 {
-    private const float StripWidth = 460f;
+    private const float StripWidth = 600f;
     private const ImGuiWindowFlags StripFlags =
         ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse
         | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoFocusOnAppearing;

@@ -355,7 +355,7 @@
   "findHome.loading": "Angebote für {0} werden geladen…",
   "findHome.failed": "Die Wohnungsangebote konnten nicht geladen werden. Aktualisiere oder prüfe Grundstücke im Spiel.",
   "findHome.noMatches": "Keine gemeldeten Grundstücke passen zu diesen Filtern. Leere die Filter oder ändere die Gebiete.",
-  "findHome.noCoverage": "Für dieses Gebiet gibt es keine aktuellen Meldungen. Sieh im Spiel nach oder scanne es.",
+  "findHome.noCoverage": "Kein aktueller Bericht deckt dieses Gebiet ab. Sieh dich im Spiel um oder aktualisiere später.",
   "findHome.noArea": "Wähle unter Gebiete mindestens ein Wohngebiet, einen Bezirk und einen Teil.",
   "findHome.clearFilters": "Filter leeren",
   "findHome.addAllMatching": "Alle Treffer hinzufügen · {0}",

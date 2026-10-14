@@ -355,7 +355,7 @@
   "findHome.loading": "{0} の掲載情報を読み込み中…",
   "findHome.failed": "ハウジングの掲載情報を読み込めませんでした。更新するか、ゲーム内で土地を確認してください。",
   "findHome.noMatches": "条件に合う報告済みの土地はありません。条件をクリアするか、エリアを変えてください。",
-  "findHome.noCoverage": "このエリアには最近の報告がありません。ゲーム内で確認するか、スキャンしてください。",
+  "findHome.noCoverage": "このエリアの最近の報告はありません。ゲーム内で確認するか、後で更新してください。",
   "findHome.noArea": "エリアで住宅街、区、区画をそれぞれ1つ以上選んでください。",
   "findHome.clearFilters": "条件をクリア",
   "findHome.addAllMatching": "該当をすべて追加 · {0}",

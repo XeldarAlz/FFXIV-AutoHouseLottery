@@ -355,7 +355,7 @@
   "findHome.loading": "Cargando los anuncios de {0}…",
   "findHome.failed": "No se pudieron cargar los anuncios de viviendas. Actualiza o inspecciona las parcelas en el juego.",
   "findHome.noMatches": "Ninguna parcela informada coincide con estos filtros. Borra los filtros o cambia las zonas.",
-  "findHome.noCoverage": "Esta zona no tiene informes recientes. Explórala en el juego o escanéala.",
+  "findHome.noCoverage": "Ningún informe reciente cubre esta zona. Explórala en el juego o actualiza más tarde.",
   "findHome.noArea": "Elige al menos una zona residencial, un distrito y una división en Zonas.",
   "findHome.clearFilters": "Borrar filtros",
   "findHome.addAllMatching": "Añadir todas las coincidencias · {0}",

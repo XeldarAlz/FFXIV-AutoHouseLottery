@@ -355,7 +355,7 @@
   "findHome.loading": "Carregando os anúncios de {0}…",
   "findHome.failed": "Não foi possível carregar os anúncios de moradia. Atualize ou inspecione os terrenos no jogo.",
   "findHome.noMatches": "Nenhum terreno informado corresponde a estes filtros. Limpe os filtros ou mude as áreas.",
-  "findHome.noCoverage": "Esta área não tem relatos recentes. Explore no jogo ou faça uma varredura.",
+  "findHome.noCoverage": "Nenhum relato recente cobre esta área. Explore no jogo ou atualize mais tarde.",
   "findHome.noArea": "Escolha pelo menos uma área residencial, um distrito e uma divisão em Áreas.",
   "findHome.clearFilters": "Limpar filtros",
   "findHome.addAllMatching": "Adicionar todos os resultados · {0}",

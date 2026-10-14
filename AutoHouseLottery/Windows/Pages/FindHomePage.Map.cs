@@ -48,6 +48,8 @@ internal sealed partial class FindHomePage
     private (ushort District, int Query) wardPickedFor;
     private (FindResults? Results, ushort District, LanguageInfo? Language, bool Named) wardLabelsFor;
     private (uint Mask, LanguageInfo? Language, bool Named) districtLabelsFor;
+    private (PlotKey Key, int View, long Minute, LanguageInfo? Language, bool Named) tooltipFor;
+    private PlotTooltipText tooltipText;
 
     private void DrawMap(FindView view, DateTime now)
     {
@@ -139,11 +141,16 @@ internal sealed partial class FindHomePage
         }
     }
 
+    // The three pickers shrink together when the results panel is narrower than they are, so the division switch stays
+    // reachable at the smallest window size.
     private void DrawMapBar()
     {
         var scale = ImGuiHelpers.GlobalScale;
+        var spacing = ImGui.GetStyle().ItemSpacing.X;
+        var natural = (DistrictPickerWidth + WardPickerWidth + DivisionSwitchWidth) * scale + spacing * 2f;
+        var fit = MathF.Min(1f, ImGui.GetContentRegionAvail().X / natural);
         var selected = Array.IndexOf(mapDistrictIds, mapDistrict, 0, mapDistrictCount);
-        if (Dropdown.Draw("##ahl_find_map_district", mapDistrictLabels.AsSpan(0, mapDistrictCount), ref selected, DistrictPickerWidth))
+        if (Dropdown.Draw("##ahl_find_map_district", mapDistrictLabels.AsSpan(0, mapDistrictCount), ref selected, DistrictPickerWidth * fit, DistrictPickerWidth))
         {
             mapDistrict = mapDistrictIds[selected];
             mapPan = Vector2.Zero;
@@ -153,7 +160,7 @@ internal sealed partial class FindHomePage
         ImGui.SameLine();
         RefreshWardLabels();
         var ward = mapWard - 1;
-        if (Dropdown.Draw("##ahl_find_map_ward", mapWardLabels, ref ward, WardPickerWidth, searchable: false))
+        if (Dropdown.Draw("##ahl_find_map_ward", mapWardLabels, ref ward, WardPickerWidth * fit, WardPickerWidth, searchable: false))
         {
             mapWard = ward + 1;
         }
@@ -163,7 +170,7 @@ internal sealed partial class FindHomePage
         var division = mapSubdivision ? 1 : 0;
         var origin = ImGui.GetCursorScreenPos();
         ImGui.SetCursorScreenPos(origin - new Vector2(0f, (Layout.ChipHeight * scale - ImGui.GetFrameHeight()) * 0.5f));
-        if (Segmented.Draw("##ahl_find_map_division", divisions, ref division, height: Layout.ChipHeight, width: DivisionSwitchWidth * scale))
+        if (Segmented.Draw("##ahl_find_map_division", divisions, ref division, height: Layout.ChipHeight, width: DivisionSwitchWidth * scale * fit))
         {
             mapSubdivision = division == 1;
         }
@@ -318,22 +325,52 @@ internal sealed partial class FindHomePage
 
     private void ShowPlotTooltip(FindView view, PlotKey key, DateTime now)
     {
+        RefreshPlotTooltip(view, key, now);
         using (Tooltip.Begin())
         {
-            Tooltip.Text(PlotLabels.Address(Discovery.Names, key), Styling.TextStrong);
-            if (view.Plot(key) is not { } plot)
+            Tooltip.Text(tooltipText.Address, Styling.TextStrong);
+            if (tooltipText.Row is not { } row)
             {
-                Tooltip.Text(Loc.T(L.Find.NoListing));
+                Tooltip.Text(tooltipText.Phase);
                 return;
             }
 
-            var row = PlotStatuses.Row(plot, view.Position);
-            Tooltip.Text(string.Concat(FindText.Status(row.Status), TextDraw.Separator, FindText.Size(row.Size)), StatusMarks.Color(row.Status));
-            Tooltip.Text(Loc.T(L.Find.Deposit, FindText.Gil(row.Price)));
-            Tooltip.Text(Loc.T(L.Find.EntriesValue, FindText.Count(row.Entries)));
-            Tooltip.Text(FindText.Observed(row.ObservedUtc, now), Styling.TextDim);
+            Tooltip.Text(tooltipText.Phase, StatusMarks.Color(row.Status));
+            Tooltip.Text(tooltipText.Deposit);
+            Tooltip.Text(tooltipText.Entries);
+            Tooltip.Text(tooltipText.Observed, Styling.TextDim);
         }
     }
+
+    // A tooltip stays up for many frames under a resting pointer, so its lines are formatted once per plot, view, minute
+    // and language.
+    private void RefreshPlotTooltip(FindView view, PlotKey key, DateTime now)
+    {
+        var inputs = (key, view.Revision, now.Ticks / TimeSpan.TicksPerMinute, Loc.Current, Discovery.Names.Ready);
+        if (inputs == tooltipFor)
+        {
+            return;
+        }
+
+        tooltipFor = inputs;
+        var address = PlotLabels.Address(Discovery.Names, key);
+        if (view.Plot(key) is not { } plot)
+        {
+            tooltipText = new PlotTooltipText(address, null, Loc.T(L.Find.NoListing), string.Empty, string.Empty, string.Empty);
+            return;
+        }
+
+        var row = PlotStatuses.Row(plot, view.Position);
+        tooltipText = new PlotTooltipText(
+            address,
+            row,
+            string.Concat(FindText.Status(row.Status), TextDraw.Separator, FindText.Size(row.Size)),
+            Loc.T(L.Find.Deposit, FindText.Gil(row.Price)),
+            Loc.T(L.Find.EntriesValue, FindText.Count(row.Entries)),
+            FindText.Observed(row.ObservedUtc, now));
+    }
+
+    private readonly record struct PlotTooltipText(string Address, ResultRow? Row, string Phase, string Deposit, string Entries, string Observed);
 
     private void DrawLegend()
     {

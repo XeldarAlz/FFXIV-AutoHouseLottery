@@ -19,6 +19,8 @@ internal sealed class SavedService
 {
     private const string FileName = "saved.json";
 
+    private static readonly TimeSpan pruneInterval = TimeSpan.FromHours(1);
+
     private readonly QueuedFile file;
     private readonly Task<FileRead> loading;
     private readonly NoticeLedger ledger = new();
@@ -28,6 +30,7 @@ internal sealed class SavedService
     private PlanInputs lastInputs;
     private bool loaded;
     private bool dirty;
+    private DateTime nextPruneUtc;
 
     public SavedService(string directory)
     {
@@ -197,6 +200,11 @@ internal sealed class SavedService
     {
         Matches = plan.Matches;
         MatchesRevision++;
+        if (nowUtc >= nextPruneUtc)
+        {
+            nextPruneUtc = nowUtc + pruneInterval;
+            dirty |= ledger.Prune(nowUtc) > 0;
+        }
         for (var index = 0; index < plan.Silent.Length; index++)
         {
             dirty |= ledger.TryRecord(plan.Silent[index], nowUtc);

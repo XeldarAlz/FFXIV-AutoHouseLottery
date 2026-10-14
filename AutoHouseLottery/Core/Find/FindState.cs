@@ -9,8 +9,9 @@ using AutoHouseLottery.Core.Selection.Model;
 namespace AutoHouseLottery.Core.Find;
 
 // The Find a home page's state: the selection (area, filters and the one shared shortlist), kept in the settings and
-// the shortlist file. Update runs every frame on the framework thread and only compares a few numbers; when one changes,
-// the whole view is rebuilt on a task and swapped in when it is done.
+// the shortlist file. Update runs every frame on the framework thread and only compares a few numbers; when one changes
+// while the window is open, the whole view is rebuilt on a task and swapped in when it is done. Only the windows read the
+// view, so a closed window costs no rebuilds.
 internal sealed class FindState
 {
     private const string ShortlistName = "Shortlist";
@@ -51,7 +52,7 @@ internal sealed class FindState
 
     public uint WorldFor(CharacterProfile? character) => configuration.Find.WorldId != 0 ? configuration.Find.WorldId : character?.HomeWorldId ?? 0;
 
-    public void Update(DateTime nowUtc, CharacterProfile? character, DiscoverySnapshot snapshot)
+    public void Update(DateTime nowUtc, CharacterProfile? character, DiscoverySnapshot snapshot, bool windowOpen)
     {
         TakeLoadedShortlist();
         SaveShortlistIfChanged();
@@ -77,7 +78,7 @@ internal sealed class FindState
             world,
             configuration.Find.GilReserve,
             nowUtc.Ticks / TimeSpan.TicksPerMinute);
-        if (building is not null || inputs == lastInputs)
+        if (!windowOpen || building is not null || inputs == lastInputs)
         {
             return;
         }

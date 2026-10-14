@@ -21,7 +21,7 @@ using System.Numerics;
 namespace AutoHouseLottery.Windows.Pages;
 
 // Action needed, Active entries and History (UX section 10), per character, from the journal and the entries imported
-// from Timers. Every row has one primary action; the ones that arrive with the results update are shown but disabled.
+// from Timers. Every row has one primary action, disabled with its reason while it cannot run.
 internal sealed class MyLotteryPage
 {
     private const float RowHeight = 64f;
@@ -58,6 +58,7 @@ internal sealed class MyLotteryPage
     private ulong statusCharacter;
     private LanguageInfo? statusLanguage;
     private string statusText = string.Empty;
+    private CachedText historyText;
 
     public void Draw(Plugin plugin)
     {
@@ -86,7 +87,8 @@ internal sealed class MyLotteryPage
         }
 
         Styling.VSpace(SectionGap);
-        if (PillButton.Draw("##ahl_lottery_history", Loc.T(L.Lottery.History, history), Styling.AccentNebula, PillButton.Emphasis.Ghost,
+        var historyLabel = historyText.Get(history, static count => Loc.T(L.Lottery.History, (int)count));
+        if (PillButton.Draw("##ahl_lottery_history", historyLabel, Styling.AccentNebula, PillButton.Emphasis.Ghost,
                 historyOpen ? FontAwesomeIcon.ChevronDown : FontAwesomeIcon.ChevronRight))
         {
             historyOpen = !historyOpen;
@@ -174,7 +176,8 @@ internal sealed class MyLotteryPage
         var width = ImGui.GetContentRegionAvail().X;
         var expanded = expandedReceipt == row.Id;
         var lineHeight = ImGui.GetTextLineHeight();
-        var height = RowHeight * scale + (expanded ? lineHeight + RowGap * scale : 0f);
+        var rowHeight = MathF.Max(RowHeight * scale, RowPadY * 2f * scale + lineHeight * 2f + RowGap * scale * 0.5f);
+        var height = rowHeight + (expanded ? lineHeight + RowGap * scale : 0f);
         var end = origin + new Vector2(width, height);
         var accent = StateColor(row.State);
         Paint.Glass(ImGui.GetWindowDrawList(), origin, end, Styling.CardRounding * scale, accent, RowTint);
@@ -190,7 +193,7 @@ internal sealed class MyLotteryPage
 
         TextDraw.At(TextDraw.Truncate(view.Title, textRight - x), new Vector2(x, top), Styling.TextStrong);
         TextDraw.At(TextDraw.Truncate(view.Facts, textRight - x), new Vector2(x, top + lineHeight + RowGap * scale * 0.5f), Styling.TextDim);
-        var midY = origin.Y + RowHeight * scale * 0.5f;
+        var midY = origin.Y + rowHeight * 0.5f;
         TextDraw.At(view.State, new Vector2(right - actionWidth - StateGap * scale - stateWidth, midY - lineHeight * 0.5f), accent);
 
         ImGui.SetCursorScreenPos(new Vector2(right - actionWidth, midY - Layout.ActionPillHeight * scale * 0.5f));
@@ -201,7 +204,7 @@ internal sealed class MyLotteryPage
 
         if (expanded)
         {
-            TextDraw.At(TextDraw.Truncate(view.Receipt, right - x), new Vector2(x, origin.Y + RowHeight * scale), Styling.TextMuted);
+            TextDraw.At(TextDraw.Truncate(view.Receipt, right - x), new Vector2(x, origin.Y + rowHeight), Styling.TextMuted);
         }
 
         ImGui.SetCursorScreenPos(origin);

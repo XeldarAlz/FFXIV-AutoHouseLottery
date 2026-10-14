@@ -355,7 +355,7 @@
   "findHome.loading": "{0} için ilanlar yükleniyor…",
   "findHome.failed": "Konut ilanları yüklenemedi. Yenileyin veya arsaları oyunda inceleyin.",
   "findHome.noMatches": "Bu filtrelere uyan bildirilmiş arsa yok. Filtreleri temizleyin veya bölgeleri değiştirin.",
-  "findHome.noCoverage": "Bu bölge için yakın tarihli bildirim yok. Oyunda göz atın veya tarayın.",
+  "findHome.noCoverage": "Bu bölgeyi kapsayan yakın tarihli bildirim yok. Oyunda göz atın veya daha sonra yenileyin.",
   "findHome.noArea": "Bölgeler altında en az bir konut bölgesi, mahalle ve kısım seçin.",
   "findHome.clearFilters": "Filtreleri temizle",
   "findHome.addAllMatching": "Tüm eşleşenleri ekle · {0}",
