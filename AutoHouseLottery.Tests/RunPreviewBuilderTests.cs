@@ -16,7 +16,7 @@ public sealed class RunPreviewBuilderTests
     {
         var (plots, shortlist) = Shortlisted(42);
 
-        var preview = RunPreviewBuilder.Build(CharacterFixtures.Character(1), BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
+        var preview = Preview(CharacterFixtures.Character(1), BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
 
         Assert.Equal(42, preview.PlotCount);
         Assert.Equal(1, preview.MaxNewEntries);
@@ -29,7 +29,7 @@ public sealed class RunPreviewBuilderTests
         var (plots, shortlist) = Shortlisted(3);
         var bare = new CharacterProfile { ContentId = 7, Name = "Bare", Region = GameRegion.Global, HomeWorldId = HomeWorld };
 
-        var preview = RunPreviewBuilder.Build(bare, BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
+        var preview = Preview(bare, BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
 
         Assert.Equal(EligibilityVerdict.Unknown, preview.Assignments[0].Eligibility.Verdict);
     }
@@ -40,8 +40,8 @@ public sealed class RunPreviewBuilderTests
         var (plots, shortlist) = Shortlisted(3);
         var character = CharacterFixtures.Character(1);
 
-        var noBuyer = RunPreviewBuilder.Build(character, BuyerType.Unknown, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
-        var noCeiling = RunPreviewBuilder.Build(character, BuyerType.Private, 0, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
+        var noBuyer = Preview(character, BuyerType.Unknown, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
+        var noCeiling = Preview(character, BuyerType.Private, 0, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
 
         Assert.Equal(RunPolicyError.MissingBuyerType, noBuyer.PolicyError);
         Assert.Equal(RunPolicyError.NonPositiveDepositCap, noCeiling.PolicyError);
@@ -66,19 +66,23 @@ public sealed class RunPreviewBuilderTests
     }
 
     [Fact]
-    public void BestMatchPolicyFreezesTheShortlistItPreviewed()
+    public void BestMatchPolicyKeepsTheShortlistAsItWasWhenItWasPlanned()
     {
-        var (plots, shortlist) = Shortlisted(3);
-        var character = CharacterFixtures.Character(1);
+        var plots = new Dictionary<PlotKey, PlotSnapshot>();
+        var live = new Shortlist(Guid.NewGuid(), "Shortlist");
+        live.Add(Plot(1, 1));
+        live.Add(Plot(1, 2));
+        var policy = RunPreviewBuilder.BestMatchPolicy(CharacterFixtures.Character(1), BuyerType.Private, Ceiling, 0, live.Freeze(), VerifiedEntryPhase());
 
-        var policy = RunPreviewBuilder.BestMatchPolicy(character, BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase());
+        live.Remove(Plot(1, 1));
+        live.Add(Plot(2, 7));
 
-        var previewed = RunPreviewBuilder.Build(character, BuyerType.Private, Ceiling, 0, shortlist, VerifiedEntryPhase(), plots, ObservedAt);
-        var started = AssignmentPlanner.Build(policy, [character], plots, ObservedAt);
-
-        Assert.Equal(shortlist, policy.Shortlist);
-        Assert.Equal(previewed.Assignments[0].TargetOrder.AsSpan(), started.Assignments[0].TargetOrder.AsSpan());
-        Assert.Equal(previewed.Assignments[0].MaximumDeposit, started.Assignments[0].MaximumDeposit);
+        var frozen = policy.Shortlist!.Value;
+        Assert.Equal(2, frozen.Plots.Length);
+        Assert.Contains(Plot(1, 1), frozen.Plots);
+        Assert.DoesNotContain(Plot(2, 7), frozen.Plots);
+        Assert.NotEqual(live.Revision, frozen.Revision);
+        Assert.Equal(frozen.Revision, policy.Revision);
     }
 
     [Fact]
@@ -97,6 +101,9 @@ public sealed class RunPreviewBuilderTests
         Assert.Equal(BuyerType.Unknown, RunPreviewBuilder.BuyerFor(PlotBuyers.Private, BuyerType.Unknown));
         Assert.Equal(BuyerType.Unknown, RunPreviewBuilder.BuyerFor(null, BuyerType.Unknown));
     }
+
+    private static RunPreview Preview(CharacterProfile character, BuyerType buyer, long cap, long reserve, ShortlistSnapshot shortlist, CyclePosition position, Dictionary<PlotKey, PlotSnapshot> plots, DateTime nowUtc)
+        => AssignmentPlanner.Build(RunPreviewBuilder.BestMatchPolicy(character, buyer, cap, reserve, shortlist, position), [character], plots, nowUtc);
 
     private static (Dictionary<PlotKey, PlotSnapshot> Plots, ShortlistSnapshot Shortlist) Shortlisted(int count)
     {

@@ -4,24 +4,11 @@ using AutoHouseLottery.Core.Selection.Model;
 
 namespace AutoHouseLottery.Core.Find.Model;
 
-// The frozen policies Find a home plans and starts runs with, for the current character. Building one only plans; a run
-// starts from it only through the run controller, which checks it again.
+// The frozen policies Find a home plans its preview with and starts runs from, for the current character. A policy only
+// plans; a run starts from it only through the run controller, which checks it again.
 internal static class RunPreviewBuilder
 {
     public const long PreviewTravelAllowance = 0;
-
-    public static RunPreview Build(
-        in CharacterProfile character,
-        BuyerType buyer,
-        long depositCap,
-        long gilReserve,
-        in ShortlistSnapshot shortlist,
-        in CyclePosition position,
-        IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,
-        DateTime nowUtc)
-    {
-        return AssignmentPlanner.Build(BestMatchPolicy(character, buyer, depositCap, gilReserve, shortlist, position), [character], plots, nowUtc);
-    }
 
     // The shortlist drawer's plan: the frozen shortlist, its ranking and the price ceiling as the deposit cap.
     public static RunPolicy BestMatchPolicy(in CharacterProfile character, BuyerType buyer, long depositCap, long gilReserve, in ShortlistSnapshot shortlist, in CyclePosition position)
