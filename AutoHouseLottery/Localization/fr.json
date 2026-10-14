@@ -181,7 +181,7 @@
   "settings.general.autoPauseHelp": "Met l'exécution en pause pendant un donjon, une épreuve, un raid ou tout autre contenu instancié, puis la reprend une fois dehors.",
   "settings.general.pauseTyping": "Attendre pendant la saisie",
   "settings.general.pauseTypingHelp": "Tant qu'un champ de texte du jeu a le focus, comme la ligne de discussion, une exécution ne lance aucun nouveau déplacement avant que vous le fermiez. Un déplacement en cours continue.",
-  "plugin.commandHelp": "Affiche ou masque la fenêtre d'Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (affiche le BaseId de la cible actuelle).",
+  "plugin.commandHelp": "Affiche ou masque la fenêtre d'Auto House Lottery. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (affiche le BaseId de la cible actuelle) | probe (consigne toutes les lectures de logement de cet endroit).",
   "plugin.commandHelpAlias": "Alias de /autohouselottery.",
   "plugin.configReset": "Vos réglages n'ont pas pu être lus, Auto House Lottery a donc démarré avec les réglages par défaut. L'ancien fichier est conservé sous {0}.",
   "plugin.configResetUnsaved": "Vos réglages n'ont pas pu être lus, Auto House Lottery a donc démarré avec les réglages par défaut. L'ancien fichier n'a pas pu être conservé ; le journal contient les détails.",
@@ -214,5 +214,9 @@
   "safety.gm.commandsHelp": "Commandes de chat à exécuter quand un MJ est repéré. Utile pour /logout, /sh restez calmes, ou une macro.",
   "safety.gm.kill": "Fermer le jeu de force",
   "safety.gm.killHelp": "Termine brutalement le processus du jeu via /xlkill. L'option de dernier recours ; pas d'au revoir, pas de cinématique, pas de déconnexion propre. Vous serez déconnecté.",
-  "safety.gm.noCommands": "Aucune commande enregistrée."
+  "safety.gm.noCommands": "Aucune commande enregistrée.",
+  "probe.done": "Lectures de logement écrites dans la console (/ahl log).",
+  "probe.started": "Tâche de sonde lancée ; suivez-la dans la console (/ahl log).",
+  "probe.failed": "La sonde n'a pas pu démarrer ; la console (/ahl log) en donne la raison.",
+  "probe.usage": "Utilisation : /ahl probe [scan | lottery | goto <district> <ward> <plot> | approach <ward> <plot> | press <enter | results | cancel | no> | stop]"
 }

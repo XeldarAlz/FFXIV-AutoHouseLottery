@@ -181,7 +181,7 @@
   "settings.general.autoPauseHelp": "Pause the run while you are inside a duty, trial, raid, or any other instanced content, then resume it once you are back outside.",
   "settings.general.pauseTyping": "Hold while typing",
   "settings.general.pauseTypingHelp": "While a text box of the game has focus, like the chat line, a run starts no new move until you close it. A move already under way carries on.",
-  "plugin.commandHelp": "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (dump the current target's BaseId).",
+  "plugin.commandHelp": "Toggle the Auto House Lottery window. /autohouselottery config | lottery | saved | deps | log | changelog | about | target (dump the current target's BaseId) | probe (log every housing reading for this spot).",
   "plugin.commandHelpAlias": "Alias for /autohouselottery.",
   "plugin.configReset": "Your settings could not be read, so Auto House Lottery started with default settings. The old file is kept as {0}.",
   "plugin.configResetUnsaved": "Your settings could not be read, so Auto House Lottery started with default settings. The old file could not be kept; the log has the details.",
@@ -214,5 +214,9 @@
   "safety.gm.commandsHelp": "Chat commands to run when a GM is spotted. Useful for things like /logout, /sh stay calm, or a macro.",
   "safety.gm.kill": "Kill the game",
   "safety.gm.killHelp": "Hard-terminate the game process via /xlkill. The last-resort option; no goodbyes, no cutscene, no logout. You'll get a disconnect.",
-  "safety.gm.noCommands": "No commands queued."
+  "safety.gm.noCommands": "No commands queued.",
+  "probe.done": "Housing readings written to the Console (/ahl log).",
+  "probe.started": "Probe task started; follow it in the Console (/ahl log).",
+  "probe.failed": "The probe could not start; the Console (/ahl log) says why.",
+  "probe.usage": "Usage: /ahl probe [scan | lottery | goto <district> <ward> <plot> | approach <ward> <plot> | press <enter | results | cancel | no> | stop]"
 }
