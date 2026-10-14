@@ -8,18 +8,20 @@ using System.Threading.Tasks;
 
 namespace AutoHouseLottery.Core.Game.Lottery;
 
-// Loads the personal lottery record the way a player does, by opening the Timers window, and closes the window again
-// if it was not open before. It writes nothing to game memory; HouseHunter's timer-state reset is deliberately not used.
-internal sealed class LotteryTimersPass(bool force) : AutoCommon
+// Loads the personal lottery entry the way a player does, by opening the Timers window on its lottery tab, and closes
+// the window again if it was not open before, also when the pass is stopped. A reading counts only when it is fresh:
+// it changed from what was there before the tab was selected, or the window refreshed after that. It writes nothing to
+// game memory; HouseHunter's timer-state reset is deliberately not used.
+internal sealed class LotteryTimersPass : AutoCommon
 {
     private const string TimersCommand = "/timers";
     private const int PlayerFreeWaitMs = 10_000;
     private const int PreCommandSettleMs = 500;
     private const int OpenWaitMs = 5_000;
     private const int TabWaitMs = 5_000;
+    private const int CloseWaitMs = 3_000;
     // HouseHunter allows the record 30 seconds to arrive.
     private const int RecordWaitMs = 30_000;
-    private const int CloseWaitMs = 3_000;
 
     public LotterySnapshot Snapshot { get; private set; }
 
@@ -35,12 +37,6 @@ internal sealed class LotteryTimersPass(bool force) : AutoCommon
             return;
         }
 
-        if (!force && Snapshot.Loaded)
-        {
-            Finish(LotteryPassOutcome.Loaded);
-            return;
-        }
-
         if (Svc.PlayerState.HomeWorld.RowId != Svc.PlayerState.CurrentWorld.RowId)
         {
             Finish(LotteryPassOutcome.NotHomeWorld);
@@ -49,66 +45,73 @@ internal sealed class LotteryTimersPass(bool force) : AutoCommon
 
         if (!await WaitUntilTimed(PlayerFree, PlayerFreeWaitMs, "lottery-player-free"))
         {
-            Finish(CancelToken.IsCancellationRequested ? LotteryPassOutcome.Cancelled : LotteryPassOutcome.PlayerBusy);
+            Finish(LotteryPassOutcome.PlayerBusy);
             return;
         }
 
+        var contentId = Snapshot.ContentId;
         var leftOpen = LotteryTimersWindow.Ready();
+        var outcome = LotteryPassOutcome.Cancelled;
+        using var window = new AddonUpdateCounter(LotteryReader.TimersAddon);
+        try
+        {
+            outcome = await LoadFresh(contentId, leftOpen, window);
+        }
+        finally
+        {
+            if (!leftOpen)
+            {
+                LotteryTimersWindow.Close();
+            }
+
+            Finish(outcome);
+        }
+    }
+
+    private async Task<LotteryPassOutcome> LoadFresh(ulong contentId, bool leftOpen, AddonUpdateCounter window)
+    {
         if (leftOpen)
         {
             Diag("Lottery pass: the Timers window is already open; closing it so it fetches the lottery afresh.");
             await WaitUntilTimed(LotteryTimersWindow.ClosedAfterNudge, CloseWaitMs, "lottery-reopen");
         }
 
-        try
+        var before = LotteryReader.Read();
+        await DelayMs(PreCommandSettleMs);
+        Diag("Lottery pass: opening the Timers window.");
+        Chat.ExecuteCommand(TimersCommand);
+        if (!await WaitUntilTimed(LotteryTimersWindow.Ready, OpenWaitMs, "lottery-timers-open")
+            || !await WaitUntilTimed(LotteryTimersWindow.LotteryTabSelected, TabWaitMs, "lottery-tab"))
         {
-            if (await OpenTimers() && await SelectLotteryTab())
-            {
-                await WaitUntilTimed(RecordLoaded, RecordWaitMs, "lottery-record");
-            }
+            return LotteryPassOutcome.NotLoaded;
         }
-        finally
+
+        var tabSelectedAt = GameSequence.Next();
+        var fresh = await WaitUntilTimed(() => SameCharacter(contentId) && Fresh(before, tabSelectedAt, window), RecordWaitMs, "lottery-record");
+        if (!SameCharacter(contentId))
         {
-            if (!leftOpen)
-            {
-                await CloseTimers();
-            }
+            Snapshot = default;
+            return LotteryPassOutcome.CharacterChanged;
         }
 
         Snapshot = LotteryReader.Read();
-        Finish(CancelToken.IsCancellationRequested ? LotteryPassOutcome.Cancelled : Snapshot.Loaded ? LotteryPassOutcome.Loaded : LotteryPassOutcome.NotLoaded);
+        return fresh && Snapshot.Loaded ? LotteryPassOutcome.Loaded : LotteryPassOutcome.NotLoaded;
     }
 
-    private async Task<bool> OpenTimers()
+    // A record left over from before the tab was selected, or from another character before a relog, does not count.
+    private static bool Fresh(in LotterySnapshot before, long tabSelectedAt, AddonUpdateCounter window)
     {
-        await DelayMs(PreCommandSettleMs);
-        if (CancelToken.IsCancellationRequested)
-        {
-            return false;
-        }
-
-        Diag("Lottery pass: opening the Timers window.");
-        Chat.ExecuteCommand(TimersCommand);
-        return await WaitUntilTimed(LotteryTimersWindow.Ready, OpenWaitMs, "lottery-timers-open");
+        var now = LotteryReader.Read();
+        return now.Loaded && (now.State != before.State || now.Entry != before.Entry || window.LastRefreshSequence > tabSelectedAt);
     }
 
-    private Task<bool> SelectLotteryTab() => WaitUntilTimed(LotteryTimersWindow.LotteryTabSelected, TabWaitMs, "lottery-tab");
-
-    private async Task CloseTimers()
-    {
-        if (!await WaitUntilTimed(LotteryTimersWindow.ClosedAfterNudge, CloseWaitMs, "lottery-timers-close") && !CancelToken.IsCancellationRequested)
-        {
-            Warn("Lottery pass: the Timers window did not close; it is left open.");
-        }
-    }
+    private static bool SameCharacter(ulong contentId) => Svc.ClientState.IsLoggedIn && Svc.PlayerState.ContentId == contentId;
 
     private void Finish(LotteryPassOutcome outcome)
     {
         Outcome = outcome;
         Diag($"Lottery pass: finished as {outcome}; {LotteryReader.Describe(Snapshot)}.");
     }
-
-    private static bool RecordLoaded() => LotteryReader.Read().Loaded;
 
     private static bool PlayerFree()
         => Svc.Objects.LocalPlayer is not null

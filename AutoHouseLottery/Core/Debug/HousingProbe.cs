@@ -49,7 +49,7 @@ internal static unsafe class HousingProbe
                 Start(() => new WardScanTask(observers.WardWindow, observers.WardPackets));
                 return;
             case "lottery":
-                Start(() => new LotteryTimersPass(force: true));
+                Start(() => new LotteryTimersPass());
                 return;
             case "goto" when tokens.Length == GotoArgumentCount && ResidentialDistricts.TryFindByKeyword(tokens[1], out var district) && TryDestination(district.TerritoryTypeId, tokens[2], tokens[3], out var destination):
                 Start(() => new ProbeTravelTask(destination, travel: true, observers));
@@ -186,8 +186,22 @@ internal static unsafe class HousingProbe
 
     private static void LogLottery()
     {
-        var snapshot = LotteryReader.Read();
-        RunLog.Info($"{Prefix} {LotteryReader.Describe(snapshot)} (no Timers pass; /ahl probe lottery runs one).");
+        var gameVersion = LotteryReader.GameVersion();
+        var validated = LotteryRecordAccess.IsValidated(gameVersion);
+        RunLog.Info($"{Prefix} game version {gameVersion}, lottery record {(validated ? "validated" : "not validated")} on this build.");
+        RunLog.Info($"{Prefix} {LotteryReader.Describe(LotteryReader.Read())} (no Timers pass; /ahl probe lottery runs one).");
+        if (!validated)
+        {
+            RunLog.Info($"{Prefix} for validation only, through checked reads: {LotteryReader.Describe(LotteryReader.ReadRecordForValidation())}.");
+        }
+
+        var texts = new List<string>();
+        LotteryReader.CollectWindowTexts(LotteryReader.TimersAddon, texts);
+        LotteryReader.CollectWindowTexts(LotteryReader.TimersDetailAddon, texts);
+        for (var textIndex = 0; textIndex < texts.Count; textIndex++)
+        {
+            RunLog.Debug($"{Prefix} Timers text {textIndex}: '{texts[textIndex]}'.");
+        }
     }
 
     private static void LogWard(HousingObservers observers)

@@ -29,6 +29,9 @@ internal sealed class AddonUpdateCounter : IDisposable
 
     public AddonEvent LastUpdateEvent { get; private set; }
 
+    // Refreshes only, without the setup: what the window shows after data arrived while it was already open.
+    public long LastRefreshSequence { get; private set; }
+
     public long LastClosedSequence { get; private set; }
 
     public void Dispose()
@@ -45,6 +48,10 @@ internal sealed class AddonUpdateCounter : IDisposable
     {
         LastUpdateSequence = GameSequence.Next();
         LastUpdateEvent = type;
+        if (type != AddonEvent.PostSetup)
+        {
+            LastRefreshSequence = LastUpdateSequence;
+        }
     }
 
     private void OnClosing(AddonEvent type, AddonArgs args)

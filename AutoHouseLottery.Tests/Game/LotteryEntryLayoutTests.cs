@@ -25,7 +25,7 @@ public sealed class LotteryEntryLayoutTests
     {
         var state = LotteryEntryLayout.Parse(Record(plot: 4, ward: 11, Mist, number: 1234, buyer: 2, phase: 1), out var entry);
         Assert.Equal(LotterySnapshotState.Active, state);
-        Assert.Equal(new LotteryEntry(Mist, 11, 4, 1234, LotteryBuyerType.Private, LotteryPhase.EntryPeriod, 2, 1), entry);
+        Assert.Equal(new LotteryEntry(Mist, 11, 4, 1234, LotteryBuyerType.Private, LotteryPhase.EntryPeriod, 2, 1, null, null), entry);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class LotteryEntryLayoutTests
         Assert.Equal(LotterySnapshotState.Active, state);
         Assert.Null(entry.BuyerType);
         Assert.Null(entry.Phase);
-        Assert.Equal(9, entry.RawPhase);
+        Assert.Equal((byte)9, entry.RawPhase);
     }
 
     [Theory]
@@ -59,12 +59,62 @@ public sealed class LotteryEntryLayoutTests
     public void OnlyALoadedRecordCountsAsLoaded()
     {
         var now = DateTime.UtcNow;
-        Assert.True(new LotterySnapshot(LotterySnapshotState.LoadedNone, 1, null, now).Loaded);
-        Assert.True(new LotterySnapshot(LotterySnapshotState.Active, 1, null, now).Loaded);
-        Assert.False(new LotterySnapshot(LotterySnapshotState.Unloaded, 1, null, now).Loaded);
-        Assert.False(new LotterySnapshot(LotterySnapshotState.Invalid, 1, null, now).Loaded);
-        Assert.False(new LotterySnapshot(LotterySnapshotState.NoCharacter, 0, null, now).Loaded);
+        Assert.True(new LotterySnapshot(LotterySnapshotState.LoadedNone, LotterySource.Record, 1, null, now).Loaded);
+        Assert.True(new LotterySnapshot(LotterySnapshotState.Active, LotterySource.Record, 1, null, now).Loaded);
+        Assert.False(new LotterySnapshot(LotterySnapshotState.Unloaded, LotterySource.Record, 1, null, now).Loaded);
+        Assert.False(new LotterySnapshot(LotterySnapshotState.Invalid, LotterySource.Record, 1, null, now).Loaded);
+        Assert.False(new LotterySnapshot(LotterySnapshotState.NoCharacter, LotterySource.TimersText, 0, null, now).Loaded);
     }
+
+    [Fact]
+    public void NoBuildIsValidatedForTheRecordUntilTheMaintainerAddsOne()
+    {
+        Assert.Empty(LotteryRecordAccess.ValidatedGameVersions);
+        Assert.False(LotteryRecordAccess.IsValidated("2026.10.01.0000.0000"));
+        Assert.False(LotteryRecordAccess.IsValidated(string.Empty));
+    }
+
+    [Theory]
+    [InlineData(0x0000_01F2_3456_7890ul, true)]
+    [InlineData(0x0000_01F2_3456_7891ul, false)]
+    [InlineData(0ul, false)]
+    [InlineData(0x8000ul, false)]
+    [InlineData(0xFFFF_8000_0000_0000ul, false)]
+    [InlineData(ulong.MaxValue, false)]
+    public void OnlyAnAlignedUserSpaceAddressIsAPlausibleRecord(ulong address, bool expected)
+    {
+        Assert.Equal(expected, LotteryRecordAccess.IsPlausiblePointer(address));
+    }
+
+    [Fact]
+    public void TheTimersTextGivesAnEntryOnlyWithALotteryNumber()
+    {
+        string[] shown = ["Results period in progress.", "Current Entry", "Plot 5, 12th Ward, Mist (Small)", "Lottery Number: 1,234", "Type of Entry: Private Buyer"];
+        var state = LotteryWindowText.Parse(shown, Patterns(), out var entry);
+        Assert.Equal(LotterySnapshotState.Active, state);
+        Assert.Equal(1234u, entry.LotteryNumber);
+        Assert.Equal(LotteryPhase.ResultsPeriod, entry.Phase);
+        Assert.Equal("Plot 5, 12th Ward, Mist (Small)", entry.AddressText);
+        Assert.Equal("Type of Entry: Private Buyer", entry.EntryTypeText);
+        Assert.Null(entry.WardIndex);
+        Assert.Null(entry.BuyerType);
+    }
+
+    [Fact]
+    public void TimersTextWithoutALotteryNumberNeverMeansNoEntry()
+    {
+        string[] shown = ["Entry period in progress.", "Housing Lottery Status"];
+        Assert.Equal(LotterySnapshotState.Unloaded, LotteryWindowText.Parse(shown, Patterns(), out _));
+        Assert.Equal(LotterySnapshotState.Unloaded, LotteryWindowText.Parse([], Patterns(), out _));
+    }
+
+    private static LotteryTextPatterns Patterns()
+        => new(
+            SheetTextPattern.FromTokens([SheetTextToken.Literal("Entry period in progress.")]),
+            SheetTextPattern.FromTokens([SheetTextToken.Literal("Results period in progress.")]),
+            SheetTextPattern.FromTokens([SheetTextToken.Literal("Lottery Number: "), SheetTextToken.Gap]),
+            SheetTextPattern.FromTokens([SheetTextToken.Literal("Plot "), SheetTextToken.Gap, SheetTextToken.Literal(", "), SheetTextToken.Gap, SheetTextToken.Literal(" Ward, "), SheetTextToken.Gap, SheetTextToken.Literal(" ("), SheetTextToken.Gap, SheetTextToken.Literal(")")]),
+            SheetTextPattern.FromTokens([SheetTextToken.Literal("Type of Entry: "), SheetTextToken.Gap]));
 
     private static byte[] Record(byte plot, byte ward, ushort territory, uint number, byte buyer, byte phase)
     {

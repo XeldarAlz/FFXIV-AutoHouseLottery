@@ -46,6 +46,14 @@ internal static class HousingSheetText
         return null;
     }
 
+    public static LotteryTextPatterns LotteryPatterns()
+        => new(
+            Pattern(HousingText.LotteryEntryPeriod),
+            Pattern(HousingText.LotteryResultsPeriod),
+            Pattern(HousingText.LotteryNumber),
+            Pattern(HousingText.LotteryEntryAddress),
+            Pattern(HousingText.LotteryEntryType));
+
     // A row in any installed client language, uncached, for the probe's cross-language self-check.
     public static SheetTextPattern PatternIn(HousingText text, ClientLanguage language) => Load(HousingTextRows.Of(text), language);
 
