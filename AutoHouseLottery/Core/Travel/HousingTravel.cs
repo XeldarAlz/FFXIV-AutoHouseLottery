@@ -65,15 +65,24 @@ internal static class HousingTravel
         }
 
         var now = Environment.TickCount64;
-        operation.Ownership.Observe(LifestreamIpc.Instance.IsBusy() == true, now);
+        var lifestream = LifestreamIpc.Instance;
+        var busy = lifestream.IsBusy();
+        operation.Ownership.Observe(busy, now);
         var verdict = ArrivalCheck.Evaluate(operation.Destination, ObserveArrival());
         var state = TravelProgressRule.Evaluate(operation.Ownership.Phase, verdict, cancelled: false, now >= operation.DeadlineMs);
-        if (state != TravelState.Travelling)
+        if (state == TravelState.Travelling)
         {
-            // Lifestream's own IsHere reads the same HousingManager values; it is logged as a second opinion, never decides.
-            var lifestreamHere = LifestreamIpc.Instance.IsHere(operation.Destination, operation.AetheryteId);
-            RunLog.Info($"Travel {token}: {state} (Lifestream {operation.Ownership.Phase}, arrival {verdict}, Lifestream IsHere {lifestreamHere?.ToString() ?? "unknown"}).");
-            current = null;
+            return state;
+        }
+
+        // Lifestream's own IsHere reads the same HousingManager values; it is logged as a second opinion, never decides.
+        var lifestreamHere = lifestream.IsHere(operation.Destination, operation.AetheryteId);
+        RunLog.Info($"Travel {token}: {state} (Lifestream {operation.Ownership.Phase}, arrival {verdict}, Lifestream IsHere {lifestreamHere?.ToString() ?? "unknown"}).");
+        current = null;
+        if (state == TravelState.TimedOut && operation.Ownership.MayAbort(busy))
+        {
+            RunLog.Info($"Travel {token}: timed out while its own Lifestream route still runs; aborting it.");
+            lifestream.Abort();
         }
 
         return state;
@@ -90,7 +99,7 @@ internal static class HousingTravel
 
         current = null;
         var lifestream = LifestreamIpc.Instance;
-        var busy = lifestream.IsBusy() == true;
+        var busy = lifestream.IsBusy();
         operation.Ownership.Observe(busy, Environment.TickCount64);
         if (!operation.Ownership.MayAbort(busy))
         {

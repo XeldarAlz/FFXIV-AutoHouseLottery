@@ -19,27 +19,28 @@ internal sealed class TravelOwnership(long requestedAtMs)
 
     public TravelPhase Phase { get; private set; } = TravelPhase.Requested;
 
-    public void Observe(bool dependencyBusy, long nowMs)
+    // A busy flag that could not be read (null) moves nothing: it is neither proof of idle nor of somebody else's work.
+    public void Observe(bool? dependencyBusy, long nowMs)
     {
         switch (Phase)
         {
-            case TravelPhase.Requested when dependencyBusy:
+            case TravelPhase.Requested when dependencyBusy == true:
                 Phase = TravelPhase.Running;
                 break;
-            case TravelPhase.Requested when nowMs - requestedAtMs >= StartGraceMs:
+            case TravelPhase.Requested when dependencyBusy == false && nowMs - requestedAtMs >= StartGraceMs:
                 Phase = TravelPhase.NeverStarted;
                 break;
-            case TravelPhase.Running when !dependencyBusy:
+            case TravelPhase.Running when dependencyBusy == false:
                 Phase = TravelPhase.Finished;
                 break;
-            case TravelPhase.Finished or TravelPhase.NeverStarted when dependencyBusy:
+            case TravelPhase.Finished or TravelPhase.NeverStarted when dependencyBusy == true:
                 Phase = TravelPhase.TakenOver;
                 break;
         }
     }
 
     // Abort is Lifestream's global cancel, so it is used only while the busy work is provably the one we started.
-    public bool MayAbort(bool dependencyBusy) => Phase == TravelPhase.Running && dependencyBusy;
+    public bool MayAbort(bool? dependencyBusy) => Phase == TravelPhase.Running && dependencyBusy == true;
 }
 
 internal enum TravelState : byte

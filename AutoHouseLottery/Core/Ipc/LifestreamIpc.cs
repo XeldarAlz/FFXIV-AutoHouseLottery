@@ -35,8 +35,6 @@ internal sealed class LifestreamIpc
     private readonly ICallGateSubscriber<uint, int, Vector3?> getPlotEntrance;
     // Lifestream returns (ResidentialAetheryteKind Kind, int Ward, int Plot)?; the enum crosses the gate as its int value.
     private readonly ICallGateSubscriber<(int Kind, int Ward, int Plot)?> getCurrentPlotInfo;
-    private readonly ICallGateSubscriber<string, string, string, string, bool, bool, HousingAddress> buildAddressBookEntry;
-    private readonly ICallGateSubscriber<string, string, int> changeCharacter;
 
     private readonly Func<bool?> isBusyCall;
 
@@ -50,8 +48,6 @@ internal sealed class LifestreamIpc
         isQuickTravelAvailable = pluginInterface.GetIpcSubscriber<HousingAddress, bool>("Lifestream.IsQuickTravelAvailable");
         getPlotEntrance = pluginInterface.GetIpcSubscriber<uint, int, Vector3?>("Lifestream.GetPlotEntrance");
         getCurrentPlotInfo = pluginInterface.GetIpcSubscriber<(int Kind, int Ward, int Plot)?>("Lifestream.GetCurrentPlotInfo");
-        buildAddressBookEntry = pluginInterface.GetIpcSubscriber<string, string, string, string, bool, bool, HousingAddress>("Lifestream.BuildAddressBookEntry");
-        changeCharacter = pluginInterface.GetIpcSubscriber<string, string, int>("Lifestream.ChangeCharacter");
 
         isBusyCall = () => isBusy.InvokeFunc();
     }
@@ -67,9 +63,7 @@ internal sealed class LifestreamIpc
             isHere.HasFunction,
             isQuickTravelAvailable.HasFunction,
             getPlotEntrance.HasFunction,
-            getCurrentPlotInfo.HasFunction,
-            buildAddressBookEntry.HasFunction,
-            changeCharacter.HasFunction);
+            getCurrentPlotInfo.HasFunction);
 
     // Null when the gate is missing or failed, which callers treat as "cannot tell", never as idle.
     public bool? IsBusy() => IpcGate.Invoke(isBusy.HasFunction, isBusyCall, null, IsBusyFailed);

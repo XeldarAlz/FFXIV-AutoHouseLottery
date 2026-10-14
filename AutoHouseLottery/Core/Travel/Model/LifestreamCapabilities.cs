@@ -8,9 +8,7 @@ internal readonly record struct LifestreamCapabilities(
     bool IsHere,
     bool IsQuickTravelAvailable,
     bool GetPlotEntrance,
-    bool GetCurrentPlotInfo,
-    bool BuildAddressBookEntry,
-    bool ChangeCharacter)
+    bool GetCurrentPlotInfo)
 {
     // Travel needs the request and the busy flag: without the flag the plugin could not tell its work from anyone else's.
     public bool CanTravel => Installed && GoToHousingAddress && IsBusy;

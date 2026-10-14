@@ -45,14 +45,6 @@ public sealed class ArrivalCheckTests
         Assert.Equal(ArrivalVerdict.WrongDivision, ArrivalCheck.Evaluate(subdivisionPlot, Observed(Mist, Ward, division: 1)));
     }
 
-    [Fact]
-    public void ThePlotItselfIsReportedOnlyWhenTheGameNamesOne()
-    {
-        Assert.Null(ArrivalCheck.OnTargetPlot(mainPlot, Observed(Mist, Ward, division: 1)));
-        Assert.True(ArrivalCheck.OnTargetPlot(mainPlot, Observed(Mist, Ward, division: 1, plot: MainPlot)));
-        Assert.False(ArrivalCheck.OnTargetPlot(mainPlot, Observed(Mist, Ward, division: 1, plot: MainPlot + 1)));
-    }
-
     [Theory]
     [InlineData(29, 1)]
     [InlineData(30, 2)]
@@ -96,6 +88,6 @@ public sealed class ArrivalCheckTests
         Assert.Equal(territoryTypeId, district.TerritoryTypeId);
     }
 
-    private static ArrivalObservation Observed(uint territoryTypeId, int? ward, int? division, int? plot = null)
-        => new(true, World, new HousingLocation(territoryTypeId, ward, plot, division, false));
+    private static ArrivalObservation Observed(uint territoryTypeId, int? ward, int? division)
+        => new(true, World, new HousingLocation(territoryTypeId, ward, null, division, false));
 }

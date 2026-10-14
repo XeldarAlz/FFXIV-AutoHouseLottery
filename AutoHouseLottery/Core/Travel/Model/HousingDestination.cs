@@ -62,8 +62,4 @@ internal static class ArrivalCheck
 
         return division == destination.Division ? ArrivalVerdict.Arrived : ArrivalVerdict.WrongDivision;
     }
-
-    // Standing on the plot's own grounds; null when the game reports no plot, as it does outside every plot's grounds.
-    public static bool? OnTargetPlot(in HousingDestination destination, in ArrivalObservation observed)
-        => observed.Location.PlotIndex is { } plotIndex ? plotIndex == destination.PlotIndex : null;
 }

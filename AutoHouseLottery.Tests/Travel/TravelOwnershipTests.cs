@@ -49,6 +49,21 @@ public sealed class TravelOwnershipTests
     }
 
     [Fact]
+    public void AnUnreadableBusyFlagIsNeitherIdleNorTakeover()
+    {
+        var ownership = new TravelOwnership(RequestedAtMs);
+        ownership.Observe(dependencyBusy: null, AfterGraceMs);
+        Assert.Equal(TravelPhase.Requested, ownership.Phase);
+        ownership.Observe(dependencyBusy: true, AfterGraceMs);
+        ownership.Observe(dependencyBusy: null, AfterGraceMs + 1);
+        Assert.Equal(TravelPhase.Running, ownership.Phase);
+        Assert.False(ownership.MayAbort(dependencyBusy: null));
+        ownership.Observe(dependencyBusy: false, AfterGraceMs + 2);
+        ownership.Observe(dependencyBusy: null, AfterGraceMs + 3);
+        Assert.Equal(TravelPhase.Finished, ownership.Phase);
+    }
+
+    [Fact]
     public void IdleIsNotArrival()
     {
         Assert.Equal(TravelState.Travelling, Evaluate(TravelPhase.Finished, ArrivalVerdict.Unknown));
