@@ -13,7 +13,7 @@ internal readonly record struct DetailField(string Label, string Value, string? 
 // rather than on every frame.
 internal sealed class DetailsText
 {
-    private (PlotKey Key, int View, long Minute, LanguageInfo? Language, bool Named, int Query, ulong Character, long Reserve) builtFor;
+    private (PlotKey Key, int View, long Minute, LanguageInfo? Language, bool Named, int Query, CharacterProfile? Character, long Reserve) builtFor;
 
     public string Address { get; private set; } = string.Empty;
 
@@ -42,7 +42,7 @@ internal sealed class DetailsText
     public void Refresh(PlotKey key, FindView view, FindState state, Discovery discovery, DateTime nowUtc)
     {
         var character = discovery.Character;
-        var inputs = (key, view.Revision, nowUtc.Ticks / TimeSpan.TicksPerMinute, Loc.Current, discovery.Names.Ready, state.QueryRevision, character?.ContentId ?? 0, state.GilReserve);
+        var inputs = (key, view.Revision, nowUtc.Ticks / TimeSpan.TicksPerMinute, Loc.Current, discovery.Names.Ready, state.QueryRevision, character, state.GilReserve);
         if (inputs == builtFor)
         {
             return;
