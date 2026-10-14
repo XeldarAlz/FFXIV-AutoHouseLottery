@@ -183,22 +183,24 @@ internal static class RunPanel
         var travel = status.Failure is EntryFailure.TravelFailed or EntryFailure.DependencyBusy or EntryFailure.WrongDestination;
         var manual = travel || status.Failure is EntryFailure.TravelUnavailable or EntryFailure.PlacardNotFound or EntryFailure.PlacardNotOpened;
         var text = RunPanelText.Shared.For(controller);
-        var card = NoticeCard.Begin(FontAwesomeIcon.HandPaper, Loc.T(L.Run.NeedsPlayerTitle), text.Failure, text.Facts, Styling.AccentAmber, hasButtons: true);
-        if (travel && NoticeCard.Button(ref card, "##ahl_run_retry_travel", Loc.T(L.Run.RetryTravel), Styling.AccentMint, PillButton.Emphasis.Filled, FontAwesomeIcon.Route))
-        {
-            controller.Resume();
-        }
-        else if (!travel && NoticeCard.Button(ref card, "##ahl_run_resume", Loc.T(L.Common.Resume), Styling.AccentMint, PillButton.Emphasis.Filled, FontAwesomeIcon.Play))
+        var resumeLabel = Loc.T(travel ? L.Run.RetryTravel : L.Common.Resume);
+        var resumeIcon = travel ? FontAwesomeIcon.Route : FontAwesomeIcon.Play;
+        var manualLabel = Loc.T(L.Run.VisitManually);
+        var stopLabel = Loc.T(L.Common.StopRun);
+        Span<float> widths = [NoticeCard.Width(resumeLabel, resumeIcon), NoticeCard.Width(manualLabel, FontAwesomeIcon.Walking)];
+        var card = NoticeCard.Begin(FontAwesomeIcon.HandPaper, Loc.T(L.Run.NeedsPlayerTitle), text.Failure, text.Facts, Styling.AccentAmber, hasButtons: true,
+            manual ? widths : widths[..1], NoticeCard.Width(stopLabel, FontAwesomeIcon.Stop));
+        if (NoticeCard.Button(ref card, travel ? "##ahl_run_retry_travel" : "##ahl_run_resume", resumeLabel, Styling.AccentMint, PillButton.Emphasis.Filled, resumeIcon))
         {
             controller.Resume();
         }
 
-        if (manual && NoticeCard.Button(ref card, "##ahl_run_manual", Loc.T(L.Run.VisitManually), Styling.AccentBlue, PillButton.Emphasis.Tinted, FontAwesomeIcon.Walking))
+        if (manual && NoticeCard.Button(ref card, "##ahl_run_manual", manualLabel, Styling.AccentBlue, PillButton.Emphasis.Tinted, FontAwesomeIcon.Walking))
         {
             controller.VisitManually();
         }
 
-        if (NoticeCard.TrailingButton(card, "##ahl_run_stop_card", Loc.T(L.Common.StopRun), Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop))
+        if (NoticeCard.TrailingButton(card, "##ahl_run_stop_card", stopLabel, Styling.AccentRose, PillButton.Emphasis.Ghost, FontAwesomeIcon.Stop))
         {
             controller.Stop();
         }

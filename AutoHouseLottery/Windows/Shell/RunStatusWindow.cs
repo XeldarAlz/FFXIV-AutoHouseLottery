@@ -30,7 +30,9 @@ public sealed class RunStatusWindow : Window
     {
         bodyFont = Fonts.PushBody();
         chrome = Styling.PushChrome(Vector2.Zero);
-        Size = new Vector2(StripWidth, MiniPlayer.Height() / ImGuiHelpers.GlobalScale);
+        // Held to the screen's width, so Pause and Stop at its right end stay on screen at a large UI scale.
+        var workWidth = ImGui.GetMainViewport().WorkSize.X / ImGuiHelpers.GlobalScale;
+        Size = new Vector2(workWidth > 0f ? MathF.Min(StripWidth, workWidth) : StripWidth, MiniPlayer.Height() / ImGuiHelpers.GlobalScale);
         SizeCondition = ImGuiCond.Always;
     }
 

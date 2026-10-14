@@ -25,6 +25,8 @@ internal sealed partial class FindHomePage
     private const int NameLength = 48;
     private const int ConfirmWindowMs = 3_000;
     private const float FooterShare = 0.5f;
+    // The scrolling part keeps at least this much; the pinned Enter and its reason get the rest they need.
+    private const float MinimumDrawerBody = 72f;
     private const float FooterHintGap = 4f;
     private const int EstimatedHintLines = 2;
     private const string DrawerId = "##ahl_find_drawer";
@@ -41,16 +43,16 @@ internal sealed partial class FindHomePage
     private CachedText removeUnavailableText;
     private readonly DrawerText drawerText = new();
 
-    // The drawer scrolls, but its Enter button and the line under it stay pinned to its bottom, so the deposit and the
-    // button are visible at the smallest window size and largest UI scale. The pinned part's height is measured on one
-    // frame and used on the next.
+    // The drawer scrolls, but its Enter button and the line under it stay pinned to its bottom, so the deposit, the
+    // button and the reason it is locked are visible at the smallest window size and largest UI scale. The pinned part's
+    // height is measured on one frame and used on the next.
     private void DrawDrawer(FindView view, Vector2 size, DateTime now)
     {
         var scale = ImGuiHelpers.GlobalScale;
         var origin = ImGui.GetCursorScreenPos();
         Paint.Glass(ImGui.GetWindowDrawList(), origin, origin + size, Styling.PanelRounding * scale, Styling.AccentNebula, 0.04f);
         var footer = details is not null || State.Shortlist.Count > 0
-            ? MathF.Min(footerHeight > 0f ? footerHeight : EstimatedFooterHeight(scale), size.Y * FooterShare)
+            ? MathF.Min(footerHeight > 0f ? footerHeight : EstimatedFooterHeight(scale), MathF.Max(size.Y * FooterShare, size.Y - MinimumDrawerBody * scale))
             : 0f;
         var bodySize = new Vector2(size.X, MathF.Max(1f, size.Y - footer));
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, new Vector2(DrawerPad, DrawerPad) * scale))
