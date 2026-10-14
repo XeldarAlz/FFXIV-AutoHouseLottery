@@ -126,7 +126,7 @@ internal sealed partial class EntryRunTask
 
         if (shown is null && HousingDialogs.IdentifyEntryConfirmation() is { } other)
         {
-            Warn($"Entry run {session.RunId}: {other.AddonName} is open but does not read as the entry confirmation ('{other.ShownText}'); it is left alone.");
+            Warn($"Entry run {session.RunId}: {other.AddonName} is open but does not read as the entry confirmation ({(other.Text is { } known ? known.ToString() : "no known row")}); it is left alone.");
             confirmationOpenedByRun = false;
         }
 

@@ -1,28 +1,35 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace AutoHouseLottery.Core.Diagnostics.Model;
 
 internal readonly record struct KnownIdentity(ulong ContentId, string Name);
 
 // A support report names nobody: every known character's name and content ID becomes the same alias wherever it
-// appears (Character A, Character B, ...), and the Windows user folder in a file path becomes a placeholder. Longer
-// texts are replaced first, so a name that contains another name keeps its own alias.
-internal sealed class DiagnosticAliases
+// appears (Character A, Character B, ...), the plugin configuration folder and the user's own folder become
+// placeholders, and so does any home folder in a path, whether Windows (C:\Users\name), Wine (Z:\home\name), Linux
+// (/home/name) or macOS (/Users/name). Longer texts are replaced first, so a name that contains another name keeps its
+// own alias.
+internal sealed partial class DiagnosticAliases
 {
     public const string UserFolderPlaceholder = "%USERPROFILE%";
+    public const string ConfigFolderPlaceholder = "%PLUGINCONFIGS%";
 
     private const string AliasPrefix = "Character ";
     private const string IdSuffix = " ID";
     private const char ProbeEllipsis = '…';
     private const int ProbeIdDigits = 4;
     private const int Letters = 26;
+    private const int ReplacementsPerIdentity = 4;
+    private const int FolderReplacements = 2;
+    private const int MaximumAliasLetters = 8;
 
     private readonly ImmutableArray<Replacement> replacements;
 
-    public DiagnosticAliases(ReadOnlySpan<KnownIdentity> identities, string? userFolder)
+    public DiagnosticAliases(ReadOnlySpan<KnownIdentity> identities, string? userFolder, string? configFolder)
     {
-        var found = new List<Replacement>(identities.Length * 4 + 1);
+        var found = new List<Replacement>(identities.Length * ReplacementsPerIdentity + FolderReplacements);
         for (var index = 0; index < identities.Length; index++)
         {
             var identity = identities[index];
@@ -47,11 +54,8 @@ internal sealed class DiagnosticAliases
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(userFolder))
-        {
-            found.Add(new Replacement(userFolder.TrimEnd('\\', '/'), UserFolderPlaceholder));
-        }
-
+        AddFolder(found, configFolder, ConfigFolderPlaceholder);
+        AddFolder(found, userFolder, UserFolderPlaceholder);
         found.Sort(static (left, right) => right.Text.Length.CompareTo(left.Text.Length));
         replacements = [.. found];
     }
@@ -59,7 +63,7 @@ internal sealed class DiagnosticAliases
     // A, B, ..., Z, then AA, AB, ...
     public static string AliasFor(int index)
     {
-        Span<char> letters = stackalloc char[8];
+        Span<char> letters = stackalloc char[MaximumAliasLetters];
         var position = letters.Length;
         var remaining = index + 1;
         while (remaining > 0)
@@ -80,8 +84,20 @@ internal sealed class DiagnosticAliases
             text = text.Replace(replacement.Text, replacement.Alias, StringComparison.OrdinalIgnoreCase);
         }
 
-        return text;
+        return HomeFolder().Replace(text, UserFolderPlaceholder);
+    }
+
+    private static void AddFolder(List<Replacement> found, string? folder, string placeholder)
+    {
+        if (!string.IsNullOrWhiteSpace(folder))
+        {
+            found.Add(new Replacement(folder.TrimEnd('\\', '/'), placeholder));
+        }
     }
 
     private readonly record struct Replacement(string Text, string Alias);
+
+    // A drive letter or nothing, then home or Users, then the user's own folder name.
+    [GeneratedRegex(@"(?:[A-Za-z]:)?[\\/](?:home|users)[\\/][^\\/\s'""]+", RegexOptions.IgnoreCase)]
+    private static partial Regex HomeFolder();
 }

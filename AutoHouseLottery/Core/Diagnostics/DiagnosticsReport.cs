@@ -71,6 +71,9 @@ internal static class DiagnosticsReport
             identities.Add(new KnownIdentity(Svc.PlayerState.ContentId, Svc.PlayerState.CharacterName));
         }
 
-        return new DiagnosticAliases(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(identities), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        return new DiagnosticAliases(
+            System.Runtime.InteropServices.CollectionsMarshal.AsSpan(identities),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Svc.PluginInterface.ConfigDirectory.Parent?.FullName);
     }
 }

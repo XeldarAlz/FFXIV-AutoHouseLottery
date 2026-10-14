@@ -211,7 +211,7 @@ internal static unsafe class HousingProbe
         var location = context.Location;
         RunLog.Info($"{Prefix} location: territory {location.TerritoryTypeId}, ward {ShowOneBased(location.WardIndex)}, plot {ShowOneBased(location.PlotIndex)}, "
                   + $"division {Show(location.Division)}, inside {location.Inside}.");
-        RunLog.Info($"{Prefix} owned estates: personal {Describe(context.PersonalEstate)}, free company {Describe(context.FreeCompanyEstate)}, apartment {Describe(context.ApartmentRoom)}.");
+        RunLog.Info($"{Prefix} owned estates: personal {Held(context.PersonalEstate)}, free company {Held(context.FreeCompanyEstate)}, apartment {Held(context.ApartmentRoom)}.");
     }
 
     private static void LogLottery()
@@ -340,7 +340,7 @@ internal static unsafe class HousingProbe
     {
         if (HousingDialogs.IdentifyEntryConfirmation() is { } confirmation)
         {
-            RunLog.Info($"{Prefix} {confirmation.AddonName}: matches {Show(confirmation.Text)}, shows '{confirmation.ShownText}'.");
+            RunLog.Info($"{Prefix} {confirmation.AddonName}: matches {Show(confirmation.Text)}{ShownIfKnown(confirmation)}.");
             if (AddonReads.TryGetReady(HousingDialogs.EntryConfirmationAddon, out var addon))
             {
                 RunLog.Info($"{Prefix} {HousingDialogs.EntryConfirmationAddon} values: {AddonReads.Describe(addon, DescribedDialogValues)}.");
@@ -355,7 +355,7 @@ internal static unsafe class HousingProbe
 
         if (HousingDialogs.IdentifyResultDialog() is { } result)
         {
-            RunLog.Info($"{Prefix} {result.AddonName}: matches {Show(result.Text)}, shows '{result.ShownText}'.");
+            RunLog.Info($"{Prefix} {result.AddonName}: matches {Show(result.Text)}{ShownIfKnown(result)}.");
             if (AddonReads.TryGetReady(HousingDialogs.ResultAddon, out var addon))
             {
                 LogButtons(HousingDialogs.ResultAddon, LabelledButtons.Collect(addon, dialogLabels));
@@ -444,8 +444,11 @@ internal static unsafe class HousingProbe
     private static string Describe(PlotAddress? address)
         => address is not { } plot ? "none" : $"territory {plot.TerritoryTypeId}, ward {plot.WardIndex + ResidentialDistricts.OneBased}, plot {plot.PlotIndex + ResidentialDistricts.OneBased}";
 
-    private static string Describe(EstateAddress? estate)
-        => estate is not { } address ? "none" : $"territory {address.TerritoryTypeId}, ward {address.WardIndex + ResidentialDistricts.OneBased}, plot {address.PlotIndex + ResidentialDistricts.OneBased}{(address.Apartment ? " (apartment)" : string.Empty)}";
+    // Whether an estate is held, never where: anyone can read an estate's owner at its placard.
+    private static string Held(EstateAddress? estate) => estate is null ? "none" : "held";
+
+    // The text of a window that matches a housing row; a window that matches none may be anyone's, so it is not copied.
+    private static string ShownIfKnown(in DialogIdentity dialog) => dialog.Text is null ? ", text not copied" : $", shows '{dialog.ShownText}'";
 
     private static string Tail(ulong value)
     {

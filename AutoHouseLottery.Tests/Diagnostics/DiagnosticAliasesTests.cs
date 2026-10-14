@@ -10,7 +10,7 @@ public sealed class DiagnosticAliasesTests
     [Fact]
     public void NamesAndContentIdsBecomeTheSameAliasEverywhere()
     {
-        var aliases = new DiagnosticAliases([new(FirstId, "Ann Lee"), new(SecondId, "Bo Grant")], null);
+        var aliases = new DiagnosticAliases([new(FirstId, "Ann Lee"), new(SecondId, "Bo Grant")], null, null);
         var report = aliases.Apply($"Entry run authorized: Ann Lee, content {FirstId}. Settlement scheduler: 1 item due for Bo Grant ({SecondId:X}).");
         Assert.Equal("Entry run authorized: Character A, content Character A ID. Settlement scheduler: 1 item due for Character B (Character B ID).", report);
     }
@@ -18,7 +18,7 @@ public sealed class DiagnosticAliasesTests
     [Fact]
     public void ANameInsideALongerNameKeepsEachAlias()
     {
-        var aliases = new DiagnosticAliases([new(FirstId, "Ann Lee"), new(SecondId, "Ann Leeds")], null);
+        var aliases = new DiagnosticAliases([new(FirstId, "Ann Lee"), new(SecondId, "Ann Leeds")], null, null);
         Assert.Equal("Character B and Character A", aliases.Apply("Ann Leeds and Ann Lee"));
     }
 
@@ -26,21 +26,39 @@ public sealed class DiagnosticAliasesTests
     public void TheProbesShortenedIdIsReplacedToo()
     {
         var hex = FirstId.ToString("X");
-        var aliases = new DiagnosticAliases([new(FirstId, "Ann Lee")], null);
+        var aliases = new DiagnosticAliases([new(FirstId, "Ann Lee")], null, null);
         Assert.Equal("character: content ID Character A ID, name read", aliases.Apply($"character: content ID …{hex[^4..]}, name read"));
     }
 
     [Fact]
     public void TheWindowsUserFolderInAPathIsHidden()
     {
-        var aliases = new DiagnosticAliases([], @"C:\Users\annlee");
+        var aliases = new DiagnosticAliases([], @"C:\Users\annlee", null);
         Assert.Equal($@"backup at {DiagnosticAliases.UserFolderPlaceholder}\AppData\Roaming\XIVLauncher\pluginConfigs\AutoHouseLottery.json", aliases.Apply(@"backup at C:\Users\annlee\AppData\Roaming\XIVLauncher\pluginConfigs\AutoHouseLottery.json"));
+    }
+
+    [Theory]
+    [InlineData(@"backup at Z:\home\annlee\.xlcore\pluginConfigs\AutoHouseLottery.json", @"backup at %USERPROFILE%\.xlcore\pluginConfigs\AutoHouseLottery.json")]
+    [InlineData("journal at /home/annlee/.xlcore/pluginConfigs/AutoHouseLottery/journal.jsonl", "journal at %USERPROFILE%/.xlcore/pluginConfigs/AutoHouseLottery/journal.jsonl")]
+    [InlineData("journal at /Users/annlee/Library/Application Support/XIV on Mac/pluginConfigs", "journal at %USERPROFILE%/Library/Application Support/XIV on Mac/pluginConfigs")]
+    [InlineData(@"kept as C:\users\annlee\AppData\Roaming\XIVLauncher\x.json", @"kept as %USERPROFILE%\AppData\Roaming\XIVLauncher\x.json")]
+    public void AHomeFolderUnderWineLinuxOrMacOSIsHiddenToo(string line, string expected)
+    {
+        var aliases = new DiagnosticAliases([], null, null);
+        Assert.Equal(expected, aliases.Apply(line));
+    }
+
+    [Fact]
+    public void ThePluginConfigurationFolderIsHiddenWhereverItLives()
+    {
+        var aliases = new DiagnosticAliases([], null, @"D:\Games\XIVLauncher\pluginConfigs");
+        Assert.Equal($@"backup at {DiagnosticAliases.ConfigFolderPlaceholder}\AutoHouseLottery.json", aliases.Apply(@"backup at D:\Games\XIVLauncher\pluginConfigs\AutoHouseLottery.json"));
     }
 
     [Fact]
     public void UnknownTextIsLeftAlone()
     {
-        var aliases = new DiagnosticAliases([new(0, " "), new(FirstId, "Ann Lee")], null);
+        var aliases = new DiagnosticAliases([new(0, " "), new(FirstId, "Ann Lee")], null, null);
         Assert.Equal("Placard sale hook: active.", aliases.Apply("Placard sale hook: active."));
     }
 
