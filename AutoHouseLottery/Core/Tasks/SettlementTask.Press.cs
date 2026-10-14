@@ -3,6 +3,7 @@ using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Dialogs;
 using AutoHouseLottery.Core.Game.Model;
+using AutoHouseLottery.Core.Game.Placard;
 using AutoHouseLottery.Core.Persistence;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Settlement.Model;
@@ -146,7 +147,8 @@ internal sealed partial class SettlementTask
         };
         ownAttempt = intent;
         Move(SettlementStep.PersistIntent);
-        var outcome = await new EntrySubmission(journal).Submit(intent, MayPress(kind), ReturnToGame, () => PressYes(kind, row, amount), static () => DateTime.UtcNow);
+        submission = new EntrySubmission(journal);
+        var outcome = await submission.Submit(intent, MayPress(kind), ReturnToGame, () => PressYes(kind, row, amount), static () => DateTime.UtcNow);
         attemptSettled = outcome is not (SubmissionOutcome.Dispatched or SubmissionOutcome.DispatchUnrecorded);
         RunLog.Info($"{Label}: {kind} attempt {intent.AttemptId} for {plot}, {amount} gil, cycle {entry.Cycle}: {outcome}.");
         return outcome;
@@ -237,15 +239,15 @@ internal sealed partial class SettlementTask
             return;
         }
 
-        End(settled.Verdict == RefundVerdict.Refunded ? SettlementResult.Refunded : SettlementResult.RefundedAmountDiffers);
+        End(SettlementResult.Refunded);
     }
 
-    // The same plot's placard opened again and read once its sale data has arrived: whether it still offers View Lottery
-    // Results to this character, null when it could not be opened and confirmed.
+    // The same plot's placard opened again and read once its address agrees: whether it still offers View Lottery Results
+    // to this character, null when it could not be opened, confirmed or fully read.
     private async Task<bool?> PlacardStillOffers()
     {
         HousingDialogs.ClosePlacard();
-        await WaitUntilTimed(() => !AddonReads.IsReady(Game.Placard.PlacardReader.AddonName), PlacardCloseWaitMs, "settlement-placard-close");
+        await WaitUntilTimed(() => !AddonReads.IsReady(PlacardReader.AddonName), PlacardCloseWaitMs, "settlement-placard-close");
         var destination = HousingDestination.Of(plot);
         if (await OpenPlacardAt(destination, services.Observers, manualArrival: false, Label) != VisitFailure.None)
         {
@@ -253,12 +255,13 @@ internal sealed partial class SettlementTask
         }
 
         var (placard, _) = await ReadPlacardSettled(services.Observers, services.Housing);
-        if (placard is not { } read || PlacardIdentity.Verify(destination, read.Address) != PlacardIdentityVerdict.Confirmed || read.Sale is null)
+        if (placard is not { } read || PlacardIdentity.Verify(destination, read.Address) != PlacardIdentityVerdict.Confirmed)
         {
             return null;
         }
 
-        return ResultsOffered(read);
+        var evidence = EvidenceOf(read);
+        return RefundRules.PlacardReadable(evidence.SaleRead, read.HousingType is not null, evidence.AllLabelsKnown) ? ResultsOffered(read) : null;
     }
 
     private async Task AwaitClaim(ActionJournal journal)
@@ -321,9 +324,9 @@ internal sealed partial class SettlementTask
     // window is left alone. True when no result dialog is open any more.
     private async Task<bool> CloseLeftoverDialog()
     {
-        if (HousingDialogs.IdentifyResultDialog() is { Text: not null } still)
+        if (HousingDialogs.ResultDialogOpen())
         {
-            Warn($"{Label}: the result dialog ({still.Text}) is still open after Yes; it is closed, never pressed again.");
+            Warn($"{Label}: a result dialog is still open after Yes; it is closed, never pressed again.");
             await CloseResult(HousingDialogs.ReadResultDialog());
             return false;
         }

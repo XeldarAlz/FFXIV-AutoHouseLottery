@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using AutoHouseLottery.Core.Eligibility.Model;
+using AutoHouseLottery.Core.External;
 using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Dialogs;
@@ -22,7 +23,8 @@ internal sealed record RunServices(
     Action ConsumeGrant,
     Action CloseConfirmationLater,
     Func<ulong, bool> AutomaticRefunds,
-    Func<Guid, bool, SettlementTask> Collect);
+    Func<Guid, bool, SettlementTask> Collect,
+    Action<Task> TrackJournalWrite);
 
 // Drives one character's entry through the steps of TECHNICAL_DESIGN section 11. Each await does at most one validated
 // operation and every wait has its own deadline. A pause or stop before the intent cancels this task and relaunches
@@ -124,6 +126,14 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
             return Stop(EntryFailure.JournalUnavailable);
         }
 
+        // Checked on every start and every resume, by the player or after a duty, since the run passes here each time.
+        if (AutoAnswerGuard.Blocks)
+        {
+            session.Fail(EntryFailure.AutoAnswerPlugin);
+            Move(EntryStep.NeedsPlayer);
+            return false;
+        }
+
         if (services.Housing.HasPendingAttempt(context.ContentId, session.Policy.Cycle.Cycle))
         {
             session.Fail(EntryFailure.SubmissionUncertain);
@@ -168,17 +178,15 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
         Diag($"Entry run {session.RunId}: outstanding earlier entry {outstanding.Kind}{(outstanding.ReceiptId is { } held ? $" ({held})" : string.Empty)}; {step}.");
         if (step == OutstandingStep.CollectFirst && outstanding.ReceiptId is { } receiptId)
         {
-            step = await CollectOutstanding(receiptId);
+            var result = await CollectOutstanding(receiptId);
             if (session.StopRequested || session.PauseRequested)
             {
                 return false;
             }
 
-            if (step == OutstandingStep.Proceed)
-            {
-                var remaining = services.Housing.Outstanding(contentId, session.Policy.Cycle.Cycle);
-                step = remaining.Kind == OutstandingKind.None ? OutstandingStep.Proceed : OutstandingPlan.Decide(remaining.Kind, automaticRefunds: false);
-            }
+            var remaining = services.Housing.Outstanding(contentId, session.Policy.Cycle.Cycle);
+            step = OutstandingPlan.AfterCollection(result, remaining.Kind);
+            Diag($"Entry run {session.RunId}: after the visit the outstanding earlier entry is {remaining.Kind}; {step}.");
         }
 
         return step switch
@@ -186,12 +194,11 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
             OutstandingStep.Proceed => true,
             OutstandingStep.StopUnclaimedWin => FinishWith(EntryFailure.UnclaimedWin),
             OutstandingStep.StopDryRunCollection => FinishWith(EntryFailure.RefundDryRun),
-            OutstandingStep.StopCheckEarlierResult => FinishWith(EntryFailure.CheckEarlierResult),
             _ => FinishWith(EntryFailure.CollectRefundFirst),
         };
     }
 
-    private async Task<OutstandingStep> CollectOutstanding(Guid receiptId)
+    private async Task<SettlementResult> CollectOutstanding(Guid receiptId)
     {
         var collect = services.Collect(receiptId, session.DryRunRequested);
         session.Collecting = collect;
@@ -206,9 +213,9 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
 
         CancelToken.ThrowIfCancellationRequested();
         var visit = collect.Progress;
-        Diag($"Entry run {session.RunId}: the earlier entry's visit ended {visit.Result}{(visit.Failure == Settlement.Model.SettlementFailure.None ? string.Empty : $" ({visit.Failure})")}"
+        Diag($"Entry run {session.RunId}: the earlier entry's visit ended {visit.Result}{(visit.Failure == SettlementFailure.None ? string.Empty : $" ({visit.Failure})")}"
            + $"{(visit.Outcome is { } outcome ? $", outcome {outcome}" : string.Empty)}.");
-        return OutstandingPlan.AfterCollection(visit.Result, visit.Outcome);
+        return visit.Result;
     }
 
     private bool ReserveFunds()
@@ -310,7 +317,7 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
     {
         if (rejection == HousingText.OutstandingPropertyOrRefund)
         {
-            _ = services.Housing.ReopenAbsenceSettlements(session.Settings.ContentId);
+            services.TrackJournalWrite(services.Housing.ReopenAbsenceSettlements(session.Settings.ContentId));
         }
 
         services.Observers.HousingLog.EndCapture();

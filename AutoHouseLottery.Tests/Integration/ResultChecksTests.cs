@@ -18,7 +18,7 @@ public sealed class ResultChecksTests
         Assert.Equal(ResultCheckSource.UncertainAttempt, check.Source);
         Assert.Equal(earlier.AttemptId, check.Id);
         Assert.Equal(EntrySlotState.Unknown, ParticipationRules.FromJournal(snapshot, ContentId, HomeWorld, SecondCycle).State);
-        Assert.Equal(OutstandingKind.None, OutstandingRules.Find(snapshot, ContentId, SecondCycle).Kind);
+        Assert.Equal(OutstandingKind.None, OutstandingRules.Find(snapshot, ContentId, SecondCycle, NothingLeftToTheGame).Kind);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class ResultChecksTests
         var check = Assert.Single(ResultChecks.Due(snapshot, SecondCycle));
         Assert.Equal(unsettled.ReceiptId, check.Id);
         Assert.Equal(ResultCheckSource.UnsettledReceipt, check.Source);
-        Assert.Equal(OutstandingKind.ResultUnchecked, OutstandingRules.Find(snapshot, ContentId, SecondCycle).Kind);
+        Assert.Equal(OutstandingKind.ResultUnchecked, OutstandingRules.Find(snapshot, ContentId, SecondCycle, NothingLeftToTheGame).Kind);
     }
 
     [Fact]

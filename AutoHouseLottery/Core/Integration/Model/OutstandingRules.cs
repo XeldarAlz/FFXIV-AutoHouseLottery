@@ -12,7 +12,10 @@ internal readonly record struct OutstandingEntry(OutstandingKind Kind, Guid? Rec
 
 internal static class OutstandingRules
 {
-    public static OutstandingEntry Find(in JournalSnapshot snapshot, ulong contentId, CycleKey currentCycle)
+    // leftToTheGame names the entries nothing here can settle (no result offered, an outcome the visit could not read, a
+    // plot the Timers text does not name for certain): they never block a new entry, and the game itself refuses one
+    // while a refund or a plot really waits (LogMessage 6100). A known win always counts.
+    public static OutstandingEntry Find(in JournalSnapshot snapshot, ulong contentId, CycleKey currentCycle, Func<EntryReceipt, EntrySettlement, bool> leftToTheGame)
     {
         var found = new OutstandingEntry(OutstandingKind.None, null);
         var receipts = snapshot.Receipts;
@@ -25,6 +28,11 @@ internal static class OutstandingRules
             }
 
             var kind = KindOf(settlement.State, receipt.Cycle, currentCycle);
+            if (kind is OutstandingKind.RefundDue or OutstandingKind.ResultUnchecked && leftToTheGame(receipt, settlement))
+            {
+                continue;
+            }
+
             if (kind > found.Kind)
             {
                 found = new OutstandingEntry(kind, receipt.ReceiptId);

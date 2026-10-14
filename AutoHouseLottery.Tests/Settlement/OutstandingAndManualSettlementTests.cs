@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration.Model;
@@ -13,13 +14,18 @@ public sealed class OutstandingAndManualSettlementTests
     private const ushort HomeWorldShort = (ushort)HomeWorld;
 
     [Fact]
-    public void AnOutstandingRefundIsCollectedFirstOnlyWithAutomaticRefunds()
+    public void AKnownRefundIsCollectedFirstOnlyWithAutomaticRefunds()
     {
         Assert.Equal(OutstandingStep.CollectFirst, OutstandingPlan.Decide(OutstandingKind.RefundDue, automaticRefunds: true));
         Assert.Equal(OutstandingStep.StopCollectRefundFirst, OutstandingPlan.Decide(OutstandingKind.RefundDue, automaticRefunds: false));
-        Assert.Equal(OutstandingStep.CollectFirst, OutstandingPlan.Decide(OutstandingKind.ResultUnchecked, automaticRefunds: true));
-        Assert.Equal(OutstandingStep.StopCheckEarlierResult, OutstandingPlan.Decide(OutstandingKind.ResultUnchecked, automaticRefunds: false));
         Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.Decide(OutstandingKind.None, automaticRefunds: false));
+    }
+
+    [Fact]
+    public void AResultNobodyReadIsVisitedWithAutomaticRefundsAndOtherwiseLeftToTheGame()
+    {
+        Assert.Equal(OutstandingStep.CollectFirst, OutstandingPlan.Decide(OutstandingKind.ResultUnchecked, automaticRefunds: true));
+        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.Decide(OutstandingKind.ResultUnchecked, automaticRefunds: false));
     }
 
     [Theory]
@@ -28,31 +34,80 @@ public sealed class OutstandingAndManualSettlementTests
     public void AnUnclaimedWinAlwaysStopsForThePlayer(bool automaticRefunds)
     {
         Assert.Equal(OutstandingStep.StopUnclaimedWin, OutstandingPlan.Decide(OutstandingKind.UnclaimedWin, automaticRefunds));
-        Assert.Equal(OutstandingStep.StopUnclaimedWin, OutstandingPlan.AfterCollection(SettlementResult.Classified, InspectionOutcome.WonUnclaimed));
+        Assert.Equal(OutstandingStep.StopUnclaimedWin, OutstandingPlan.AfterCollection(SettlementResult.Classified, OutstandingKind.UnclaimedWin));
     }
 
     [Fact]
     public void ADryRunCollectionCannotFreeTheSlot()
     {
-        Assert.Equal(OutstandingStep.StopDryRunCollection, OutstandingPlan.AfterCollection(SettlementResult.DryRun, InspectionOutcome.LostRefundDue));
+        Assert.Equal(OutstandingStep.StopDryRunCollection, OutstandingPlan.AfterCollection(SettlementResult.DryRun, OutstandingKind.RefundDue));
     }
 
     [Fact]
-    public void ACollectedOrSettledEntryLetsTheRunGoOn()
+    public void AfterTheVisitOnlyWhatIsStillKnownToWaitStopsTheRun()
     {
-        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.Refunded, InspectionOutcome.LostRefundDue));
-        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.RefundedAmountDiffers, InspectionOutcome.ForfeitRefundDue));
-        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.Classified, InspectionOutcome.Refunded));
-        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.Classified, InspectionOutcome.Expired));
+        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.Refunded, OutstandingKind.None));
+        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, OutstandingKind.None));
+        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, OutstandingKind.ResultUnchecked));
+        Assert.Equal(OutstandingStep.StopCollectRefundFirst, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, OutstandingKind.RefundDue));
+        Assert.Equal(OutstandingStep.StopCollectRefundFirst, OutstandingPlan.AfterCollection(SettlementResult.NeedsReconciliation, OutstandingKind.RefundDue));
     }
 
     [Fact]
-    public void AnythingLessThanASettlementStopsTheRun()
+    public void AnEntryNothingHereCanSettleNeverBlocksANewEntry()
     {
-        Assert.Equal(OutstandingStep.StopCollectRefundFirst, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, InspectionOutcome.LostRefundDue));
-        Assert.Equal(OutstandingStep.StopCheckEarlierResult, OutstandingPlan.AfterCollection(SettlementResult.NeedsReconciliation, null));
-        Assert.Equal(OutstandingStep.StopCheckEarlierResult, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, InspectionOutcome.OutcomeUnknown));
-        Assert.Equal(OutstandingStep.StopCheckEarlierResult, OutstandingPlan.AfterCollection(SettlementResult.Stopped, InspectionOutcome.Refunded));
+        var collectedByHand = Receipt(Plot(12, 5), FirstCycle);
+        var neverRead = Receipt(Plot(12, 6), FirstCycle);
+        var unreadable = Receipt(Plot(12, 7), FirstCycle);
+        var won = Receipt(Plot(12, 8), FirstCycle);
+        var sighted = new HashSet<Guid> { collectedByHand.ReceiptId, won.ReceiptId };
+        bool LeftToTheGame(EntryReceipt receipt, EntrySettlement settlement)
+            => PendingRules.LeftToTheGame(settlement.State, sighted.Contains(receipt.ReceiptId), receipt.Plot is not null);
+
+        var onlyPending = Journal([], (collectedByHand, SettlementState.LostRefundDue), (unreadable, SettlementState.OutcomeUnknown));
+        Assert.Equal(OutstandingKind.None, OutstandingRules.Find(onlyPending, ContentId, SecondCycle, LeftToTheGame).Kind);
+
+        var unread = Journal([], (collectedByHand, SettlementState.LostRefundDue), (neverRead, SettlementState.Entered));
+        Assert.Equal(new OutstandingEntry(OutstandingKind.ResultUnchecked, neverRead.ReceiptId), OutstandingRules.Find(unread, ContentId, SecondCycle, LeftToTheGame));
+
+        var win = Journal([], (won, SettlementState.WonUnclaimed));
+        Assert.Equal(OutstandingKind.UnclaimedWin, OutstandingRules.Find(win, ContentId, SecondCycle, LeftToTheGame).Kind);
+    }
+
+    [Fact]
+    public void AnEntryIsLeftToTheGameOnlyWhenNothingHereCanSettleIt()
+    {
+        Assert.True(PendingRules.LeftToTheGame(SettlementState.OutcomeUnknown, noResultSeen: false, plotKnown: true));
+        Assert.True(PendingRules.LeftToTheGame(SettlementState.LostRefundDue, noResultSeen: true, plotKnown: true));
+        Assert.True(PendingRules.LeftToTheGame(SettlementState.Entered, noResultSeen: false, plotKnown: false));
+        Assert.False(PendingRules.LeftToTheGame(SettlementState.Entered, noResultSeen: false, plotKnown: true));
+        Assert.False(PendingRules.LeftToTheGame(SettlementState.LostRefundDue, noResultSeen: false, plotKnown: true));
+    }
+
+    [Fact]
+    public void ThePlayerMayMarkAnEntrySettledInGameOnlyOnceItsResultsAreOut()
+    {
+        Assert.True(ManualSettlement.CanMarkSettledInGame(SettlementState.LostRefundDue, resultsArrived: true, attemptOpen: false));
+        Assert.True(ManualSettlement.CanMarkSettledInGame(SettlementState.ForfeitRefundDue, resultsArrived: true, attemptOpen: false));
+        Assert.True(ManualSettlement.CanMarkSettledInGame(SettlementState.OutcomeUnknown, resultsArrived: true, attemptOpen: false));
+        Assert.True(ManualSettlement.CanMarkSettledInGame(SettlementState.Entered, resultsArrived: true, attemptOpen: false));
+        Assert.False(ManualSettlement.CanMarkSettledInGame(SettlementState.Entered, resultsArrived: false, attemptOpen: false));
+        Assert.False(ManualSettlement.CanMarkSettledInGame(SettlementState.LostRefundDue, resultsArrived: true, attemptOpen: true));
+        Assert.False(ManualSettlement.CanMarkSettledInGame(SettlementState.WonUnclaimed, resultsArrived: true, attemptOpen: false));
+        Assert.False(ManualSettlement.CanMarkSettledInGame(SettlementState.RefundPending, resultsArrived: true, attemptOpen: false));
+        Assert.False(ManualSettlement.CanMarkSettledInGame(SettlementState.Refunded, resultsArrived: true, attemptOpen: false));
+    }
+
+    [Fact]
+    public void ARefusalWith6100ReopensOnlyWhatWasSettledWithoutAResult()
+    {
+        var byAbsence = Receipt(Plot(12, 5), FirstCycle);
+        var byResult = Receipt(Plot(12, 6), FirstCycle);
+        var otherCharacter = Receipt(Plot(12, 7), FirstCycle) with { CharacterContentId = ContentId + 1 };
+        var journal = Journal([], (byAbsence, SettlementState.Refunded), (byResult, SettlementState.Refunded), (otherCharacter, SettlementState.Refunded));
+        journal = journal with { Settlements = SettledByAbsence(journal.Settlements, byAbsence.ReceiptId, otherCharacter.ReceiptId) };
+
+        Assert.Equal(byAbsence.ReceiptId, Assert.Single(ManualSettlement.ReopenedBy6100(journal, ContentId)));
     }
 
     [Theory]
@@ -178,6 +233,20 @@ public sealed class OutstandingAndManualSettlementTests
         var journal = Journal([refund], (lost, SettlementState.RefundPending));
 
         Assert.Empty(ManualSettlement.FromReading(journal, Reading(LotterySnapshotState.LoadedNone), ResultsPhase(FirstCycle)));
+    }
+
+    private static ImmutableArray<EntrySettlement> SettledByAbsence(ImmutableArray<EntrySettlement> settlements, params Guid[] receiptIds)
+    {
+        var marked = settlements.ToBuilder();
+        for (var index = 0; index < marked.Count; index++)
+        {
+            if (Array.IndexOf(receiptIds, marked[index].ReceiptId) >= 0)
+            {
+                marked[index] = marked[index] with { SettledByAbsence = true };
+            }
+        }
+
+        return marked.ToImmutable();
     }
 
     private static EstateAddress Estate(int ward, int plot) => new(HousingDistricts.Mist, HomeWorldShort, ward - 1, plot - 1, false, 1);

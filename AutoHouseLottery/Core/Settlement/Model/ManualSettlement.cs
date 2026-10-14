@@ -79,4 +79,36 @@ internal static class ManualSettlement
 
         return fixes.ToImmutable();
     }
+
+    // The player's word that a refund owed, or a result never read, was settled in game by hand. Only for an entry of
+    // this plugin whose results are out and that has no refund or claim of the plugin still in question; never for an
+    // earlier attempt still in question, which only its plot's result can settle.
+    public static bool CanMarkSettledInGame(SettlementState state, bool resultsArrived, bool attemptOpen)
+        => resultsArrived && !attemptOpen && (SettlementStates.OutcomeOpen(state) || SettlementStates.RefundOwed(state));
+
+    // The entries of a character the game says are not settled after all (LogMessage 6100): those recorded as settled
+    // without a result being read.
+    public static ImmutableArray<Guid> ReopenedBy6100(in JournalSnapshot snapshot, ulong contentId)
+    {
+        var reopened = ImmutableArray.CreateBuilder<Guid>();
+        var receipts = snapshot.Receipts;
+        for (var index = 0; index < receipts.Length; index++)
+        {
+            var receipt = receipts[index];
+            if (receipt.CharacterContentId == contentId && SettlementLookups.Settlement(snapshot, receipt.ReceiptId) is { SettledByAbsence: true })
+            {
+                reopened.Add(receipt.ReceiptId);
+            }
+        }
+
+        return reopened.ToImmutable();
+    }
+}
+
+internal static class PendingRules
+{
+    // An entry nothing here can settle: the visit read no outcome, the placard offered no result, or the plot the
+    // Timers text names cannot be told. Such an entry is left to the game and never blocks a new one.
+    public static bool LeftToTheGame(SettlementState state, bool noResultSeen, bool plotKnown)
+        => state == SettlementState.OutcomeUnknown || noResultSeen || !plotKnown;
 }

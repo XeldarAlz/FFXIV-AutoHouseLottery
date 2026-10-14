@@ -13,6 +13,13 @@ internal static class DisplayDates
     private const int MinutesPerHour = 60;
     private const int MonthsPerYear = 12;
 
+    // Where each number stands: the date's three in the client language's order, then the hour and the minute.
+    private const int FirstDatePart = 0;
+    private const int SecondDatePart = 1;
+    private const int ThirdDatePart = 2;
+    private const int HourPart = 3;
+    private const int MinutePart = 4;
+
     // A date and time the game rendered into a macro: exactly five runs of ASCII digits, the date in the client
     // language's order with a four-digit year, then the hour and the minute, split only by punctuation and spaces. Any
     // letter (a month name, a.m. or p.m.), another count of numbers or an impossible date reads as unknown, so a deadline
@@ -66,15 +73,15 @@ internal static class DisplayDates
 
         var (yearIndex, monthIndex, dayIndex) = order switch
         {
-            DateOrder.YearMonthDay => (0, 1, 2),
-            DateOrder.MonthDayYear => (2, 0, 1),
-            _ => (2, 1, 0),
+            DateOrder.YearMonthDay => (FirstDatePart, SecondDatePart, ThirdDatePart),
+            DateOrder.MonthDayYear => (ThirdDatePart, FirstDatePart, SecondDatePart),
+            _ => (ThirdDatePart, SecondDatePart, FirstDatePart),
         };
         var year = parts[yearIndex];
         var month = parts[monthIndex];
         var day = parts[dayIndex];
-        var hour = parts[3];
-        var minute = parts[4];
+        var hour = parts[HourPart];
+        var minute = parts[MinutePart];
         if (digits[yearIndex] != YearDigits
             || year < 1
             || month is < 1 or > MonthsPerYear
