@@ -22,6 +22,7 @@ internal sealed partial class EntryRunTask
     private const int TickAttempts = 3;
     private const int ClickWindowWaitMs = 5_000;
     private const int ReceiptGilWaitMs = 30_000;
+    private const int SecondReadingDelayMs = 60_000;
 
     private long dispatchSequence;
     private DateTime dispatchedUtc;
@@ -342,11 +343,27 @@ internal sealed partial class EntryRunTask
         }
 
         gilAfter = CharacterContextReader.ReadGil();
-        bool? namesPlot = refreshed?.Entry is { } entry ? ReadingAddress.Names(entry, intent.Plot, DistrictNames.Of) : null;
-        var result = ReceiptCorrelation.Correlate(new ReceiptFacts(intent.Amount, gilBefore, gilAfter, rejection, refreshed, namesPlot));
+        var facts = new ReceiptFacts(intent.Amount, gilBefore, gilAfter, rejection, refreshed, NamesPlot(refreshed, intent));
+        if (ReceiptCorrelation.NeedsSecondReading(facts))
+        {
+            Diag($"Entry run {session.RunId}: the first reading shows no entry on {intent.Plot} and the gil is untouched; reading again in {SecondReadingDelayMs / TimeUnits.MillisecondsPerSecond}s before the slot is released.");
+            await DelayMs(SecondReadingDelayMs);
+            var again = CharacterContextReader.Read() is { ContentId: var againId } againContext && againId == intent.CharacterContentId ? await RefreshLottery(againContext) : null;
+            rejection ??= services.Observers.HousingLog.FirstRejectionAfter(dispatchSequence)?.Text;
+            facts = facts with
+            {
+                GilAfter = CharacterContextReader.ReadGil(),
+                Rejection = rejection,
+                SecondReading = again,
+                SecondReadingNamesPlot = NamesPlot(again, intent),
+            };
+        }
+
+        var result = ReceiptCorrelation.Correlate(facts);
         services.Observers.HousingLog.EndCapture();
-        RunLog.Info($"Entry run {session.RunId}: receipt for attempt {intent.AttemptId}: {result.Verdict} (gil {gilBefore} -> {gilAfter?.ToString() ?? "unknown"}, deposit {intent.Amount}, "
-                  + $"refusal {rejection?.ToString() ?? "none"}, reading {(refreshed is { } shown ? LotteryReader.Describe(shown) : "none")}, names the plot {namesPlot?.ToString() ?? "unknown"}).");
+        RunLog.Info($"Entry run {session.RunId}: receipt for attempt {intent.AttemptId}: {result.Verdict} (gil {gilBefore} -> {facts.GilAfter?.ToString() ?? "unknown"}, deposit {intent.Amount}, "
+                  + $"refusal {facts.Rejection?.ToString() ?? "none"}, reading {Describe(facts.Reading)} naming the plot {facts.ReadingNamesPlot?.ToString() ?? "unknown"}, "
+                  + $"second reading {Describe(facts.SecondReading)} naming the plot {facts.SecondReadingNamesPlot?.ToString() ?? "unknown"}).");
         switch (result.Verdict)
         {
             case ReceiptVerdict.Confirmed when !dispatchUnrecorded:
@@ -367,6 +384,11 @@ internal sealed partial class EntryRunTask
                 return;
         }
     }
+
+    private static bool? NamesPlot(LotterySnapshot? reading, ActionAttempt intent)
+        => reading?.Entry is { } entry ? ReadingAddress.Names(entry, intent.Plot, DistrictNames.Of) : null;
+
+    private static string Describe(LotterySnapshot? reading) => reading is { } shown ? LotteryReader.Describe(shown) : "none";
 
     private async Task PersistReceipt(ActionJournal journal, ActionAttempt intent, uint? lotteryNumber)
     {
