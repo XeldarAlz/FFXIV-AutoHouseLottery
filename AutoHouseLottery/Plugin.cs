@@ -1,9 +1,14 @@
 using AutoHouseLottery.Core;
 using AutoHouseLottery.Core.Debug;
 using AutoHouseLottery.Core.Find;
+using AutoHouseLottery.Core.Game;
+using AutoHouseLottery.Core.Game.Dialogs;
+using AutoHouseLottery.Core.Game.Placard;
+using AutoHouseLottery.Core.Game.Ward;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Tasks;
+using AutoHouseLottery.Core.Travel;
 using AutoHouseLottery.Windows;
 using AutoHouseLottery.Windows.Shell;
 using clib;
@@ -21,6 +26,8 @@ namespace AutoHouseLottery;
 
 public sealed class Plugin : IDalamudPlugin
 {
+    private const string ProbeVerb = "probe";
+
     [PluginService]
     internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
 
@@ -32,10 +39,16 @@ public sealed class Plugin : IDalamudPlugin
     internal Configuration Configuration { get; }
     internal WindowSystem WindowSystem { get; } = new("AutoHouseLottery");
     internal RunController Controller { get; }
+    internal HousingObservers Housing { get; }
     internal Discovery Discovery { get; }
 
     private readonly DutyWatcher dutyWatcher;
     private readonly GmAlertWatcher gmAlertWatcher;
+    private readonly AddonUpdateCounter wardWindow;
+    private readonly WardPortalObserver wardPackets;
+    private readonly AddonUpdateCounter placardWindow;
+    private readonly PlacardSaleHook placardSales;
+    private readonly HousingLogWatcher housingLog;
     private readonly AppWindow appWindow;
     private readonly CommandInfo primaryCommand;
     private readonly CommandInfo aliasCommand;
@@ -65,6 +78,17 @@ public sealed class Plugin : IDalamudPlugin
             completed.Push(dutyWatcher.Dispose);
             gmAlertWatcher = new GmAlertWatcher();
             completed.Push(gmAlertWatcher.Dispose);
+            wardWindow = new AddonUpdateCounter(WardReader.AddonName);
+            completed.Push(wardWindow.Dispose);
+            wardPackets = new WardPortalObserver();
+            completed.Push(wardPackets.Dispose);
+            placardWindow = new AddonUpdateCounter(PlacardReader.AddonName);
+            completed.Push(placardWindow.Dispose);
+            placardSales = new PlacardSaleHook();
+            completed.Push(placardSales.Dispose);
+            housingLog = new HousingLogWatcher();
+            completed.Push(housingLog.Dispose);
+            Housing = new HousingObservers(wardWindow, wardPackets, placardWindow, placardSales, SignboardAgentLayout.Resolve(placardSales.SignatureFound), housingLog);
 
             InitializeLocalization();
             Discovery = new Discovery(Configuration, PluginInterface.GetPluginConfigDirectory(), PluginVersion, () => appWindow?.IsOpen == true);
@@ -112,7 +136,9 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        TaskStarter.StopCurrent();
         Controller.Shutdown();
+        HousingTravel.Release();
 
         PluginInterface.UiBuilder.Draw -= OnDraw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
@@ -128,6 +154,11 @@ public sealed class Plugin : IDalamudPlugin
         CommandManager.RemoveHandler(HouseLotteryConstants.PrimaryCommand);
         CommandManager.RemoveHandler(HouseLotteryConstants.AliasCommand);
 
+        housingLog.Dispose();
+        placardSales.Dispose();
+        placardWindow.Dispose();
+        wardPackets.Dispose();
+        wardWindow.Dispose();
         dutyWatcher.Dispose();
         gmAlertWatcher.Dispose();
         Discovery.Dispose();
@@ -193,11 +224,19 @@ public sealed class Plugin : IDalamudPlugin
         {
             TargetDumper.Dump();
         }
+        else if (IsProbe(trimmed))
+        {
+            HousingProbe.Run(trimmed[ProbeVerb.Length..], Housing);
+        }
         else
         {
             ToggleMainUi();
         }
     }
+
+    private static bool IsProbe(string arguments)
+        => arguments.StartsWith(ProbeVerb, StringComparison.OrdinalIgnoreCase)
+        && (arguments.Length == ProbeVerb.Length || char.IsWhiteSpace(arguments[ProbeVerb.Length]));
 
     private void OnDraw()
     {
