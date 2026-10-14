@@ -3,6 +3,7 @@ using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Lottery;
 using AutoHouseLottery.Core.Game.Model;
+using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Integration.Model;
 using AutoHouseLottery.Core.Persistence.Model;
@@ -32,7 +33,7 @@ internal sealed class ReconcileTask(HousingContext housing) : AutoCommon
             return;
         }
 
-        var pending = Pending(journal.Snapshot(), context.ContentId);
+        var pending = Pending(journal.Snapshot(), context.ContentId, housing.CurrentPosition(DateTime.UtcNow).Cycle);
         if (pending.Count == 0)
         {
             Finish(ReconcileOutcome.NothingPending, 0, 0, 0);
@@ -86,7 +87,8 @@ internal sealed class ReconcileTask(HousingContext housing) : AutoCommon
         Finish(remaining == 0 ? ReconcileOutcome.Settled : ReconcileOutcome.StillUncertain, confirmed, rejected, remaining);
     }
 
-    private static List<ActionAttempt> Pending(in JournalSnapshot snapshot, ulong contentId)
+    // Only this cycle's attempts can be read back from the lottery reading; earlier ones wait for a result check.
+    private static List<ActionAttempt> Pending(in JournalSnapshot snapshot, ulong contentId, CycleKey cycle)
     {
         var pending = new List<ActionAttempt>();
         var attempts = snapshot.Attempts;
@@ -95,6 +97,7 @@ internal sealed class ReconcileTask(HousingContext housing) : AutoCommon
             var attempt = attempts[index];
             if (attempt.Kind == ActionKind.Entry
                 && attempt.CharacterContentId == contentId
+                && attempt.Cycle == cycle
                 && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
             {
                 pending.Add(attempt);

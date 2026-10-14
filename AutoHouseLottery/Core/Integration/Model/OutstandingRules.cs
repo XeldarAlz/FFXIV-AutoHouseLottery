@@ -58,7 +58,7 @@ internal static class OutstandingRules
             case SettlementState.Expired:
                 return OutstandingKind.None;
             default:
-                return entered.Region == current.Region && current.IsLaterThan(entered) ? OutstandingKind.ResultUnchecked : OutstandingKind.None;
+                return ResultChecks.IsUnsettledFromEarlierCycle(state, entered, current) ? OutstandingKind.ResultUnchecked : OutstandingKind.None;
         }
     }
 }

@@ -111,7 +111,7 @@ internal sealed partial class EntryRunTask(EntryRunSession session, RunServices 
             return Stop(EntryFailure.JournalUnavailable);
         }
 
-        if (services.Housing.HasPendingAttempt(context.ContentId))
+        if (services.Housing.HasPendingAttempt(context.ContentId, session.Policy.Cycle.Cycle))
         {
             session.Fail(EntryFailure.SubmissionUncertain);
             Move(EntryStep.NeedsReconciliation);

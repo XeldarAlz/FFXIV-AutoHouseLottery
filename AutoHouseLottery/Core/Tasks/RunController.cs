@@ -269,7 +269,7 @@ internal sealed class RunController
             policy,
             settings is not null,
             housing.JournalWritable,
-            context is not null && housing.HasPendingAttempt(context.ContentId),
+            context is not null && housing.HasPendingAttempt(context.ContentId, policy.Cycle.Cycle),
             slot,
             preview?.Blockers ?? RunBlocker.None,
             assignment is not null);
@@ -528,7 +528,7 @@ internal sealed class RunController
         }
 
         reconcileWanted = false;
-        if (housing.HasPendingAttempt(contentId))
+        if (housing.HasPendingAttempt(contentId, housing.CurrentPosition(DateTime.UtcNow).Cycle))
         {
             RunLog.Info("Reconciliation: this character has an entry attempt in question; reading its lottery entry before any further entry.");
             Reconcile();

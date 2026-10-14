@@ -125,13 +125,17 @@ internal sealed class HousingContext : IDisposable
         return CharacterProfileMapping.From(context, Region, accountGroup, outstanding, Participation(context.ContentId, context.HomeWorldId, reading, position));
     }
 
-    public bool HasPendingAttempt(ulong contentId)
+    // An attempt in question for this cycle holds its entry slot. One from an earlier cycle cannot hold this cycle's
+    // slot; it waits for a result check instead (ResultChecks).
+    public bool HasPendingAttempt(ulong contentId, CycleKey cycle)
     {
         var attempts = JournalSnapshot.Attempts;
         for (var index = 0; index < attempts.Length; index++)
         {
             var attempt = attempts[index];
-            if (attempt.CharacterContentId == contentId && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
+            if (attempt.CharacterContentId == contentId
+                && attempt.Cycle == cycle
+                && attempt.State is AttemptState.Prepared or AttemptState.Dispatched or AttemptState.NeedsReconciliation)
             {
                 return true;
             }
