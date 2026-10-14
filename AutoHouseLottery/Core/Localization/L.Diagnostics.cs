@@ -26,7 +26,7 @@ internal static partial class L
         public static readonly LocString NameEntryConfirm = new("diagnostics.name.entryConfirm", "Entering the lottery");
         public static readonly LocString NameRefund = new("diagnostics.name.refund", "Collecting refunds");
         public static readonly LocString NameClaim = new("diagnostics.name.claim", "Claiming a house");
-        public static readonly LocString NameAbsence = new("diagnostics.name.absence", "Results settled in game");
+        public static readonly LocString NameAbsence = new("diagnostics.name.absence", "Placards without a result");
 
         public static readonly LocString StateReady = new("diagnostics.state.ready", "Ready");
         public static readonly LocString StateFallback = new("diagnostics.state.fallback", "Fallback");
@@ -69,7 +69,7 @@ internal static partial class L
         public static readonly LocString RefundDryRunOnly = new("diagnostics.reason.refundDryRunOnly", "A result check reads the refund and closes it, so nothing is collected. Collect refunds in game.");
         public static readonly LocString ClaimValidated = new("diagnostics.reason.claimValidated", "Validated in game: Claim house accepts the win you chose to claim.");
         public static readonly LocString ClaimDryRunOnly = new("diagnostics.reason.claimDryRunOnly", "A win is read and closed, so nothing is claimed. Claim your house in game.");
-        public static readonly LocString AbsenceValidated = new("diagnostics.reason.absenceValidated", "Validated in game: an entry whose placard no longer offers a result is recorded as settled in game.");
-        public static readonly LocString AbsenceDryRunOnly = new("diagnostics.reason.absenceDryRunOnly", "An entry whose placard no longer offers a result stays pending on My lottery instead of being recorded as settled.");
+        public static readonly LocString AbsenceValidated = new("diagnostics.reason.absenceValidated", "Validated in game: an entry whose placard no longer offers a result is recorded as settled outside the plugin.");
+        public static readonly LocString AbsenceDryRunOnly = new("diagnostics.reason.absenceDryRunOnly", "An entry whose placard no longer offers a result stays pending on My lottery instead of being recorded as settled, and does not hold up your next entry.");
     }
 }
