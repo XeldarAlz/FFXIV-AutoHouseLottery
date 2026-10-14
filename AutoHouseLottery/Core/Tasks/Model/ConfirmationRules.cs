@@ -1,4 +1,5 @@
 using AutoHouseLottery.Core.Eligibility.Model;
+using AutoHouseLottery.Core.Housing.Model;
 
 namespace AutoHouseLottery.Core.Tasks.Model;
 
@@ -17,8 +18,8 @@ internal readonly record struct ConfirmationFacts(
 internal static class ConfirmationRules
 {
     // An exact plot is entered only for the amount it was started with; a changed amount goes back to the player
-    // either way. A best match plot may show an amount the listing did not, but not a different one, and never more
-    // than the character's cap or than its gil allows after the reserve.
+    // either way. A best match plot may show an amount the listing did not, but not a different one, never less than any
+    // plot costs, and never more than the character's cap or than its gil allows after the reserve.
     public static EntryFailure Check(in ConfirmationFacts facts)
     {
         if (!facts.Identified)
@@ -26,7 +27,7 @@ internal static class ConfirmationRules
             return EntryFailure.ConfirmationNotShown;
         }
 
-        if (facts.ShownDeposit is not { } deposit)
+        if (facts.ShownDeposit is not { } deposit || (facts.ExpectedDeposit is null && deposit < HousingDistricts.MinimumPlotPrice))
         {
             return EntryFailure.DepositUnreadable;
         }
