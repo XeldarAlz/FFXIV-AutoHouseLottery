@@ -110,6 +110,26 @@ internal static unsafe class HousingDialogs
         return new DialogIdentity(ResultAddon, HousingSheetText.Match(shown, HousingTextRows.ResultDialogs.AsSpan()), shown);
     }
 
+    // The result dialog as it stands: the result row its text matched, the refund a refund row names (read only when its
+    // text is exactly that row's shape), and the text itself for the log.
+    public static ResultDialogReading? ReadResultDialog()
+    {
+        if (!AddonReads.TryGetReady(ResultAddon, out var addon))
+        {
+            return null;
+        }
+
+        var shown = AddonReads.NodeText(((AddonSelectYesno*)addon)->PromptText) ?? string.Empty;
+        var row = HousingSheetText.Match(shown, HousingTextRows.ResultDialogs.AsSpan());
+        long? refund = null;
+        if (row is { } matched && HousingSheetText.Pattern(matched).TryCapture(shown, out var gaps))
+        {
+            refund = ResultDialogText.Refund(matched, gaps);
+        }
+
+        return new ResultDialogReading(row, refund, shown);
+    }
+
     public static DialogActionResult PressPlacardButton(HousingText label)
     {
         var action = label switch
@@ -199,6 +219,31 @@ internal static unsafe class HousingDialogs
         }
 
         RunLog.Info($"Housing dialog: {action} closes {EntryConfirmationAddon}.");
+        addon->Close(FireCloseCallback);
+        return DialogActionResult.Closed;
+    }
+
+    // Like the entry's Cancel, closing a result dialog presses nothing on it, and only a dialog that reads as one of the
+    // result rows is closed; any other Yes/No window is left alone.
+    public static DialogActionResult CloseResult()
+    {
+        const NativeAction action = NativeAction.CloseResult;
+        if (!NativeActionGate.IsPermitted(action))
+        {
+            return Refused(action, DialogActionResult.NotPermitted);
+        }
+
+        if (IdentifyResultDialog() is not { Text: not null } || !AddonReads.TryGetReady(ResultAddon, out var addon))
+        {
+            return Refused(action, DialogActionResult.IdentityMismatch);
+        }
+
+        if (!EzThrottler.Throttle(CloseThrottleKey, ClickThrottleMs))
+        {
+            return DialogActionResult.Throttled;
+        }
+
+        RunLog.Info($"Housing dialog: {action} closes {ResultAddon}.");
         addon->Close(FireCloseCallback);
         return DialogActionResult.Closed;
     }

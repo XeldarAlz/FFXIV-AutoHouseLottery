@@ -101,26 +101,35 @@ public sealed class InspectionRulesTests
     }
 
     [Fact]
-    public void NoResultIsNeverReadAsALossWithoutIndependentEvidence()
+    public void NoResultOfferedIsNeverReadAsALoss()
     {
-        var unknownReading = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: false));
-        var entryStillShown = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: false, readingShowsEntry: true));
-        var buttonButNoDialog = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: true, readingShowsEntry: false));
+        var verdict = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: false));
 
-        Assert.Equal(InspectionReason.NoResultOffered, unknownReading.Reason);
-        Assert.Equal(InspectionReason.NoResultOffered, entryStillShown.Reason);
-        Assert.Equal(InspectionReason.ResultNotShown, buttonButNoDialog.Reason);
+        Assert.NotEqual(InspectionOutcome.LostRefundDue, verdict.Outcome);
+        Assert.Null(verdict.Refund);
     }
 
     [Fact]
-    public void ARefundCollectedOutsideThePluginSettlesWithoutAnAmount()
+    public void APressedButtonWithoutADialogOrAReadingStillShowingTheEntryDecidesNothing()
     {
-        var byReading = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.LostRefundDue, recordedRefund: RefundKind.Loss, readingShowsEntry: false));
-        var byOwnPress = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.NeedsReconciliation, recordedRefund: RefundKind.Loss, open: ActionKind.Refund));
-        var neverRead = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, readingShowsEntry: false));
-        var lapsed = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, readingShowsEntry: false) with { RefundWindowPassed = true });
+        var buttonButNoDialog = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: true, readingShowsEntry: false));
+        var entryStillShown = InspectionRules.Decide(Facts(ResultKind.NotShown, offered: null, resultsOffered: false, readingShowsEntry: true));
+        var claimInQuestion = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.NeedsReconciliation, open: ActionKind.Claim));
 
-        Assert.Equal(new InspectionVerdict(InspectionOutcome.Refunded, null, InspectionReason.None), byReading);
+        Assert.Equal(InspectionReason.ResultNotShown, buttonButNoDialog.Reason);
+        Assert.Equal(InspectionReason.NoResultOffered, entryStillShown.Reason);
+        Assert.Equal(InspectionReason.NoResultOffered, claimInQuestion.Reason);
+    }
+
+    [Fact]
+    public void AResultNoLongerOfferedWasSettledOutsideTheVisitForAnAmountNobodySaw()
+    {
+        var owed = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.LostRefundDue, recordedRefund: RefundKind.Loss));
+        var byOwnPress = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, recorded: SettlementState.NeedsReconciliation, recordedRefund: RefundKind.Loss, open: ActionKind.Refund) with { RefundWindowPassed = true });
+        var neverRead = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false, readingShowsEntry: false));
+        var lapsed = InspectionRules.Decide(Facts(ResultKind.NotShown, resultsOffered: false) with { RefundWindowPassed = true });
+
+        Assert.Equal(new InspectionVerdict(InspectionOutcome.Refunded, null, InspectionReason.None), owed);
         Assert.Equal(new InspectionVerdict(InspectionOutcome.Refunded, null, InspectionReason.None), byOwnPress);
         Assert.Equal(InspectionOutcome.Refunded, neverRead.Outcome);
         Assert.Equal(InspectionOutcome.Expired, lapsed.Outcome);

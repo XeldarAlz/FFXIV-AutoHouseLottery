@@ -7,7 +7,7 @@ namespace AutoHouseLottery.Core.Settlement.Model;
 // character. OfferedRefund: the amount a refund dialog named, null when it named none or could not be read. Recorded and
 // RecordedRefund: what the journal holds for the receipt. OpenAttempt: the kind of this plugin's own refund or claim
 // still open on the receipt, null when there is none. ReadingShowsEntry: a fresh lottery reading during the receipt's
-// results period, true when it shows this entry, false when it proves the entry gone, null when it cannot say.
+// results period, true when it still shows this entry, false when it does not, null when it cannot say.
 // OwnsPlot: the character's own estate list holds this plot. RefundWindowPassed: the estimated 90-day refund window
 // has closed.
 internal readonly record struct InspectionFacts(
@@ -67,10 +67,10 @@ internal static class InspectionRules
         return result == ResultKind.NotShown && !resultsOffered ? AttemptVerdict.NotEntered : AttemptVerdict.Unknown;
     }
 
-    // The result dialog's own row decides; inspection never infers a loss from anything else. Without a dialog the entry
-    // counts as settled only on independent evidence: the plot in the character's estate list, or the placard no longer
-    // offering a result together with this plugin's own refund press or a reading that proves the entry gone. A result
-    // that contradicts what is already recorded is reported, never written over it.
+    // The result dialog's own row decides; inspection never infers a loss from anything else, and only ever runs once the
+    // results are out. Without a dialog the entry counts as settled outside the visit: claimed when the plot is in the
+    // character's estate list, otherwise as below. A result that contradicts what is already recorded is reported, never
+    // written over it.
     public static InspectionVerdict Decide(in InspectionFacts facts)
     {
         switch (facts.Identity)
@@ -101,7 +101,7 @@ internal static class InspectionRules
                 return InspectionVerdict.Unknown(InspectionReason.UnrecognizedDialog);
         }
 
-        return facts.ResultsOffered ? InspectionVerdict.Unknown(InspectionReason.ResultNotShown) : NoResultOffered(facts, refundRecorded);
+        return facts.ResultsOffered ? InspectionVerdict.Unknown(InspectionReason.ResultNotShown) : NoResultOffered(facts);
     }
 
     private static InspectionVerdict Refund(in InspectionFacts facts, InspectionOutcome outcome, RefundKind kind)
@@ -118,20 +118,25 @@ internal static class InspectionRules
             : new InspectionVerdict(outcome, amount, InspectionReason.None);
     }
 
-    private static InspectionVerdict NoResultOffered(in InspectionFacts facts, bool refundRecorded)
+    // Once the results are out the game offers each entrant its result until it is settled, so a confirmed placard that
+    // offers this character none any more means it was settled outside this visit: claimed when the plot is in the estate
+    // list (decided above), lapsed when the refund window has closed, otherwise refunded, for an amount nobody saw. The
+    // placard is the only witness left for an earlier cycle, the same as for an uncertain attempt. A reading that still
+    // shows the entry, or a claim of this plugin still in question, leaves it open.
+    private static InspectionVerdict NoResultOffered(in InspectionFacts facts)
     {
-        if (refundRecorded && (facts.OpenAttempt == ActionKind.Refund || facts.ReadingShowsEntry == false))
+        if (facts.OwnsPlot)
         {
-            return new InspectionVerdict(InspectionOutcome.Refunded, null, InspectionReason.None);
+            return InspectionVerdict.Unknown(InspectionReason.ContradictsRecord);
         }
 
-        if (SettlementStates.OutcomeOpen(facts.Recorded) && facts.OpenAttempt is null && facts.ReadingShowsEntry == false)
+        if (facts.ReadingShowsEntry == true || facts.OpenAttempt == ActionKind.Claim || facts.Recorded == SettlementState.ClaimPending)
         {
-            var outcome = facts.RefundWindowPassed ? InspectionOutcome.Expired : InspectionOutcome.Refunded;
-            return new InspectionVerdict(outcome, null, InspectionReason.None);
+            return InspectionVerdict.Unknown(InspectionReason.NoResultOffered);
         }
 
-        return InspectionVerdict.Unknown(InspectionReason.NoResultOffered);
+        var lapsed = facts.RefundWindowPassed && facts.OpenAttempt != ActionKind.Refund;
+        return new InspectionVerdict(lapsed ? InspectionOutcome.Expired : InspectionOutcome.Refunded, null, InspectionReason.None);
     }
 
     public static SettlementState StateOf(InspectionOutcome outcome) => outcome switch
