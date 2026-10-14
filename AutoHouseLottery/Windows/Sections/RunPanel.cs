@@ -79,7 +79,7 @@ internal static class RunPanel
         var right = end.X - PadX * scale;
         var y = origin.Y + PadY * scale;
         var text = RunPanelText.Shared.For(controller);
-        var titleX = DrawModeBadge(drawList, status.EntryMode, x, y + lineHeight * 0.5f);
+        var titleX = x;
         var titleRight = right;
         if (controlsInDock)
         {
@@ -253,13 +253,6 @@ internal static class RunPanel
     {
         var card = NoticeCard.Begin(FontAwesomeIcon.Sync, Loc.T(L.Run.Checking), Loc.T(L.Run.UncertainBody), null, Styling.AccentBlue, hasButtons: false);
         NoticeCard.End(card);
-    }
-
-    private static float DrawModeBadge(ImDrawListPtr drawList, EntryMode mode, float x, float midY)
-    {
-        var dryRun = mode == EntryMode.DryRun;
-        var width = Badge.DrawLeft(drawList, Loc.T(dryRun ? L.Run.DryRunBadge : L.Run.RealEntryBadge), dryRun ? Styling.AccentBlue : Styling.AccentRose, x, midY);
-        return x + width + ButtonGap * ImGuiHelpers.GlobalScale;
     }
 
     private static int DetailLineCount(RunStatus status)

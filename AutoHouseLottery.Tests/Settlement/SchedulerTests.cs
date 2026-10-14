@@ -105,9 +105,9 @@ public sealed class SchedulerTests
         var entered = Receipt(Plot(12, 5), FirstCycle);
         var journal = Journal([], (entered, SettlementState.Entered));
 
-        Assert.Empty(SettlementSchedule.Due(journal, ContentId, VerifiedEntryPhase(), (_, _) => true, _ => false));
-        Assert.Equal([new SettlementWork(entered.ReceiptId, SettlementMode.Refund)], SettlementSchedule.Due(journal, ContentId, ResultsPhase(FirstCycle), (_, _) => true, _ => false).AsSpan().ToArray());
-        Assert.Empty(SettlementSchedule.Due(journal, ContentId + 1, ResultsPhase(FirstCycle), (_, _) => true, _ => false));
+        Assert.Empty(SettlementSchedule.Due(journal, ContentId, VerifiedEntryPhase()));
+        Assert.Equal([new SettlementWork(entered.ReceiptId, SettlementMode.Refund)], SettlementSchedule.Due(journal, ContentId, ResultsPhase(FirstCycle)).AsSpan().ToArray());
+        Assert.Empty(SettlementSchedule.Due(journal, ContentId + 1, ResultsPhase(FirstCycle)));
     }
 
     [Fact]
@@ -116,21 +116,20 @@ public sealed class SchedulerTests
         var entered = Receipt(Plot(12, 5), FirstCycle);
         var journal = Journal([], (entered, SettlementState.Entered));
 
-        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle), (_, _) => true, _ => false);
+        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle));
 
         Assert.Equal(SettlementMode.Refund, Assert.Single(due).Mode);
     }
 
     [Fact]
-    public void WinsWaitForThePlayerAndKnownRefundsWaitForAPermittedPress()
+    public void WinsWaitForThePlayerAndKnownRefundsAreCollected()
     {
         var won = Receipt(Plot(12, 5), FirstCycle);
         var lost = Receipt(Plot(12, 6), FirstCycle);
         var settled = Receipt(Plot(12, 7), FirstCycle);
         var journal = Journal([], (won, SettlementState.WonUnclaimed), (lost, SettlementState.LostRefundDue), (settled, SettlementState.Refunded));
 
-        Assert.Empty(SettlementSchedule.Due(journal, ContentId, ResultsPhase(FirstCycle), (_, _) => false, _ => false));
-        Assert.Equal([new SettlementWork(lost.ReceiptId, SettlementMode.Refund)], SettlementSchedule.Due(journal, ContentId, ResultsPhase(FirstCycle), (receiptId, plot) => receiptId == lost.ReceiptId && plot == lost.Plot, _ => false).AsSpan().ToArray());
+        Assert.Equal([new SettlementWork(lost.ReceiptId, SettlementMode.Refund)], SettlementSchedule.Due(journal, ContentId, ResultsPhase(FirstCycle)).AsSpan().ToArray());
     }
 
     [Fact]
@@ -140,7 +139,7 @@ public sealed class SchedulerTests
         var open = Attempt(Plot(12, 5), AttemptState.NeedsReconciliation) with { Kind = ActionKind.Refund, ReceiptId = receipt.ReceiptId };
         var journal = Journal([open], (receipt, SettlementState.NeedsReconciliation));
 
-        Assert.Equal([new SettlementWork(receipt.ReceiptId, SettlementMode.Inspect)], SettlementSchedule.Due(journal, ContentId, ResultsPhase(FirstCycle), (_, _) => true, _ => false).AsSpan().ToArray());
+        Assert.Equal([new SettlementWork(receipt.ReceiptId, SettlementMode.Inspect)], SettlementSchedule.Due(journal, ContentId, ResultsPhase(FirstCycle)).AsSpan().ToArray());
     }
 
     [Fact]
@@ -150,7 +149,7 @@ public sealed class SchedulerTests
         var newer = Receipt(Plot(3, 40), SecondCycle);
         var journal = Journal([], (older, SettlementState.Entered), (newer, SettlementState.OutcomeUnknown));
 
-        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle), (_, _) => true, _ => false);
+        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle));
 
         Assert.Equal([new SettlementWork(older.ReceiptId, SettlementMode.Refund), new SettlementWork(newer.ReceiptId, SettlementMode.Refund)], due.AsSpan().ToArray());
     }
@@ -162,7 +161,7 @@ public sealed class SchedulerTests
         var current = Attempt(Plot(12, 6), AttemptState.NeedsReconciliation, SecondCycle);
         var journal = Journal([uncertain, current]);
 
-        var due = SettlementSchedule.Due(journal, ContentId, VerifiedEntryPhase() with { Cycle = SecondCycle }, (_, _) => true, _ => false);
+        var due = SettlementSchedule.Due(journal, ContentId, VerifiedEntryPhase() with { Cycle = SecondCycle });
 
         Assert.Equal([new SettlementWork(uncertain.AttemptId, SettlementMode.Refund)], due.AsSpan().ToArray());
     }
@@ -174,22 +173,9 @@ public sealed class SchedulerTests
         var refund = Attempt(Plot(12, 5), AttemptState.NeedsReconciliation) with { Kind = ActionKind.Refund, ReceiptId = older.ReceiptId };
         var journal = Journal([refund], (older, SettlementState.NeedsReconciliation));
 
-        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle), (_, _) => true, _ => false);
+        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle));
 
         Assert.Equal([new SettlementWork(older.ReceiptId, SettlementMode.Inspect)], due.AsSpan().ToArray());
-    }
-
-    [Fact]
-    public void AParkedEntryIsLeftForThePlayersOwnCheck()
-    {
-        var parked = Receipt(Plot(12, 5), FirstCycle);
-        var open = Receipt(Plot(12, 6), FirstCycle);
-        var uncertain = Attempt(Plot(12, 7), AttemptState.NeedsReconciliation);
-        var journal = Journal([uncertain], (parked, SettlementState.Entered), (open, SettlementState.Entered));
-
-        var due = SettlementSchedule.Due(journal, ContentId, ResultsPhase(SecondCycle), (_, _) => true, id => id == parked.ReceiptId || id == uncertain.AttemptId);
-
-        Assert.Equal([new SettlementWork(open.ReceiptId, SettlementMode.Refund)], due.AsSpan().ToArray());
     }
 
     [Fact]

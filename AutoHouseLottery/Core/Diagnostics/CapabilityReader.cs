@@ -7,8 +7,6 @@ using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Ward;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Ipc;
-using AutoHouseLottery.Core.Settlement.Model;
-using AutoHouseLottery.Core.Tasks.Model;
 using ECommons.DalamudServices;
 
 namespace AutoHouseLottery.Core.Diagnostics;
@@ -31,7 +29,8 @@ internal static class CapabilityReader
             Lifestream = LifestreamIpc.Instance.Capabilities(),
             LifestreamVersion = ExternalPlugins.LoadedVersion(ExternalPlugin.Lifestream)?.ToString(),
             NavmeshAvailable = NavmeshIpc.Instance.Available,
-            AutoAnswerPlugin = AutoAnswerGuard.LoadedName(),
+            AutoAnswerPlugin = AutoAnswerGuard.UnpausableName() ?? AutoAnswerGuard.LoadedName(),
+            AutoAnswerPausable = AutoAnswerGuard.UnpausableName() is null,
             LotteryRecordValidated = LotteryRecordAccess.IsValidated(gameVersion),
             GameVersion = gameVersion,
             PlacardSale = observers.PlacardSales.Active ? PlacardSaleFact.Active
@@ -44,13 +43,6 @@ internal static class CapabilityReader
                 _ => WardListFact.NotSeen,
             },
             WardPacketsActive = observers.WardPackets.Active,
-            EntryConfirmValidated = EntryCapabilities.EntryConfirmValidated,
-            RefundValidated = SettlementCapabilities.RefundConfirmValidated,
-            ClaimValidated = SettlementCapabilities.ClaimConfirmValidated,
-            AbsenceSettlementValidated = SettlementCapabilities.AbsenceSettlementValidated,
-            EntryPermitted = plugin.Controller.RealEntryAllowed,
-            RefundPermitted = plugin.Controller.RealRefundAllowed,
-            ClaimPermitted = plugin.Controller.RealClaimAllowed,
         };
     }
 

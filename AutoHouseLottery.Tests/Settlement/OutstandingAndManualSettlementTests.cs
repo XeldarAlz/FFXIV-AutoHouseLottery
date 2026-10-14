@@ -34,23 +34,15 @@ public sealed class OutstandingAndManualSettlementTests
     public void AnUnclaimedWinAlwaysStopsForThePlayer(bool automaticRefunds)
     {
         Assert.Equal(OutstandingStep.StopUnclaimedWin, OutstandingPlan.Decide(OutstandingKind.UnclaimedWin, automaticRefunds));
-        Assert.Equal(OutstandingStep.StopUnclaimedWin, OutstandingPlan.AfterCollection(SettlementResult.Classified, OutstandingKind.UnclaimedWin));
-    }
-
-    [Fact]
-    public void ADryRunCollectionCannotFreeTheSlot()
-    {
-        Assert.Equal(OutstandingStep.StopDryRunCollection, OutstandingPlan.AfterCollection(SettlementResult.DryRun, OutstandingKind.RefundDue));
+        Assert.Equal(OutstandingStep.StopUnclaimedWin, OutstandingPlan.AfterCollection(OutstandingKind.UnclaimedWin));
     }
 
     [Fact]
     public void AfterTheVisitOnlyWhatIsStillKnownToWaitStopsTheRun()
     {
-        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.Refunded, OutstandingKind.None));
-        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, OutstandingKind.None));
-        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, OutstandingKind.ResultUnchecked));
-        Assert.Equal(OutstandingStep.StopCollectRefundFirst, OutstandingPlan.AfterCollection(SettlementResult.NeedsPlayer, OutstandingKind.RefundDue));
-        Assert.Equal(OutstandingStep.StopCollectRefundFirst, OutstandingPlan.AfterCollection(SettlementResult.NeedsReconciliation, OutstandingKind.RefundDue));
+        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(OutstandingKind.None));
+        Assert.Equal(OutstandingStep.Proceed, OutstandingPlan.AfterCollection(OutstandingKind.ResultUnchecked));
+        Assert.Equal(OutstandingStep.StopCollectRefundFirst, OutstandingPlan.AfterCollection(OutstandingKind.RefundDue));
     }
 
     [Fact]

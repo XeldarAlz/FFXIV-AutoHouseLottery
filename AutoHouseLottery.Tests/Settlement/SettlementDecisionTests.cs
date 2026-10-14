@@ -1,6 +1,7 @@
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Settlement.Model;
 using AutoHouseLottery.Core.Tasks.Model;
+using static AutoHouseLottery.Tests.HousingFixtures;
 
 namespace AutoHouseLottery.Tests.Settlement;
 
@@ -48,5 +49,55 @@ public sealed class SettlementDecisionTests
     {
         Assert.Equal("Look-alike", AutoAnswerPlugins.FirstLoaded([new InstalledPlugin(internalName, "Look-alike", true)]));
         Assert.Null(AutoAnswerPlugins.FirstLoaded([new InstalledPlugin(internalName, "Look-alike", false)]));
+    }
+
+    [Fact]
+    public void OnlyYesAlreadyItselfIsPausedAndOnlyWhileItsStopRequestsCanBeReached()
+    {
+        var yesAlready = new InstalledPlugin("YesAlready", "YesAlready", true);
+        var fork = new InstalledPlugin("YesAlreadyFork", "Look-alike", true);
+
+        Assert.Null(AutoAnswerPlugins.FirstUnpausable([yesAlready], stopRequestsReachable: true));
+        Assert.Equal("YesAlready", AutoAnswerPlugins.FirstUnpausable([yesAlready], stopRequestsReachable: false));
+        Assert.Equal("Look-alike", AutoAnswerPlugins.FirstUnpausable([yesAlready, fork], stopRequestsReachable: true));
+        Assert.Equal("Look-alike", AutoAnswerPlugins.FirstUnpausable([new InstalledPlugin("yesalready", "Look-alike", true)], stopRequestsReachable: true));
+        Assert.Null(AutoAnswerPlugins.FirstUnpausable([fork with { Loaded = false }], stopRequestsReachable: true));
+    }
+
+    [Fact]
+    public void ARefundIsCollectedOnlyForALossOrForfeitThatIsRecordedAsOwed()
+    {
+        var owedLoss = new InspectionVerdict(InspectionOutcome.LostRefundDue, Deposit, InspectionReason.None);
+        var owedForfeit = new InspectionVerdict(InspectionOutcome.ForfeitRefundDue, Deposit / 2, InspectionReason.None);
+
+        Assert.Equal(VisitAction.CollectRefund, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedLoss, attemptOpenBeforeVisit: false));
+        Assert.Equal(VisitAction.CollectRefund, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Forfeited, owedForfeit, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedLoss with { Refund = null }, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedForfeit, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, owedLoss, attemptOpenBeforeVisit: true));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Inspect, ResultKind.Lost, owedLoss, false));
+    }
+
+    [Fact]
+    public void AWinIsNeverCollectedAsARefundAndALossIsNeverClaimed()
+    {
+        var won = new InspectionVerdict(InspectionOutcome.WonUnclaimed, null, InspectionReason.None);
+        var owedLoss = new InspectionVerdict(InspectionOutcome.LostRefundDue, Deposit, InspectionReason.None);
+
+        Assert.Equal(VisitAction.Claim, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.Won, won, false));
+        Assert.Equal(VisitAction.Claim, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.SoleEntrantWon, won, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Won, won, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.Lost, owedLoss, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Inspect, ResultKind.Won, won, false));
+    }
+
+    [Fact]
+    public void ARowThatDisagreesWithTheVerdictClosesTheDialog()
+    {
+        var claimed = new InspectionVerdict(InspectionOutcome.Claimed, null, InspectionReason.None);
+        var unknown = InspectionVerdict.Unknown(InspectionReason.ContradictsRecord);
+
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Refund, ResultKind.Lost, claimed, false));
+        Assert.Equal(VisitAction.Close, SettlementDecisions.Act(SettlementMode.Claim, ResultKind.Won, unknown, false));
     }
 }

@@ -70,11 +70,9 @@ internal static class RunText
             EntryFailure.GilUnknown => L.RunFailure.GilUnknown,
             EntryFailure.CheckboxNotTicked => L.RunFailure.CheckboxNotTicked,
             EntryFailure.ConfirmRefused => L.RunFailure.ConfirmRefused,
-            EntryFailure.RealEntryNotCovered => L.RunFailure.RealEntryNotCovered,
             EntryFailure.CharacterIneligible => L.RunFailure.CharacterIneligible,
             EntryFailure.AlreadyEntered => L.RunFailure.AlreadyEntered,
             EntryFailure.CollectRefundFirst => L.RunFailure.CollectRefundFirst,
-            EntryFailure.RefundDryRun => L.RunFailure.RefundDryRun,
             EntryFailure.UnclaimedWin => L.RunFailure.UnclaimedWin,
             EntryFailure.CycleChanged => L.RunFailure.CycleChanged,
             EntryFailure.JournalUnavailable => L.RunFailure.JournalUnavailable,
@@ -84,8 +82,9 @@ internal static class RunText
             _ => L.RunFailure.Rejected,
         });
 
-    // The reason anything that opens a lottery dialog is held while a plugin that answers dialogs is loaded.
-    public static string AutoAnswer() => Loc.T(L.RunStart.AutoAnswer, AutoAnswerGuard.LoadedName() ?? AutoAnswerPlugins.InternalNames[0]);
+    // The reason anything that opens a lottery dialog is held while a plugin that answers dialogs is loaded and cannot be
+    // paused.
+    public static string AutoAnswer() => Loc.T(L.RunStart.AutoAnswer, AutoAnswerGuard.UnpausableName() ?? AutoAnswerGuard.LoadedName() ?? AutoAnswerPlugins.InternalNames[0]);
 
     public static string Reconcile(in ReconcileReport report) => report.Outcome switch
     {

@@ -5,7 +5,6 @@ using AutoHouseLottery.Core.Game;
 using AutoHouseLottery.Core.Game.Character;
 using AutoHouseLottery.Core.Game.Model;
 using AutoHouseLottery.Core.Game.Watchers;
-using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Persistence.Model;
 using AutoHouseLottery.Core.Settlement.Model;
@@ -77,7 +76,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
     }
 
     // The work to start now, or null with Block saying why not.
-    public SettlementWork? Tick(long nowMs, bool ownWorkActive, bool busy, bool ownVisitRunning, Func<Guid, PlotKey, bool> collectable)
+    public SettlementWork? Tick(long nowMs, bool ownWorkActive, bool busy, bool ownVisitRunning)
     {
         input.Sample(nowMs, ownWorkActive);
         if (heldAfterAlert && SchedulerRules.HoldReleased(heldAtMs, input.IdleMs(nowMs), nowMs))
@@ -97,7 +96,7 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
             ReconcileEstates(context);
         }
 
-        var due = SettlementSchedule.Due(housing.JournalSnapshot, context.ContentId, housing.CurrentPosition(DateTime.UtcNow), collectable, Parked);
+        var due = SettlementSchedule.Due(housing.JournalSnapshot, context.ContentId, housing.CurrentPosition(DateTime.UtcNow));
         DueCount = due.Length;
         var next = queue.Next(due, nowMs);
         var facts = new SchedulerFacts(
@@ -143,10 +142,6 @@ internal sealed class SettlementScheduler(HousingContext housing, Configuration 
 
         return null;
     }
-
-    // While a placard without a result cannot settle anything, revisiting one already found that way in full only costs
-    // travel. A weaker sighting (a placard not fully read) is visited again.
-    private bool Parked(Guid id) => !SettlementCapabilities.AbsenceSettlementValidated && configuration.AbsenceSighting(id) is { Strong: true };
 
     // A win the character's estate list now holds was claimed, by this plugin's press or in game; it is recorded as
     // claimed without a visit. A refund or claim of this plugin that was confirmed while its receipt was left behind (the

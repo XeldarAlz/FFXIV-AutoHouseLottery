@@ -32,7 +32,7 @@ The human gates, in order, none of them skippable:
 
 1. **The plan comes first.** What to build, and the constraints it has to respect, are written before any agent runs.
 2. **The diff is read.** Output is reviewed before it lands, not after users find the problem.
-3. **It is tested in the game before release.** On a real client, a dry run of the full entry flow that stops at the lottery confirmation and presses Cancel, and one supervised real press for each action before its validation flag is turned on: an entry before Enter submits, a refund before refunds are collected, a claim before Claim house accepts, and supervised visits before a placard without a result settles an entry. Until its flag is on, an action ships as dry run only, and the README and the Plugins page say so. A clean `dotnet build` and a green `dotnet test` do not replace any of it.
+3. **It is tested in the game before release.** On a real client, one supervised real press for each action a change touches: an entry, a refund, a claim, and a visit to a placard without a result. A clean `dotnet build` and a green `dotnet test` do not replace any of it.
 4. **Ownership transfers.** Every merged line is the maintainer's to defend, explain, and fix. "The AI did it" is not an answer to why something is written the way it is.
 5. **Feedback is taken on its merits.** AI-assisted work invites sharper review, from users and from any reviewer, and that scrutiny is earned rather than unfair. The answer to a review comment is a fix or a reason, never a defense of the tooling.
 

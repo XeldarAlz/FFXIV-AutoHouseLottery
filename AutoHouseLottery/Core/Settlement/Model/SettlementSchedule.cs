@@ -172,19 +172,17 @@ internal static class SettlementSchedule
 {
     // The work the scheduler may do for one character. First the result checks (ResultChecks): every earlier cycle's
     // entry nobody has read and every earlier attempt still in question, which only the plot's result can settle. Then
-    // this cycle's entries once its results are out, a refund already known to be owed once it can actually be collected
-    // (a refund that could only be inspected again teaches nothing), and a read-back for a refund of this plugin that may
-    // already have gone through. Anything with a refund or claim of this plugin still open is only ever read back. Wins
-    // wait for the player. Parked items (a placard already found without a result, while that cannot settle anything) are
-    // left for the player's own Check result instead of a trip every session.
-    public static ImmutableArray<SettlementWork> Due(in JournalSnapshot snapshot, ulong contentId, in CyclePosition current, Func<Guid, PlotKey, bool> collectable, Func<Guid, bool> parked)
+    // this cycle's entries once its results are out, a refund already known to be owed on a known plot, and a read-back
+    // for a refund of this plugin that may already have gone through. Anything with a refund or claim of this plugin still
+    // open is only ever read back. Wins wait for the player.
+    public static ImmutableArray<SettlementWork> Due(in JournalSnapshot snapshot, ulong contentId, in CyclePosition current)
     {
         var due = ImmutableArray.CreateBuilder<SettlementWork>();
         var checks = ResultChecks.Due(snapshot, current.Cycle);
         for (var index = 0; index < checks.Length; index++)
         {
             var check = checks[index];
-            if (check.ContentId == contentId && !parked(check.Id))
+            if (check.ContentId == contentId)
             {
                 Add(due, new SettlementWork(check.Id, SettlementLookups.OpenAttempt(snapshot, check.Id) is null ? SettlementMode.Refund : SettlementMode.Inspect));
             }
@@ -195,7 +193,6 @@ internal static class SettlementSchedule
         {
             var receipt = receipts[index];
             if (receipt.CharacterContentId != contentId
-                || parked(receipt.ReceiptId)
                 || !SettlementDeadlines.ResultsArrived(receipt.Cycle, current)
                 || SettlementLookups.Settlement(snapshot, receipt.ReceiptId) is not { } settlement)
             {
@@ -214,7 +211,7 @@ internal static class SettlementSchedule
             }
 
             if (SettlementStates.OutcomeOpen(settlement.State)
-                || (SettlementStates.RefundOwed(settlement.State) && receipt.Plot is { } plot && collectable(receipt.ReceiptId, plot)))
+                || (SettlementStates.RefundOwed(settlement.State) && receipt.Plot is not null))
             {
                 Add(due, new SettlementWork(receipt.ReceiptId, SettlementMode.Refund));
             }

@@ -10,7 +10,6 @@ internal enum OutstandingStep : byte
     CollectFirst,
     StopCollectRefundFirst,
     StopUnclaimedWin,
-    StopDryRunCollection,
 }
 
 internal static class OutstandingPlan
@@ -26,9 +25,7 @@ internal static class OutstandingPlan
         _ => OutstandingStep.Proceed,
     };
 
-    // After the refund driver's visit, from what is still outstanding then. A dry run cannot free the slot, so the run
-    // stops and says so; anything the visit could not settle is decided as if automatic refunds were off, so the same
-    // entry is never visited twice in one run.
-    public static OutstandingStep AfterCollection(SettlementResult result, OutstandingKind remaining)
-        => result == SettlementResult.DryRun ? OutstandingStep.StopDryRunCollection : Decide(remaining, automaticRefunds: false);
+    // After the refund driver's visit, from what is still outstanding then. Anything the visit could not settle is
+    // decided as if automatic refunds were off, so the same entry is never visited twice in one run.
+    public static OutstandingStep AfterCollection(OutstandingKind remaining) => Decide(remaining, automaticRefunds: false);
 }

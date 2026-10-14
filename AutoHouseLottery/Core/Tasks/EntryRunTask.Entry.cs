@@ -28,11 +28,11 @@ internal sealed partial class EntryRunTask
     private long dispatchSequence;
     private DateTime dispatchedUtc;
 
-    // Opens the entry confirmation and checks it. A dry run closes it there; a real entry goes on to the intent.
+    // Opens the entry confirmation and checks it, then goes on to the intent.
     private async Task<EntryFailure> Enter()
     {
         Move(EntryStep.PrepareEntry);
-        if (AutoAnswerGuard.Blocks)
+        if (AutoAnswerGuard.Answering)
         {
             return EntryFailure.AutoAnswerPlugin;
         }
@@ -66,14 +66,7 @@ internal sealed partial class EntryRunTask
             return check;
         }
 
-        var deposit = shown.Deposit!.Value;
-        if (session.EntryMode == EntryMode.DryRun)
-        {
-            await FinishDryRun(deposit, liveGil);
-            return EntryFailure.None;
-        }
-
-        return await SubmitReal(deposit);
+        return await Submit(shown.Deposit!.Value);
     }
 
     private async Task<bool> PressEnterLottery()
@@ -154,28 +147,8 @@ internal sealed partial class EntryRunTask
 
     private static bool ConfirmationOpen() => HousingDialogs.IdentifyEntryConfirmation() is { Text: HousingText.EntryConfirmation };
 
-    private async Task FinishDryRun(long deposit, long? gilAtConfirmation)
+    private async Task<EntryFailure> Submit(long deposit)
     {
-        var closed = await CloseConfirmation();
-        var gilAfter = CharacterContextReader.ReadGil();
-        var cycle = session.LiveCycle ?? session.Policy.Cycle.Cycle;
-        var trace = new DryRunTrace(session.RunId, session.Settings.ContentId, session.Target, session.Settings.Buyer, cycle, deposit, gilAtConfirmation, closed, gilAfter == gilAtConfirmation, DateTime.UtcNow);
-        session.RecordTrace(trace);
-        RunLog.Info($"Entry run {session.RunId}: DRY RUN. At the confirmation for {trace.Plot} the run would have entered as {trace.Buyer} for {trace.Deposit} gil in cycle {trace.Cycle}; "
-                  + $"it closed the confirmation instead (closed {closed}, gil {(trace.GilUnchanged ? "unchanged" : $"was {gilAtConfirmation?.ToString() ?? "unknown"}, now {gilAfter?.ToString() ?? "unknown"}")}). "
-                  + "No intent was written and nothing was submitted.");
-        Move(EntryStep.FinishCharacter);
-        Move(EntryStep.Completed);
-    }
-
-    private async Task<EntryFailure> SubmitReal(long deposit)
-    {
-        if (!MayConfirm(deposit))
-        {
-            await CloseConfirmation();
-            return EntryFailure.RealEntryNotCovered;
-        }
-
         if (!await TickCheckbox())
         {
             await CloseConfirmation();
@@ -225,7 +198,7 @@ internal sealed partial class EntryRunTask
         session.Attempt = intent;
         Move(EntryStep.PersistIntent);
         var journal = services.Housing.Journal!;
-        var outcome = await new EntrySubmission(journal).Submit(intent, MayConfirm(deposit), ReturnToGame, () => PressConfirm(deposit), static () => DateTime.UtcNow);
+        var outcome = await new EntrySubmission(journal).Submit(intent, ReturnToGame, () => PressConfirm(deposit), static () => DateTime.UtcNow);
         RunLog.Info($"Entry run {session.RunId}: submission of attempt {intent.AttemptId} for {intent.Plot}, {deposit} gil, cycle {cycle}: {outcome}.");
         switch (outcome)
         {
@@ -236,11 +209,6 @@ internal sealed partial class EntryRunTask
             case SubmissionOutcome.PressRefused:
                 await CloseConfirmation();
                 session.Fail(EntryFailure.ConfirmRefused);
-                Move(EntryStep.NeedsPlayer);
-                return EntryFailure.None;
-            case SubmissionOutcome.GateClosed:
-                await CloseConfirmation();
-                session.Fail(EntryFailure.RealEntryNotCovered);
                 Move(EntryStep.NeedsPlayer);
                 return EntryFailure.None;
             case SubmissionOutcome.SlotTaken:
@@ -254,38 +222,26 @@ internal sealed partial class EntryRunTask
         }
     }
 
-    private bool MayConfirm(long deposit)
-        => RealEntryGate.MayConfirm(EntryCapabilities.EntryConfirmValidated, session.DryRunRequested, services.Grant(), session.Mode, session.Settings.ContentId, session.Target, deposit);
-
     private async Task ReturnToGame() => await NextFrame();
 
     // The single press. The character and the dialog are read once more on this frame: the same character, and still
-    // row 7046 showing the same amount. The grant is used up only by a press that was sent.
+    // row 7046 showing the same amount.
     private DialogActionResult PressConfirm(long deposit)
     {
         Move(EntryStep.SubmitOnce);
         if (Svc.PlayerState.ContentId != session.Settings.ContentId
             || HousingDialogs.ReadEntryConfirmation() is not { Identified: true, ConfirmEnabled: true } shown
-            || shown.Deposit != deposit
-            || !MayConfirm(deposit))
+            || shown.Deposit != deposit)
         {
             return DialogActionResult.IdentityMismatch;
         }
 
         dispatchSequence = GameSequence.Next();
         dispatchedUtc = DateTime.UtcNow;
-        DialogActionResult pressed;
         using (NativeActionGate.Allow(NativeAction.ConfirmEntry))
         {
-            pressed = HousingDialogs.ConfirmEntry();
+            return HousingDialogs.ConfirmEntry();
         }
-
-        if (pressed == DialogActionResult.Pressed)
-        {
-            services.ConsumeGrant();
-        }
-
-        return pressed;
     }
 
     // The tick follows the Enter Lottery press closely, so a throttled tick waits out the press window and tries again,

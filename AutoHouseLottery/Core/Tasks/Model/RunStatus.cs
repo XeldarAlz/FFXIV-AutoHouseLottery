@@ -3,19 +3,6 @@ using AutoHouseLottery.Core.Housing.Model;
 
 namespace AutoHouseLottery.Core.Tasks.Model;
 
-// What a dry run would have submitted, and proof that it submitted nothing: the confirmation closed and the gil stayed.
-internal sealed record DryRunTrace(
-    Guid RunId,
-    ulong ContentId,
-    PlotKey Plot,
-    BuyerType Buyer,
-    CycleKey Cycle,
-    long Deposit,
-    long? GilAtConfirmation,
-    bool ConfirmationClosed,
-    bool GilUnchanged,
-    DateTime AtUtc);
-
 // The published state of the run, rebuilt on every change and read by the windows.
 internal sealed record RunStatus
 {
@@ -26,8 +13,6 @@ internal sealed record RunStatus
     public Guid RunId { get; init; }
 
     public RunMode Mode { get; init; }
-
-    public EntryMode EntryMode { get; init; }
 
     public EntryStep Step { get; init; } = EntryStep.Ready;
 
@@ -56,8 +41,6 @@ internal sealed record RunStatus
     public bool PauseRequested { get; init; }
 
     public bool StopRequested { get; init; }
-
-    public DryRunTrace? Trace { get; init; }
 
     public DateTime StartedUtc { get; init; }
 
