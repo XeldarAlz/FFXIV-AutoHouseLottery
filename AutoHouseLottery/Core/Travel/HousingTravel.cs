@@ -45,14 +45,15 @@ internal static class HousingTravel
         }
 
         var now = Environment.TickCount64;
+        var quickTravel = lifestream.IsQuickTravelAvailable(destination, district.AetheryteId);
         if (!lifestream.GoToHousingAddress(destination, district.AetheryteId))
         {
             return new TravelStart(TravelStartResult.RequestFailed, 0);
         }
 
         var token = ++lastToken;
-        current = new Operation(token, destination, new TravelOwnership(now), now + TravelDeadlineMs);
-        RunLog.Info($"Travel {token}: asked Lifestream for {destination}.");
+        current = new Operation(token, destination, district.AetheryteId, new TravelOwnership(now), now + TravelDeadlineMs);
+        RunLog.Info($"Travel {token}: asked Lifestream for {destination} (quick travel {quickTravel?.ToString() ?? "unknown"}).");
         return new TravelStart(TravelStartResult.Started, token);
     }
 
@@ -69,7 +70,9 @@ internal static class HousingTravel
         var state = TravelProgressRule.Evaluate(operation.Ownership.Phase, verdict, cancelled: false, now >= operation.DeadlineMs);
         if (state != TravelState.Travelling)
         {
-            RunLog.Info($"Travel {token}: {state} (Lifestream {operation.Ownership.Phase}, arrival {verdict}).");
+            // Lifestream's own IsHere reads the same HousingManager values; it is logged as a second opinion, never decides.
+            var lifestreamHere = LifestreamIpc.Instance.IsHere(operation.Destination, operation.AetheryteId);
+            RunLog.Info($"Travel {token}: {state} (Lifestream {operation.Ownership.Phase}, arrival {verdict}, Lifestream IsHere {lifestreamHere?.ToString() ?? "unknown"}).");
             current = null;
         }
 
@@ -117,5 +120,5 @@ internal static class HousingTravel
         return new ArrivalObservation(zoneReady, Svc.PlayerState.CurrentWorld.RowId, CharacterContextReader.ReadLocation());
     }
 
-    private sealed record Operation(long Token, HousingDestination Destination, TravelOwnership Ownership, long DeadlineMs);
+    private sealed record Operation(long Token, HousingDestination Destination, uint AetheryteId, TravelOwnership Ownership, long DeadlineMs);
 }
