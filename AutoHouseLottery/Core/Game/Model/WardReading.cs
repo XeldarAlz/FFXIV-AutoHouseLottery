@@ -11,12 +11,11 @@ internal enum WardReadStatus : byte
     Incomplete,
 }
 
-// Unrequested: read as displayed, with no request to tie it to. AddonOnly: the window refreshed to the requested ward
-// after the request. PacketAndAddon: the ward's packet arrived after the request and the window refreshed after it.
+// Unrequested: read as displayed, with no request to tie it to. PacketAndAddon: the ward's packet arrived after the
+// request and the window refreshed after the packet.
 internal enum WardCorrelation : byte
 {
     Unrequested,
-    AddonOnly,
     PacketAndAddon,
 }
 
@@ -46,8 +45,8 @@ internal sealed record WardReading(
     WardCorrelation Correlation,
     DateTime ReadAtUtc)
 {
-    public WardReading WithCorrelation(WardCorrelation correlation, WardPortalReading? packet)
-        => this with { Correlation = correlation, Packet = packet };
+    public WardReading Acknowledged(WardPortalReading packet)
+        => this with { Correlation = WardCorrelation.PacketAndAddon, Packet = packet };
 }
 
 // One plot of the ward packet. Flags are the game's HouseInfoFlags: 1 owned, 2 visitors allowed, 4 search comment,
@@ -55,11 +54,8 @@ internal sealed record WardReading(
 internal readonly record struct WardPortalEntry(int PlotIndex, uint Price, byte Flags, byte Appeal1, byte Appeal2, byte Appeal3)
 {
     private const byte PlotOwnedFlag = 1;
-    private const byte OwnedByFreeCompanyFlag = 16;
 
     public bool PlotOwned => (Flags & PlotOwnedFlag) != 0;
-
-    public bool OwnedByFreeCompany => (Flags & OwnedByFreeCompanyFlag) != 0;
 }
 
 // PurchaseType and TenantType are the two bytes after the entries; PaissaHouse reads them as the ward's purchase type

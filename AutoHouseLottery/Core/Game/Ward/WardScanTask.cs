@@ -19,52 +19,60 @@ internal sealed class WardScanTask(AddonUpdateCounter window, WardPortalObserver
     protected override async Task Execute()
     {
         Status = "Scanning the wards";
-        WardReader.ReadDisplayed(window.LastUpdateSequence, out var displayed, out var shownWardIndex);
-        Diag($"Ward scan: the selector shows ward {shownWardIndex + 1}, value 4 reads {displayed?.WardCount?.ToString() ?? "no count"}; planning {ResidentialDistricts.WardCount} wards.");
+        var header = WardReader.ReadHeader(window.LastUpdateSequence);
+        Diag($"Ward scan: the selector shows ward {header.ShownWardIndex + 1}; planning {ResidentialDistricts.WardCount} wards.");
         var acknowledged = ImmutableArray.CreateBuilder<WardReading>(ResidentialDistricts.WardCount);
-        var stop = WardScanStop.Completed;
-        int? stoppedAtWard = null;
-        for (var wardIndex = 0; wardIndex < ResidentialDistricts.WardCount; wardIndex++)
+        var stop = WardScanStop.Cancelled;
+        int? stoppedAtWard = 0;
+        try
         {
-            if (CancelToken.IsCancellationRequested)
+            if (!packets.Active)
             {
-                stop = WardScanStop.Cancelled;
+                stop = WardScanStop.NoPacketObserver;
+                return;
+            }
+
+            for (var wardIndex = 0; wardIndex < ResidentialDistricts.WardCount; wardIndex++)
+            {
                 stoppedAtWard = wardIndex;
-                break;
-            }
-
-            var reading = wardIndex == shownWardIndex ? WardPager.AcceptDisplayed(wardIndex, window, packets) : null;
-            if (reading is null)
-            {
-                if (WardPager.Request(wardIndex) is not { } request)
+                var reading = wardIndex == header.ShownWardIndex ? WardPager.AcceptDisplayed(wardIndex, window, packets) : null;
+                if (reading is null)
                 {
-                    stop = WardScanStop.RequestRefused;
-                    stoppedAtWard = wardIndex;
-                    break;
+                    if (WardPager.Request(wardIndex) is not { } request)
+                    {
+                        stop = WardScanStop.RequestRefused;
+                        return;
+                    }
+
+                    var (acknowledgement, polled) = await AwaitAcknowledgement(request);
+                    if (acknowledgement != WardAcknowledgement.Acknowledged)
+                    {
+                        stop = WardScanResult.StopFor(acknowledgement);
+                        return;
+                    }
+
+                    reading = polled!;
+                    await DelayMs(BetweenRequestsMs);
                 }
 
-                (var acknowledgement, reading) = await AwaitAcknowledgement(request);
-                if (acknowledgement != WardAcknowledgement.Acknowledged)
-                {
-                    stop = CancelToken.IsCancellationRequested ? WardScanStop.Cancelled : WardScanResult.StopFor(acknowledgement);
-                    stoppedAtWard = wardIndex;
-                    break;
-                }
-
-                await DelayMs(BetweenRequestsMs);
+                acknowledged.Add(reading);
+                Diag($"Ward scan: ward {wardIndex + 1} acknowledged, {reading.Rows.Length} rows.");
             }
 
-            acknowledged.Add(reading!);
-            Diag($"Ward scan: ward {wardIndex + 1} acknowledged ({reading!.Correlation}), {reading.Rows.Length} rows.");
+            stop = WardScanStop.Completed;
+            stoppedAtWard = null;
         }
-
-        Result = new WardScanResult(acknowledged.ToImmutable(), ResidentialDistricts.WardCount, stop, stoppedAtWard);
-        Diag($"Ward scan: {Result.Wards.Length} of {Result.WardsPlanned} wards acknowledged, ended {stop}{(stoppedAtWard is { } ward ? $" at ward {ward + 1}" : string.Empty)}.");
+        finally
+        {
+            Result = new WardScanResult(acknowledged.ToImmutable(), ResidentialDistricts.WardCount, stop, stoppedAtWard);
+            Diag($"Ward scan: {Result.Wards.Length} of {Result.WardsPlanned} wards acknowledged, ended {stop}{(stoppedAtWard is { } ward ? $" at ward {ward + 1}" : string.Empty)}.");
+        }
     }
 
+    // NextFrame throws once the task is cancelled, so cancellation leaves through the caller's finally.
     private async Task<(WardAcknowledgement Acknowledgement, WardReading? Reading)> AwaitAcknowledgement(WardRequest request)
     {
-        while (!CancelToken.IsCancellationRequested)
+        while (true)
         {
             var acknowledgement = WardPager.Poll(request, window, packets, out var reading);
             if (acknowledgement != WardAcknowledgement.Pending)
@@ -74,7 +82,5 @@ internal sealed class WardScanTask(AddonUpdateCounter window, WardPortalObserver
 
             await NextFrame(PollFrames);
         }
-
-        return (WardAcknowledgement.Pending, null);
     }
 }

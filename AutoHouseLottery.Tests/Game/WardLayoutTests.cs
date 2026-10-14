@@ -11,11 +11,11 @@ public sealed class WardLayoutTests
     [InlineData(60, FullWardValues - 1, false)]
     [InlineData(61, FullWardValues + 7, false)]
     [InlineData(-1, FullWardValues, false)]
-    [InlineData(0, 36, true)]
-    [InlineData(30, 36 + (30 * 7), true)]
-    public void RowsFitOnlyWhenEveryRowHasItsSevenValues(int rowCount, int valueCount, bool expected)
+    [InlineData(0, FullWardValues, false)]
+    [InlineData(30, FullWardValues, false)]
+    public void OnlyAFullWardOfSixtyRowsFits(int rowCount, int valueCount, bool expected)
     {
-        Assert.Equal(expected, WardLayout.RowCountFits(rowCount, valueCount));
+        Assert.Equal(expected, WardLayout.RowsFit(rowCount, valueCount));
     }
 
     [Fact]

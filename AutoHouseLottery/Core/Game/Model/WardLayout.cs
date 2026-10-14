@@ -27,8 +27,9 @@ internal static class WardLayout
 
     public static int RowValue(int rowIndex, int offset) => FirstRowValue + (rowIndex * ValuesPerRow) + offset;
 
-    public static bool RowCountFits(int rowCount, int valueCount)
-        => rowCount is >= 0 and <= MaxRows && RowValue(rowCount, StatusOffset) <= valueCount;
+    // Every ward lists all of its plots, so anything but a full set of rows is not a ward this reader knows.
+    public static bool RowsFit(int rowCount, int valueCount)
+        => rowCount == MaxRows && RowValue(rowCount, StatusOffset) <= valueCount;
 
     public static bool FreeCompanyFlag(uint buyerFlags) => ((buyerFlags >> BuyerFlagsByteShift) & FreeCompanyBit) != 0;
 

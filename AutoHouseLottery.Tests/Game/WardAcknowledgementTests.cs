@@ -17,17 +17,17 @@ public sealed class WardAcknowledgementTests
     private static readonly WardRequest request = new(RequestedWard, Mist, World, RequestSequence, DeadlineMs);
     private static readonly WardScope sameScope = new(Mist, World);
     private static readonly WardPacketState packetForWard = new(ObserverActive: true, Present: true, RequestedWard, Mist, World, Sequence: 101);
-    private static readonly WardWindowState refreshedAfterPacket = new(Open: true, LayoutValid: true, RowsComplete: true, RequestedWard, LastUpdateSequence: 102);
+    private static readonly WardWindowHeader refreshedAfterPacket = new(Open: true, HeaderValid: true, RequestedWard, LastUpdateSequence: 102);
 
     [Fact]
-    public void AcknowledgesRowsRefreshedAfterThisWardsPacket()
+    public void RowsRefreshedAfterThisWardsPacketAreReadAndAcknowledged()
     {
-        Assert.Equal(WardAcknowledgement.Acknowledged, Evaluate(refreshedAfterPacket, packetForWard));
-        Assert.Equal(WardCorrelation.PacketAndAddon, WardAcknowledgementRule.CorrelationOf(packetForWard));
+        Assert.Equal(WardAcknowledgement.RowsDue, Evaluate(refreshedAfterPacket, packetForWard));
+        Assert.Equal(WardAcknowledgement.Acknowledged, WardAcknowledgementRule.AfterRows(WardReadStatus.Read, request, BeforeDeadlineMs));
     }
 
     [Fact]
-    public void StaleRowsUnderTheSameRowCountAreNotAcknowledged()
+    public void StaleRowsUnderTheSameRowCountAreNotRead()
     {
         var notRefreshed = refreshedAfterPacket with { LastUpdateSequence = RequestSequence - 1 };
         Assert.Equal(WardAcknowledgement.Pending, Evaluate(notRefreshed, packetForWard));
@@ -40,17 +40,15 @@ public sealed class WardAcknowledgementTests
     }
 
     [Fact]
-    public void RowsRefreshedBeforeThePacketArrivedAreNotAcknowledged()
+    public void RowsRefreshedBeforeThePacketArrivedAreNotRead()
     {
-        var packetAfterRefresh = packetForWard with { Sequence = 103 };
-        Assert.Equal(WardAcknowledgement.Pending, Evaluate(refreshedAfterPacket, packetAfterRefresh));
+        Assert.Equal(WardAcknowledgement.Pending, Evaluate(refreshedAfterPacket, packetForWard with { Sequence = 103 }));
     }
 
     [Fact]
     public void APacketFromBeforeTheRequestDoesNotCount()
     {
-        var earlierPacket = packetForWard with { Sequence = RequestSequence - 10 };
-        Assert.Equal(WardAcknowledgement.Pending, Evaluate(refreshedAfterPacket, earlierPacket));
+        Assert.Equal(WardAcknowledgement.Pending, Evaluate(refreshedAfterPacket, packetForWard with { Sequence = RequestSequence - 10 }));
     }
 
     [Fact]
@@ -62,11 +60,11 @@ public sealed class WardAcknowledgementTests
     }
 
     [Fact]
-    public void WithoutThePacketObserverTheWindowAloneAcknowledges()
+    public void WithoutThePacketObserverNothingIsAcknowledged()
     {
         var noObserver = new WardPacketState(ObserverActive: false, Present: false, -1, 0, 0, 0);
-        Assert.Equal(WardAcknowledgement.Acknowledged, Evaluate(refreshedAfterPacket, noObserver));
-        Assert.Equal(WardCorrelation.AddonOnly, WardAcknowledgementRule.CorrelationOf(noObserver));
+        Assert.Equal(WardAcknowledgement.NoPacketObserver, Evaluate(refreshedAfterPacket, noObserver));
+        Assert.Equal(WardScanStop.NoPacketObserver, WardScanResult.StopFor(WardAcknowledgement.NoPacketObserver));
     }
 
     [Fact]
@@ -79,17 +77,17 @@ public sealed class WardAcknowledgementTests
     [Fact]
     public void PartiallyFilledRowsArePendingUntilTheDeadline()
     {
-        var partial = refreshedAfterPacket with { RowsComplete = false };
-        Assert.Equal(WardAcknowledgement.Pending, Evaluate(partial, packetForWard));
-        Assert.Equal(WardAcknowledgement.TimedOut, Evaluate(partial, packetForWard, nowMs: DeadlineMs));
+        Assert.Equal(WardAcknowledgement.Pending, WardAcknowledgementRule.AfterRows(WardReadStatus.Incomplete, request, BeforeDeadlineMs));
+        Assert.Equal(WardAcknowledgement.TimedOut, WardAcknowledgementRule.AfterRows(WardReadStatus.Incomplete, request, DeadlineMs));
     }
 
     [Fact]
     public void AnUnexpectedLayoutAfterTheRequestStopsTheReader()
     {
-        var mismatched = refreshedAfterPacket with { LayoutValid = false, RowsComplete = false };
+        var mismatched = refreshedAfterPacket with { HeaderValid = false };
         Assert.Equal(WardAcknowledgement.LayoutMismatch, Evaluate(mismatched, packetForWard));
         Assert.Equal(WardAcknowledgement.Pending, Evaluate(mismatched with { LastUpdateSequence = RequestSequence }, packetForWard));
+        Assert.Equal(WardAcknowledgement.LayoutMismatch, WardAcknowledgementRule.AfterRows(WardReadStatus.LayoutMismatch, request, BeforeDeadlineMs));
     }
 
     [Fact]
@@ -113,14 +111,12 @@ public sealed class WardAcknowledgementTests
     }
 
     [Fact]
-    public void ScanCoverageIsCompleteOnlyWhenEveryPlannedWardWasAcknowledged()
+    public void AScanThatStoppedEarlyIsNeverComplete()
     {
-        var partial = new WardScanResult([], WardsPlanned: 30, WardScanStop.TimedOut, StoppedAtWard: 0);
-        Assert.False(partial.Complete);
-        Assert.Equal(WardScanStop.WindowClosed, WardScanResult.StopFor(WardAcknowledgement.WindowClosed));
-        Assert.Equal(WardScanStop.ScopeChanged, WardScanResult.StopFor(WardAcknowledgement.ScopeChanged));
+        Assert.False(new WardScanResult([], WardsPlanned: 30, WardScanStop.NoPacketObserver, StoppedAtWard: 0).Complete);
+        Assert.False(new WardScanResult([], WardsPlanned: 30, WardScanStop.Completed, StoppedAtWard: null).Complete);
     }
 
-    private static WardAcknowledgement Evaluate(in WardWindowState window, in WardPacketState packet, long nowMs = BeforeDeadlineMs)
+    private static WardAcknowledgement Evaluate(in WardWindowHeader window, in WardPacketState packet, long nowMs = BeforeDeadlineMs)
         => WardAcknowledgementRule.Evaluate(request, window, packet, sameScope, nowMs);
 }

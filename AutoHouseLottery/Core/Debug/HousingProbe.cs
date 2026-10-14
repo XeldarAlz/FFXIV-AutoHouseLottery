@@ -169,8 +169,9 @@ internal static unsafe class HousingProbe
     private static void LogWard(HousingObservers observers)
     {
         var window = observers.WardWindow;
-        var status = WardReader.ReadDisplayed(window.LastUpdateSequence, out var reading, out var shownWard);
-        RunLog.Info($"{Prefix} ward window: {status}, shown ward {ShowOneBased(shownWard >= 0 ? shownWard : null)}, last update {window.LastUpdateEvent} at sequence {window.LastUpdateSequence}, "
+        var header = WardReader.ReadHeader(window.LastUpdateSequence);
+        var status = WardReader.ReadDisplayed(window.LastUpdateSequence, out var reading);
+        RunLog.Info($"{Prefix} ward window: {status}, shown ward {ShowOneBased(header.ShownWardIndex >= 0 ? header.ShownWardIndex : null)}, last update {window.LastUpdateEvent} at sequence {window.LastUpdateSequence}, "
                   + $"portal territory {Show(WardReader.PortalTerritory())}.");
         if (reading is not null)
         {

@@ -7,6 +7,7 @@ internal enum WardScanStop : byte
     Completed,
     Cancelled,
     RequestRefused,
+    NoPacketObserver,
     WindowClosed,
     LayoutMismatch,
     ScopeChanged,
@@ -23,6 +24,7 @@ internal sealed record WardScanResult(ImmutableArray<WardReading> Wards, int War
         WardAcknowledgement.WindowClosed => WardScanStop.WindowClosed,
         WardAcknowledgement.LayoutMismatch => WardScanStop.LayoutMismatch,
         WardAcknowledgement.ScopeChanged => WardScanStop.ScopeChanged,
+        WardAcknowledgement.NoPacketObserver => WardScanStop.NoPacketObserver,
         _ => WardScanStop.TimedOut,
     };
 }

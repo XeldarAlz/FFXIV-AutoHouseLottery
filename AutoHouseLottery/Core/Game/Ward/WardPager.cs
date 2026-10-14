@@ -43,22 +43,22 @@ internal static unsafe class WardPager
     public static WardAcknowledgement Poll(in WardRequest request, AddonUpdateCounter window, WardPortalObserver packets, out WardReading? reading)
     {
         reading = null;
-        var status = WardReader.ReadDisplayed(window.LastUpdateSequence, out var displayed, out var shownWardIndex);
-        var windowState = new WardWindowState(
-            status != WardReadStatus.WindowClosed,
-            status != WardReadStatus.LayoutMismatch,
-            status == WardReadStatus.Read,
-            shownWardIndex,
-            window.LastUpdateSequence);
         var latest = packets.Latest;
         var packetState = latest is null
             ? new WardPacketState(packets.Active, false, WardReader.NoWard, 0, 0, 0)
             : new WardPacketState(packets.Active, true, latest.WardIndex, latest.TerritoryTypeId, latest.WorldId, latest.Sequence);
         var scope = new WardScope(WardReader.PortalTerritory() ?? 0, Svc.PlayerState.CurrentWorld.RowId);
-        var acknowledgement = WardAcknowledgementRule.Evaluate(request, windowState, packetState, scope, Environment.TickCount64);
+        var now = Environment.TickCount64;
+        var acknowledgement = WardAcknowledgementRule.Evaluate(request, WardReader.ReadHeader(window.LastUpdateSequence), packetState, scope, now);
+        if (acknowledgement != WardAcknowledgement.RowsDue)
+        {
+            return acknowledgement;
+        }
+
+        acknowledgement = WardAcknowledgementRule.AfterRows(WardReader.ReadDisplayed(window.LastUpdateSequence, out var displayed), request, now);
         if (acknowledgement == WardAcknowledgement.Acknowledged)
         {
-            reading = displayed!.WithCorrelation(WardAcknowledgementRule.CorrelationOf(packetState), packets.Active ? latest : null);
+            reading = displayed!.Acknowledged(latest!);
         }
 
         return acknowledgement;

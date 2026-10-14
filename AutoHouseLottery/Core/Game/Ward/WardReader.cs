@@ -12,33 +12,34 @@ internal static unsafe class WardReader
     public const string AddonName = "HousingSelectBlock";
     public const int NoWard = -1;
 
-    public static WardReadStatus ReadDisplayed(long updateSequence, out WardReading? reading, out int shownWardIndex)
+    // Only the ward number and the row count, so a poll can rule a request out before reading sixty rows.
+    public static WardWindowHeader ReadHeader(long lastUpdateSequence)
+    {
+        if (!AddonReads.TryGetReady(AddonName, out var addon))
+        {
+            return new WardWindowHeader(false, false, NoWard, lastUpdateSequence);
+        }
+
+        var valid = HeaderFits(addon, out var shownWardIndex);
+        return new WardWindowHeader(true, valid, shownWardIndex, lastUpdateSequence);
+    }
+
+    public static WardReadStatus ReadDisplayed(long updateSequence, out WardReading? reading)
     {
         reading = null;
-        shownWardIndex = NoWard;
         if (!AddonReads.TryGetReady(AddonName, out var addon))
         {
             return WardReadStatus.WindowClosed;
         }
 
+        if (!HeaderFits(addon, out var shownWardIndex))
+        {
+            return WardReadStatus.LayoutMismatch;
+        }
+
         var values = addon->AtkValues;
-        var valueCount = (int)addon->AtkValuesCount;
-        if (values == null || valueCount <= WardLayout.FirstRowValue
-            || !AddonReads.IsInteger(values[WardLayout.WardIndexValue])
-            || !AddonReads.IsInteger(values[WardLayout.RowCountValue]))
-        {
-            return WardReadStatus.LayoutMismatch;
-        }
-
-        shownWardIndex = (int)AddonReads.Unsigned(values[WardLayout.WardIndexValue]);
-        var rowCount = (int)AddonReads.Unsigned(values[WardLayout.RowCountValue]);
-        if (!WardLayout.RowCountFits(rowCount, valueCount))
-        {
-            return WardReadStatus.LayoutMismatch;
-        }
-
-        var rows = new WardPlotRow[rowCount];
-        for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
+        var rows = new WardPlotRow[WardLayout.MaxRows];
+        for (var rowIndex = 0; rowIndex < rows.Length; rowIndex++)
         {
             var rowStatus = ReadRow(values, rowIndex, out rows[rowIndex]);
             if (rowStatus != WardReadStatus.Read)
@@ -67,6 +68,22 @@ internal static unsafe class WardReader
     {
         var agent = AgentHousingPortal.Instance();
         return agent == null ? null : agent->TerritoryType;
+    }
+
+    private static bool HeaderFits(AtkUnitBase* addon, out int shownWardIndex)
+    {
+        shownWardIndex = NoWard;
+        var values = addon->AtkValues;
+        var valueCount = (int)addon->AtkValuesCount;
+        if (values == null || valueCount <= WardLayout.FirstRowValue
+            || !AddonReads.IsInteger(values[WardLayout.WardIndexValue])
+            || !AddonReads.IsInteger(values[WardLayout.RowCountValue]))
+        {
+            return false;
+        }
+
+        shownWardIndex = (int)AddonReads.Unsigned(values[WardLayout.WardIndexValue]);
+        return WardLayout.RowsFit((int)AddonReads.Unsigned(values[WardLayout.RowCountValue]), valueCount);
     }
 
     private static WardReadStatus ReadRow(AtkValue* values, int rowIndex, out WardPlotRow row)
