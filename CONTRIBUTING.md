@@ -13,7 +13,7 @@ dotnet test AutoHouseLottery.sln -c Release
 
 You need the .NET 10 SDK. The plugin requires Dalamud at runtime; CI pulls a Dalamud dev build automatically and that's enough to compile. When your Dalamud build is not where XIVLauncher puts it, pass its folder with `-p:DalamudLibPath=<folder>/`. See `.github/workflows/ci.yml` if you want to reproduce CI locally.
 
-`dotnet test AutoHouseLottery.Tests -c Release` runs the unit tests alone. They cover the gil arithmetic, check that all nine catalogs carry the same keys in the same order with the same placeholders and no em dashes, and check that the newest changelog entry matches the version in `Directory.Build.props`. The test project builds without Dalamud: it compiles the pure folders of the plugin through `<Compile Include>` links, so a new `Core/<Area>/Model/` folder is added to that list when it lands.
+`dotnet test AutoHouseLottery.Tests -c Release` runs the unit tests alone. They cover the gil arithmetic, the housing, eligibility, selection and journal rules, check that all nine catalogs carry the same keys in the same order with the same placeholders and no em dashes, and check that the newest changelog entry matches the version in `Directory.Build.props`. The test project builds without Dalamud: it compiles the pure folders of the plugin through `<Compile Include>` links, so a new `Core/<Area>/Model/` folder is added to that list when it lands. `Core/Persistence/` is linked whole, so it stays free of Dalamud.
 
 Load the built plugin via `/xlsettings` -> **Experimental** -> **Dev Plugin Locations**, pointing at `AutoHouseLottery/bin/Release/AutoHouseLottery.dll`.
 
@@ -21,14 +21,14 @@ Load the built plugin via `/xlsettings` -> **Experimental** -> **Dev Plugin Loca
 
 Folders marked *planned* arrive with later phases of the plugin.
 
-- `AutoHouseLottery/Core/Housing/Model/` (*planned*): plot and lottery period identity (`PlotKey`, `CycleKey`), plot observations with their own source times, and the coverage of what was actually read.
+- `AutoHouseLottery/Core/Housing/Model/`: plot and lottery period identity (`PlotKey`, `CycleKey`, the lottery calendar estimate), plot observations with their own source times, their merge rules, and the coverage of what was actually read.
 - `AutoHouseLottery/Core/Providers/` (*planned*): the Aetherphone housing service client and its disk cache, keeping fetch age apart from observation age.
-- `AutoHouseLottery/Core/Selection/Model/` (*planned*): the shortlist, the best match ranking, Same plot and Spread placement, and the assignment planner.
-- `AutoHouseLottery/Core/Eligibility/Model/` (*planned*): eligibility, ownership group and budget rules, where Unknown never counts as eligible.
+- `AutoHouseLottery/Core/Selection/Model/`: the shortlist, the best match ranking, Same plot and Spread placement, and the assignment planner.
+- `AutoHouseLottery/Core/Eligibility/Model/`: eligibility, ownership group and budget rules, where Unknown never counts as eligible.
 - `AutoHouseLottery/Core/Game/`: the duty and GM watchers and text input focus; later the ward, placard and lottery readers and the dialog drivers.
 - `AutoHouseLottery/Core/Travel/` (*planned*): housing addresses, arrival checks and the final approach to a plot.
-- `AutoHouseLottery/Core/Tasks/`: the run controller, the single owner of every game-changing action; later the entry and settlement drivers and the result and refund scheduler, with their pure rules under `Core/Tasks/Model/`.
-- `AutoHouseLottery/Core/Persistence/` (*planned*): the action journal and entry receipts, written before any irreversible confirmation.
+- `AutoHouseLottery/Core/Tasks/`: the run controller, the single owner of every game-changing action; later the entry and settlement drivers and the result and refund scheduler. The execution lease and the other pure rules live under `Core/Tasks/Model/`.
+- `AutoHouseLottery/Core/Persistence/`: the action journal and entry receipts, an append-only JSON lines file where each record is flushed to disk before any irreversible confirmation.
 - `AutoHouseLottery/Core/Ipc/`: the guarded IPC call helper; later the Lifestream adapter and the plugin's own public API.
 - `AutoHouseLottery/Core/External/`: the helper plugins on the Plugins page and their one-click install.
 - `AutoHouseLottery/Core/Diagnostics/` (*planned*): the compatibility report and sanitized traces for bug reports.
