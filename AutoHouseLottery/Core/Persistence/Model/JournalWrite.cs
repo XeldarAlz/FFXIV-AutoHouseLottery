@@ -10,4 +10,6 @@ internal enum JournalWrite : byte
     Invalid,
     WriteFailed,
     Faulted,
+    AmountMismatch,
+    WrittenAmountDiffers,
 }
