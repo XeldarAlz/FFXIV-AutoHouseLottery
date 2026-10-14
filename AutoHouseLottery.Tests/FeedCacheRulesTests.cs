@@ -38,4 +38,17 @@ public sealed class FeedCacheRulesTests
         Assert.False(FeedCacheRules.TryAccept(Encoding.UTF8.GetBytes("""{"schema":99,"worldId":63,"receivedUtc":"2026-10-14T22:00:00Z","upstreamUtc":"2026-10-14T21:50:00Z","body":"{}"}"""), HomeWorld, FeedCacheRules.MaximumAge, now, out _));
         Assert.False(FeedCacheRules.TryAccept(Encoding.UTF8.GetBytes("""{"schema":1,"worldId":63,"body":"{}"}"""), HomeWorld, FeedCacheRules.MaximumAge, now, out _));
     }
+
+    [Theory]
+    [InlineData("world-63.json", 6, false)]
+    [InlineData("world-63.json", 8, true)]
+    [InlineData("worlds.json", 29, false)]
+    [InlineData("worlds.json", 31, true)]
+    [InlineData("world-abc.json", 90, false)]
+    [InlineData("notes.txt", 90, false)]
+    public void OnlySavedListingsPastTheirAgeAreRemoved(string fileName, int ageDays, bool expected)
+    {
+        var now = new DateTime(2026, 10, 14, 12, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(expected, FeedCacheRules.Expired(fileName, now.AddDays(-ageDays), now));
+    }
 }
