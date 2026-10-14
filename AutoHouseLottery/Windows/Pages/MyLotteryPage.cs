@@ -15,6 +15,7 @@ using AutoHouseLottery.Windows.Shell;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
+using Dalamud.Interface.Utility.Raii;
 using ECommons.DalamudServices;
 using System.Numerics;
 
@@ -204,7 +205,7 @@ internal sealed class MyLotteryPage
         TextDraw.At(view.State, new Vector2(right - actionWidth - secondaryWidth - StateGap * scale - stateWidth, midY - lineHeight * 0.5f), accent);
         if (view.SettledInGame)
         {
-            DrawSettledInGame(plugin, row, confirming, right - actionWidth - secondaryWidth, midY - Layout.ActionPillHeight * scale * 0.5f);
+            DrawSettledInGame(plugin, row, view.Id, confirming, right - actionWidth - secondaryWidth, midY - Layout.ActionPillHeight * scale * 0.5f);
         }
 
         ImGui.SetCursorScreenPos(new Vector2(right - actionWidth, midY - Layout.ActionPillHeight * scale * 0.5f));
@@ -224,14 +225,15 @@ internal sealed class MyLotteryPage
 
     // "Settled in game", then a confirmation in its place: the player's word that the refund or the result was settled by
     // hand. It records the entry as refunded for an amount not seen and never touches the game.
-    private void DrawSettledInGame(Plugin plugin, LotteryRow row, bool confirming, float x, float y)
+    private void DrawSettledInGame(Plugin plugin, LotteryRow row, string rowId, bool confirming, float x, float y)
     {
         var scale = ImGuiHelpers.GlobalScale;
+        using var scope = ImRaii.PushId(rowId);
         ImGui.SetCursorScreenPos(new Vector2(x, y));
         var writable = plugin.HousingData.JournalWritable && !plugin.Controller.Busy;
         if (!confirming)
         {
-            if (PillButton.Draw($"##ahl_lottery_settled_{row.Id:N}", Loc.T(L.Settlement.SettledInGame), Styling.AccentNebula, PillButton.Emphasis.Ghost, FontAwesomeIcon.HandHoldingUsd,
+            if (PillButton.Draw("##ahl_lottery_settled", Loc.T(L.Settlement.SettledInGame), Styling.AccentNebula, PillButton.Emphasis.Ghost, FontAwesomeIcon.HandHoldingUsd,
                     writable, Layout.ActionPillHeight, Loc.T(L.Settlement.SettledInGameHint)))
             {
                 confirmingSettled = row.Id;
@@ -241,7 +243,7 @@ internal sealed class MyLotteryPage
         }
 
         var confirmLabel = Loc.T(L.Settlement.SettledInGameConfirm);
-        if (PillButton.Draw($"##ahl_lottery_settled_yes_{row.Id:N}", confirmLabel, Styling.AccentAmber, PillButton.Emphasis.Tinted, FontAwesomeIcon.Check, writable, Layout.ActionPillHeight,
+        if (PillButton.Draw("##ahl_lottery_settled_yes", confirmLabel, Styling.AccentAmber, PillButton.Emphasis.Tinted, FontAwesomeIcon.Check, writable, Layout.ActionPillHeight,
                 Loc.T(L.Settlement.SettledInGameHint)))
         {
             confirmingSettled = Guid.Empty;
@@ -249,7 +251,7 @@ internal sealed class MyLotteryPage
         }
 
         ImGui.SetCursorScreenPos(new Vector2(x + PillButton.Width(confirmLabel, FontAwesomeIcon.Check) + StateGap * scale, y));
-        if (PillButton.Draw($"##ahl_lottery_settled_no_{row.Id:N}", Loc.T(L.Settlement.SettledInGameCancel), Styling.AccentNebula, PillButton.Emphasis.Ghost, null, true, Layout.ActionPillHeight))
+        if (PillButton.Draw("##ahl_lottery_settled_no", Loc.T(L.Settlement.SettledInGameCancel), Styling.AccentNebula, PillButton.Emphasis.Ghost, null, true, Layout.ActionPillHeight))
         {
             confirmingSettled = Guid.Empty;
         }
