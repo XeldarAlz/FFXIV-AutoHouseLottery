@@ -11,6 +11,8 @@
   <ItemGroup>
     <Compile Include="..\AutoHouseLottery\Core\Shared\**\*.cs" Link="Shared\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Changelog\**\*.cs" Link="Changelog\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Game\Model\**\*.cs" Link="Game\Model\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\AutoHouseLottery\Core\Travel\Model\**\*.cs" Link="Travel\Model\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\AutoHouseLottery\Core\Localization\L.cs;..\AutoHouseLottery\Core\Localization\L.*.cs;..\AutoHouseLottery\Core\Localization\LocString.cs" Link="Localization\%(Filename)%(Extension)" />
   </ItemGroup>
 
