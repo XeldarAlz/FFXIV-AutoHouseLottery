@@ -132,9 +132,9 @@ Open `/ahl deps` after install to see the helpers, one-click install each missin
 | `/autohouselottery log` | Open the Console page |
 | `/autohouselottery changelog` | Open the Changelog page |
 | `/autohouselottery about` | Open the About page |
-| `/autohouselottery stop` | Stop the run or the result visit before its next step; a press that may already have reached the game is verified first |
+| `/autohouselottery stop` | Stop the run or the result visit before its next step; a press that may already have reached the game is verified first. It also halts a batch between characters, after the running character's outcome is recorded, and stops a character switch the batch or the refund queue started |
 | `/autohouselottery pause` | Pause the run before its next step |
-| `/autohouselottery resume` | Resume a paused run, or retry one that waits for you, from a fresh check of the character and the plot |
+| `/autohouselottery resume` | Resume a paused run, or retry one that waits for you, from a fresh check of the character and the plot. With no run going, it continues a batch that waits for a login or was halted, as the batch card's Continue does |
 | `/autohouselottery target` | Log the targeted object's BaseId (debug helper) |
 
 ## Testing and debug commands
@@ -167,7 +167,7 @@ None of these is needed to use the plugin. `probe` reads what the game shows and
 
 - **Fetched from the housing service**: the public listings of the world you browse and of the worlds your saved searches, lists and shortlist point at, from `https://housing-api.yozoracho.dev/api/v1`, every 20 minutes while the window is open and every hour while only Saved or the shortlist needs them. The requests carry the plugin's name and version, and nothing about you or your characters.
 - **Read from the game, never sent anywhere**: your character's name, home world, gil and Free Company, your lottery entries and their results, and during a run the plot's placard, the lottery windows and any dialog that opens.
-- **Kept on disk in the plugin's config folder**: your settings (including the characters seen on this install, by name, home world and content id, so My lottery can name them), your shortlist and Saved library, the housing service's answers (each world's listings for 7 days and the list of worlds for 30, deleted when the plugin loads after that), the lottery calendar, and `journal.jsonl`, the record of every entry, refund and claim the plugin made, kept until each one is settled so an interrupted run is checked instead of repeated.
+- **Kept on disk in the plugin's config folder**: your settings (including the characters seen on this install, by name, home world and content id, so My lottery can name them), your shortlist and Saved library, the housing service's answers (each world's listings for 7 days and the list of worlds for 30, deleted when the plugin loads after that), the lottery calendar, `journal.jsonl`, the record of every entry, refund and claim the plugin made, kept until each one is settled so an interrupted run is checked instead of repeated, and `batch.json`, the batch of several characters that is running or waiting (each character's name, content ID and home world, its buyer type, deposit cap, gil reserve and target, and its outcome so far), kept until you discard or dismiss that batch.
 - **Copied only when you press a copy button**: Copy log on the Console and Copy diagnostics on the Plugins page. Both replace character names and content IDs with aliases, and your home folder (on Windows, Wine, Linux or macOS) and the plugin configuration folder with placeholders.
 
 ## Languages
