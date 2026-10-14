@@ -206,7 +206,7 @@ public sealed partial class CommandDocumentationTests
 
     private static string Section(string heading)
     {
-        var readme = File.ReadAllText(Path.Combine(RepositoryFiles.Root, ReadmePath));
+        var readme = File.ReadAllText(Path.Combine(RepositoryFiles.Root, ReadmePath)).ReplaceLineEndings("\n");
         var start = readme.IndexOf(string.Concat("\n", heading, "\n"), StringComparison.Ordinal);
         Assert.True(start >= 0, $"The README has no '{heading}' section.");
         var end = readme.IndexOf(string.Concat("\n", SectionPrefix), start + heading.Length + 1, StringComparison.Ordinal);
