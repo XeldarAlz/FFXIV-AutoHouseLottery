@@ -73,11 +73,18 @@ public sealed class ObservationMappingTests
     [Fact]
     public void PhaseEndComesOnlyFromALotterySaleWithAnEndTime()
     {
-        Assert.Equal(new PhaseEnd(LotteryPhase.Entry, phaseEnd), PlacardObservations.PhaseOf(openLottery));
-        Assert.Equal(LotteryPhase.Results, PlacardObservations.PhaseOf(openLottery with { Availability = PlacardAvailability.InResultsPeriod })?.Phase);
-        Assert.Null(PlacardObservations.PhaseOf(openLottery with { PhaseEndsAtUtc = null }));
-        Assert.Null(PlacardObservations.PhaseOf(openLottery with { PurchaseType = PlacardPurchaseType.FirstComeFirstServed }));
-        Assert.Null(PlacardObservations.PhaseOf(openLottery with { Availability = PlacardAvailability.Unavailable }));
+        Assert.Equal(new PhaseEnd(LotteryPhase.Entry, phaseEnd), PlacardObservations.PhaseOf(openLottery, ObservedAt));
+        Assert.Equal(LotteryPhase.Results, PlacardObservations.PhaseOf(openLottery with { Availability = PlacardAvailability.InResultsPeriod }, ObservedAt)?.Phase);
+        Assert.Null(PlacardObservations.PhaseOf(openLottery with { PhaseEndsAtUtc = null }, ObservedAt));
+        Assert.Null(PlacardObservations.PhaseOf(openLottery with { PurchaseType = PlacardPurchaseType.FirstComeFirstServed }, ObservedAt));
+        Assert.Null(PlacardObservations.PhaseOf(openLottery with { Availability = PlacardAvailability.Unavailable }, ObservedAt));
+    }
+
+    [Fact]
+    public void PhaseThatEndedBeforeTheReadingSaysNothingAboutTheCalendar()
+    {
+        Assert.Null(PlacardObservations.PhaseOf(openLottery, phaseEnd));
+        Assert.Null(PlacardObservations.PhaseOf(openLottery, phaseEnd.AddMinutes(1)));
     }
 
     [Fact]

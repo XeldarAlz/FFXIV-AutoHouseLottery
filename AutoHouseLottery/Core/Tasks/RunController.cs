@@ -248,7 +248,7 @@ internal sealed class RunController
         if (context is not null && settings is not null && RunPolicyRules.Validate(policy) == RunPolicyError.None)
         {
             var profile = housing.Profile(context, null, policy.Cycle);
-            preview = AssignmentPlanner.Build(policy, [profile], housing.Plots.Plots, DateTime.UtcNow);
+            preview = AssignmentPlanner.Build(policy, [profile], housing.Plots, DateTime.UtcNow);
             assignment = FindAssignment(preview.Assignments, context.ContentId);
             slot = profile.Participation.StateIn(policy.Cycle.Cycle);
         }

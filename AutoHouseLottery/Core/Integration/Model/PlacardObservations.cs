@@ -14,9 +14,10 @@ internal static class PlacardObservations
     private const byte LargeSize = 2;
 
     // The phase the placard's sale block reports and when it ends, which is server data the calendar can be anchored on.
-    public static PhaseEnd? PhaseOf(PlacardSaleInfo? sale)
+    // Like a listing's vote, it speaks only about a phase that had not ended when it was read.
+    public static PhaseEnd? PhaseOf(PlacardSaleInfo? sale, DateTime readAtUtc)
     {
-        if (sale is not { PurchaseType: PlacardPurchaseType.Lottery, PhaseEndsAtUtc: { } endsAt } lottery)
+        if (sale is not { PurchaseType: PlacardPurchaseType.Lottery, PhaseEndsAtUtc: { } endsAt } lottery || endsAt <= readAtUtc)
         {
             return null;
         }

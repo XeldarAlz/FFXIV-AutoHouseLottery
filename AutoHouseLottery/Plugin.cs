@@ -8,6 +8,7 @@ using AutoHouseLottery.Core.Game.Ward;
 using AutoHouseLottery.Core.Game.Watchers;
 using AutoHouseLottery.Core.Integration;
 using AutoHouseLottery.Core.Localization;
+using AutoHouseLottery.Core.Providers;
 using AutoHouseLottery.Core.Tasks;
 using AutoHouseLottery.Core.Travel;
 using AutoHouseLottery.Windows;
@@ -52,6 +53,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly AddonUpdateCounter placardWindow;
     private readonly PlacardSaleHook placardSales;
     private readonly HousingLogWatcher housingLog;
+    private readonly HousingFeedService housingFeed;
     private readonly AppWindow appWindow;
     private readonly RunStatusWindow runStrip;
     private readonly CommandInfo primaryCommand;
@@ -75,8 +77,6 @@ public sealed class Plugin : IDalamudPlugin
             completed.Push(CLibMain.Dispose);
 
             Configuration = LoadConfiguration();
-            HousingData = new HousingContext(Configuration, PluginInterface.GetPluginConfigDirectory());
-            completed.Push(HousingData.Dispose);
 
             wardWindow = new AddonUpdateCounter(WardReader.AddonName);
             completed.Push(wardWindow.Dispose);
@@ -89,16 +89,20 @@ public sealed class Plugin : IDalamudPlugin
             housingLog = new HousingLogWatcher();
             completed.Push(housingLog.Dispose);
             Housing = new HousingObservers(wardWindow, wardPackets, placardWindow, placardSales, SignboardAgentLayout.Resolve(placardSales.SignatureFound), housingLog);
+            InitializeLocalization();
+            var directory = PluginInterface.GetPluginConfigDirectory();
+            housingFeed = Discovery.CreateFeed(directory, PluginVersion);
+            completed.Push(housingFeed.Dispose);
+            HousingData = new HousingContext(Configuration, directory, housingFeed);
+            completed.Push(HousingData.Dispose);
+            Discovery = new Discovery(Configuration, directory, housingFeed, () => appWindow?.IsOpen == true);
+            completed.Push(Discovery.Dispose);
             Controller = new RunController(HousingData, Housing);
             completed.Push(Controller.Shutdown);
             dutyWatcher = new DutyWatcher();
             completed.Push(dutyWatcher.Dispose);
             gmAlertWatcher = new GmAlertWatcher();
             completed.Push(gmAlertWatcher.Dispose);
-
-            InitializeLocalization();
-            Discovery = new Discovery(Configuration, PluginInterface.GetPluginConfigDirectory(), PluginVersion, () => appWindow?.IsOpen == true);
-            completed.Push(Discovery.Dispose);
             Fonts.Initialize(PluginInterface.UiBuilder, PluginDirectory);
             completed.Push(Fonts.Dispose);
             appWindow = new AppWindow(this);
@@ -169,8 +173,9 @@ public sealed class Plugin : IDalamudPlugin
         wardWindow.Dispose();
         dutyWatcher.Dispose();
         gmAlertWatcher.Dispose();
-        HousingData.Dispose();
         Discovery.Dispose();
+        housingFeed.Dispose();
+        HousingData.Dispose();
 
         CLibMain.Dispose();
         ECommonsMain.Dispose();
