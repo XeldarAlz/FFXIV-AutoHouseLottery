@@ -33,6 +33,11 @@ internal enum HousingText : byte
     LandOwnedOnAccount,
     OneEntryPerPeriod,
     OutstandingPropertyOrRefund,
+    ProceedCheckbox,
+    PurchaseBlockedAfterDemolition,
+    FreeCompanyMembershipTooRecent,
+    HousingActionFailed,
+    FreeCompanyLeft,
 }
 
 internal readonly record struct HousingTextRow(HousingText Text, HousingSheet Sheet, uint RowId);
@@ -66,6 +71,25 @@ internal static class HousingTextRows
         new(HousingText.LandOwnedOnAccount, HousingSheet.LogMessage, 3497),
         new(HousingText.OneEntryPerPeriod, HousingSheet.LogMessage, 6099),
         new(HousingText.OutstandingPropertyOrRefund, HousingSheet.LogMessage, 6100),
+        new(HousingText.ProceedCheckbox, HousingSheet.Addon, 7047),
+        new(HousingText.PurchaseBlockedAfterDemolition, HousingSheet.LogMessage, 6097),
+        new(HousingText.FreeCompanyMembershipTooRecent, HousingSheet.LogMessage, 6098),
+        new(HousingText.HousingActionFailed, HousingSheet.LogMessage, 6101),
+        new(HousingText.FreeCompanyLeft, HousingSheet.LogMessage, 6102),
+    ];
+
+    // The log messages with which the game refuses a lottery entry. Each one is about the character, not the plot, so
+    // none of them is a reason to try another plot.
+    public static readonly ImmutableArray<HousingText> EntryRejections =
+    [
+        HousingText.CaretakerItemsUnclaimed,
+        HousingText.LandOwnedOnAccount,
+        HousingText.OneEntryPerPeriod,
+        HousingText.OutstandingPropertyOrRefund,
+        HousingText.PurchaseBlockedAfterDemolition,
+        HousingText.FreeCompanyMembershipTooRecent,
+        HousingText.HousingActionFailed,
+        HousingText.FreeCompanyLeft,
     ];
 
     // The texts a SelectYesno can carry after View Lottery Results.

@@ -152,8 +152,6 @@ internal static class LotteryRecordAccess
 // never means "no entry".
 internal static class LotteryWindowText
 {
-    private const ulong DecimalBase = 10;
-
     public static LotterySnapshotState Parse(ReadOnlySpan<string> shown, in LotteryTextPatterns patterns, out LotteryEntry entry)
     {
         entry = default;
@@ -172,9 +170,9 @@ internal static class LotteryWindowText
             {
                 phase = LotteryPhase.ResultsPeriod;
             }
-            else if (patterns.Number.TryCapture(text, out var numberGaps) && FirstNumber(numberGaps) is { } number)
+            else if (patterns.Number.TryCapture(text, out var numberGaps) && DisplayNumbers.First(numberGaps) is { } number and <= uint.MaxValue)
             {
-                lotteryNumber = number;
+                lotteryNumber = (uint)number;
             }
             else if (patterns.Address.Matches(text))
             {
@@ -194,46 +192,6 @@ internal static class LotteryWindowText
         entry = new LotteryEntry(null, null, null, lotteryNumber, null, phase, null, null, addressText, entryTypeText);
         return LotterySnapshotState.Active;
     }
-
-    // The first run of digits in the captured macros, reading through digit grouping marks.
-    private static uint? FirstNumber(ImmutableArray<string> gaps)
-    {
-        for (var gapIndex = 0; gapIndex < gaps.Length; gapIndex++)
-        {
-            var gap = gaps[gapIndex];
-            ulong value = 0;
-            var digits = 0;
-            for (var characterIndex = 0; characterIndex < gap.Length; characterIndex++)
-            {
-                var character = gap[characterIndex];
-                if (char.IsAsciiDigit(character))
-                {
-                    value = (value * DecimalBase) + (ulong)(character - '0');
-                    digits++;
-                    if (value > uint.MaxValue)
-                    {
-                        return null;
-                    }
-
-                    continue;
-                }
-
-                if (digits > 0 && !IsGroupingMark(character))
-                {
-                    break;
-                }
-            }
-
-            if (digits > 0)
-            {
-                return (uint)value;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool IsGroupingMark(char character) => character is ',' or '.' or ' ' or ' ' or ' ';
 }
 
 internal readonly record struct LotteryTextPatterns(

@@ -11,6 +11,7 @@ internal enum NativeAction : byte
     CancelEntry = 8,
     AcceptResult = 16,
     DeclineResult = 32,
+    TickEntryCheckbox = 64,
 }
 
 internal enum DialogActionResult : byte
@@ -29,4 +30,5 @@ internal enum DialogActionResult : byte
 // Text is the housing row the dialog was matched to, null when it matched none.
 internal readonly record struct DialogIdentity(string AddonName, HousingText? Text, string ShownText);
 
-internal readonly record struct HousingLogObservation(HousingText Text, uint RowId, int? FirstNumber, DateTime AtUtc);
+// Sequence orders the message against the run's own presses on the shared GameSequence counter.
+internal readonly record struct HousingLogObservation(HousingText Text, uint RowId, int? FirstNumber, DateTime AtUtc, long Sequence);

@@ -46,7 +46,7 @@ internal sealed class HousingLogWatcher : IDisposable
         }
 
         int? firstNumber = message.TryGetIntParameter(FirstParameter, out var number) ? number : null;
-        var observation = new HousingLogObservation(text, message.LogMessageId, firstNumber, DateTime.UtcNow);
+        var observation = new HousingLogObservation(text, message.LogMessageId, firstNumber, DateTime.UtcNow, GameSequence.Next());
         lock (gate)
         {
             recent[next] = observation;
