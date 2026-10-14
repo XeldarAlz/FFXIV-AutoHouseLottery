@@ -82,11 +82,19 @@ public sealed class RunPreviewBuilderTests
     }
 
     [Fact]
-    public void PlotSoldToOneBuyerTypeDecidesTheBuyer()
+    public void BuyerIsThePlayersChoiceThatThePlotOnlyConfirms()
     {
-        Assert.Equal(BuyerType.Private, RunPreviewBuilder.BuyerFor(PlotBuyers.Private, BuyerType.FreeCompany));
-        Assert.Equal(BuyerType.FreeCompany, RunPreviewBuilder.BuyerFor(PlotBuyers.FreeCompany, BuyerType.Unknown));
+        Assert.Equal(BuyerType.Private, RunPreviewBuilder.BuyerFor(PlotBuyers.Private, BuyerType.Private));
         Assert.Equal(BuyerType.FreeCompany, RunPreviewBuilder.BuyerFor(PlotBuyers.Both, BuyerType.FreeCompany));
+        Assert.Equal(BuyerType.FreeCompany, RunPreviewBuilder.BuyerFor(null, BuyerType.FreeCompany));
+    }
+
+    [Fact]
+    public void NoChoiceOrAChoiceThePlotRefusesGivesNoBuyer()
+    {
+        Assert.Equal(BuyerType.Unknown, RunPreviewBuilder.BuyerFor(PlotBuyers.Private, BuyerType.FreeCompany));
+        Assert.Equal(BuyerType.Unknown, RunPreviewBuilder.BuyerFor(PlotBuyers.FreeCompany, BuyerType.Private));
+        Assert.Equal(BuyerType.Unknown, RunPreviewBuilder.BuyerFor(PlotBuyers.Private, BuyerType.Unknown));
         Assert.Equal(BuyerType.Unknown, RunPreviewBuilder.BuyerFor(null, BuyerType.Unknown));
     }
 

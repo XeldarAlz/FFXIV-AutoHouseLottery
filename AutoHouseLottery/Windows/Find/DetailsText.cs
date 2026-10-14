@@ -90,9 +90,15 @@ internal sealed class DetailsText
             return (null, Loc.T(L.Find.NeedCharacter));
         }
 
-        var buyer = RunPreviewBuilder.BuyerFor(plot.Buyers?.Value, state.Filter.Buyer);
+        var chosen = state.Filter.Buyer;
+        if (chosen == BuyerType.Unknown)
+        {
+            return (null, Loc.T(L.Find.NeedBuyer));
+        }
+
+        var buyer = RunPreviewBuilder.BuyerFor(plot.Buyers?.Value, chosen);
         return buyer == BuyerType.Unknown
-            ? (null, Loc.T(L.Find.NeedBuyer))
+            ? (null, Loc.T(L.RunFailure.Ineligible))
             : (RunPreviewBuilder.ExactPolicy(profile, buyer, key, deposit, state.GilReserve, view.Position, view.Revision), null);
     }
 

@@ -153,7 +153,7 @@ internal sealed partial class FindHomePage
         var controller = plugin.Controller;
         var reason = policy is null ? missing ?? string.Empty : check.Reason(controller, mode, policy);
         var enabled = policy is not null && reason.Length == 0;
-        if (HeroButton.Draw(FontAwesomeIcon.Ticket, title, null, Styling.AccentGlow, enabled) && policy is not null && enabled)
+        if (HeroButton.Draw(FontAwesomeIcon.Ticket, title, BuyerLabel(State.Filter.Buyer), Styling.AccentGlow, enabled) && policy is not null && enabled)
         {
             var refusal = mode == RunMode.Exact ? controller.StartExact(policy) : controller.StartBestMatch(policy);
             check.Invalidate();
@@ -172,6 +172,13 @@ internal sealed partial class FindHomePage
 
         ImGui.PopTextWrapPos();
     }
+
+    private static string? BuyerLabel(BuyerType buyer) => buyer switch
+    {
+        BuyerType.Private => Loc.T(L.Find.BuyerPrivate),
+        BuyerType.FreeCompany => Loc.T(L.Find.BuyerFreeCompany),
+        _ => null,
+    };
 
     // Visiting arrives with a later update; its button is shown, locked, with the reason under it.
     private static void UnavailableAction(FontAwesomeIcon icon, string title, Vector4 accent, string reason)
