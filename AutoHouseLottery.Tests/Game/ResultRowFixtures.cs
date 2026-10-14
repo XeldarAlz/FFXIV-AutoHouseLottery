@@ -72,7 +72,10 @@ internal static class ResultRowFixtures
     }
 
     // The row as a dialog shows it once extracted: macros filled in, line breaks as new lines, soft hyphens gone.
-    public static string Shown(string language, int row)
+    public static string Shown(string language, int row) => ShownWith(language, row, gapValues);
+
+    // The same with each macro filled in by the given values in order.
+    public static string ShownWith(string language, int row, params string[] values)
     {
         var template = templates[(language, row)];
         var shown = new StringBuilder();
@@ -81,7 +84,7 @@ internal static class ResultRowFixtures
         {
             if (template.AsSpan(characterIndex).StartsWith(GapMarker))
             {
-                shown.Append(gapValues[gapIndex++ % gapValues.Length]);
+                shown.Append(values[gapIndex++ % values.Length]);
                 characterIndex += GapMarker.Length - 1;
                 continue;
             }

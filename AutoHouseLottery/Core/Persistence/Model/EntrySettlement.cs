@@ -8,6 +8,9 @@ internal readonly record struct EntrySettlement(
     long? ReceivedRefund,
     DateTime UpdatedUtc)
 {
+    // Gil spent travelling to the entered plot to read its result, collect its refund or claim it.
+    public long TravelSpent { get; init; }
+
     public bool IsSettled => SettlementTransitions.IsSettled(State);
 
     public static EntrySettlement Entered(Guid receiptId, DateTime nowUtc)

@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Persistence.Model;
+using AutoHouseLottery.Core.Shared;
 
 namespace AutoHouseLottery.Core.Persistence;
 
@@ -276,6 +277,81 @@ internal sealed class ActionJournal : IDisposable
             Publish();
             var differs = next == SettlementState.Refunded && amount is { } received && received != advanced.ExpectedRefund;
             return differs ? JournalWrite.WrittenAmountDiffers : JournalWrite.Written;
+        }
+    }
+
+    // Gil spent travelling for a settlement, kept on the settlement apart from the refund so the net return can be told.
+    public JournalWrite AddTravel(Guid receiptId, long spent, DateTime nowUtc)
+    {
+        lock (gate)
+        {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
+            if (spent <= 0)
+            {
+                return JournalWrite.Invalid;
+            }
+
+            if (!settlements.TryGetValue(receiptId, out var current))
+            {
+                return JournalWrite.UnknownRecord;
+            }
+
+            if (!Gil.TryAdd(current.TravelSpent, spent, out var total))
+            {
+                return JournalWrite.Invalid;
+            }
+
+            var updated = current with { TravelSpent = total, UpdatedUtc = nowUtc };
+            if (!TryAppend(JournalCodec.Encode(updated)))
+            {
+                return JournalWrite.WriteFailed;
+            }
+
+            settlements[receiptId] = updated;
+            Publish();
+            return JournalWrite.Written;
+        }
+    }
+
+    // The plot of an entry imported from the Timers text, once a result read at that plot has proved it. Only an imported
+    // receipt that names no plot yet can be given one, and only a plot on its own home world and region.
+    public JournalWrite ResolvePlot(Guid receiptId, PlotKey plot)
+    {
+        lock (gate)
+        {
+            if (faulted)
+            {
+                return JournalWrite.Faulted;
+            }
+
+            if (!receipts.TryGetValue(receiptId, out var receipt))
+            {
+                return JournalWrite.UnknownRecord;
+            }
+
+            if (receipt.Plot is { } known)
+            {
+                return known == plot ? JournalWrite.AlreadyRecorded : JournalWrite.IllegalTransition;
+            }
+
+            if (!receipt.Imported || !plot.IsValid || plot.WorldId != receipt.HomeWorldId || plot.Region != receipt.Cycle.Region)
+            {
+                return JournalWrite.Invalid;
+            }
+
+            var resolved = receipt with { Plot = plot };
+            if (!TryAppend(JournalCodec.Encode(resolved)))
+            {
+                return JournalWrite.WriteFailed;
+            }
+
+            receipts[receiptId] = resolved;
+            Publish();
+            return JournalWrite.Written;
         }
     }
 

@@ -13,4 +13,6 @@ internal readonly struct SettlementJson
     public long? ReceivedRefund { get; init; }
 
     public DateTime? UpdatedUtc { get; init; }
+
+    public long? TravelSpent { get; init; }
 }
