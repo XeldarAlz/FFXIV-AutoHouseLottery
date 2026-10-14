@@ -11,7 +11,7 @@ internal static class SavedCodec
     public const int Schema = 1;
     public const int MaximumRecent = 40;
 
-    public static string Export(in SavedLibrarySnapshot library, IReadOnlyDictionary<string, DateTime> delivered, IReadOnlyList<NoticeRecord> recent)
+    public static string Export(in SavedLibrarySnapshot library, IReadOnlyDictionary<string, DateTime> delivered, IReadOnlyList<NoticeRecord> recent, NoticeBaseline baseline)
     {
         var searches = new SavedSearchJson[library.Searches.Length];
         for (var index = 0; index < searches.Length; index++)
@@ -46,7 +46,23 @@ internal static class SavedCodec
             };
         }
 
-        var file = new SavedFileJson { Schema = Schema, Searches = searches, Lists = lists, Delivered = ledger, Recent = records };
+        var pendingPlots = new PlotKeyJson[baseline.Plots.Count];
+        var pendingIndex = 0;
+        foreach (var plot in baseline.Plots)
+        {
+            pendingPlots[pendingIndex++] = PlotKeyJson.From(plot);
+        }
+
+        var file = new SavedFileJson
+        {
+            Schema = Schema,
+            Searches = searches,
+            Lists = lists,
+            Delivered = ledger,
+            Recent = records,
+            PendingSources = [.. baseline.Sources],
+            PendingPlots = pendingPlots,
+        };
         return JsonSerializer.Serialize(file, SavedJsonContext.Default.SavedFileJson);
     }
 
@@ -100,7 +116,14 @@ internal static class SavedCodec
             skipped++;
         }
 
-        document = new SavedDocument(searches.ToImmutable(), lists.ToImmutable(), ReadDelivered(file.Delivered), ReadRecent(file.Recent), skipped);
+        document = new SavedDocument(
+            searches.ToImmutable(),
+            lists.ToImmutable(),
+            ReadDelivered(file.Delivered),
+            ReadRecent(file.Recent),
+            [.. file.PendingSources ?? []],
+            ReadPlots(file.PendingPlots),
+            skipped);
         return SavedReadError.None;
     }
 
@@ -166,18 +189,16 @@ internal static class SavedCodec
             json.MainDivision ?? true,
             json.Subdivision ?? true);
         var defaults = PlotFilter.Default;
-        var filter = defaults with
-        {
-            Sizes = json.Sizes ?? defaults.Sizes,
-            Buyer = json.Buyer ?? defaults.Buyer,
-            PriceCeiling = Math.Max(0, json.PriceCeiling ?? 0),
-            Statuses = json.Statuses ?? defaults.Statuses,
-            FirstPlot = Math.Clamp(json.FirstPlot ?? defaults.FirstPlot, PlotFilter.FirstPlotNumber, PlotFilter.LastPlotNumber),
-            LastPlot = Math.Clamp(json.LastPlot ?? defaults.LastPlot, PlotFilter.FirstPlotNumber, PlotFilter.LastPlotNumber),
-            MinimumEntries = json.MinimumEntries is >= 0 ? json.MinimumEntries : null,
-            MaximumEntries = json.MaximumEntries is >= 0 ? json.MaximumEntries : null,
-            MaximumAgeHours = Math.Max(0, json.MaximumAgeHours ?? 0),
-        };
+        var filter = PlotFilter.Sanitized(
+            json.Sizes ?? defaults.Sizes,
+            json.Buyer ?? defaults.Buyer,
+            json.PriceCeiling ?? 0,
+            json.Statuses ?? defaults.Statuses,
+            json.FirstPlot ?? defaults.FirstPlot,
+            json.LastPlot ?? defaults.LastPlot,
+            json.MinimumEntries,
+            json.MaximumEntries,
+            json.MaximumAgeHours ?? 0);
         search = new SavedSearch(id, name, area, filter, json.CreatedUtc ?? default);
         return true;
     }
@@ -227,6 +248,25 @@ internal static class SavedCodec
         return entries.ToImmutable();
     }
 
+    private static ImmutableArray<PlotKey> ReadPlots(PlotKeyJson[]? plots)
+    {
+        if (plots is null)
+        {
+            return [];
+        }
+
+        var keys = ImmutableArray.CreateBuilder<PlotKey>(plots.Length);
+        for (var index = 0; index < plots.Length; index++)
+        {
+            if (plots[index].TryToKey(out var key))
+            {
+                keys.Add(key);
+            }
+        }
+
+        return keys.ToImmutable();
+    }
+
     private static ImmutableArray<NoticeRecord> ReadRecent(NoticeRecordJson[]? recent)
     {
         if (recent is null)
@@ -237,7 +277,7 @@ internal static class SavedCodec
         var records = ImmutableArray.CreateBuilder<NoticeRecord>(Math.Min(recent.Length, MaximumRecent));
         for (var index = 0; index < recent.Length && records.Count < MaximumRecent; index++)
         {
-            if (recent[index] is { Kind: { } kind, Plot: { } plot, AtUtc: { } at } record && plot.TryToKey(out var key))
+            if (recent[index] is { Kind: { } kind, Plot: { } plot, AtUtc: { } at } record && Enum.IsDefined(kind) && plot.TryToKey(out var key))
             {
                 records.Add(new NoticeRecord(kind, key, record.Source ?? string.Empty, at, record.PhaseEndUtc));
             }

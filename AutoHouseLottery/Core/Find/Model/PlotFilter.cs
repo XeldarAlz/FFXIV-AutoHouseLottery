@@ -10,6 +10,9 @@ internal readonly record struct PlotFilter
     public const int FirstPlotNumber = 1;
     public const int LastPlotNumber = HousingDistricts.PlotsPerDivision * 2;
 
+    private const StatusFilter KnownStatuses = StatusFilter.EntryOpen | StatusFilter.Results | StatusFilter.NextCycle | StatusFilter.ForSale
+        | StatusFilter.Occupied | StatusFilter.NotReported | StatusFilter.NeedsRefresh;
+
     public SizeFilter Sizes { get; init; }
 
     public BuyerType Buyer { get; init; }
@@ -37,6 +40,34 @@ internal readonly record struct PlotFilter
         FirstPlot = FirstPlotNumber,
         LastPlot = LastPlotNumber,
     };
+
+    // Values read back from a settings or saved file: unknown flags and enum values, negative amounts and plot numbers
+    // outside a ward are dropped rather than trusted.
+    public static PlotFilter Sanitized(
+        SizeFilter sizes,
+        BuyerType buyer,
+        long priceCeiling,
+        StatusFilter statuses,
+        int firstPlot,
+        int lastPlot,
+        int? minimumEntries,
+        int? maximumEntries,
+        int maximumAgeHours)
+    {
+        var knownSizes = sizes & SizeFilter.All;
+        return new PlotFilter
+        {
+            Sizes = knownSizes == SizeFilter.None ? SizeFilter.All : knownSizes,
+            Buyer = Enum.IsDefined(buyer) ? buyer : BuyerType.Unknown,
+            PriceCeiling = Math.Max(0, priceCeiling),
+            Statuses = statuses & KnownStatuses,
+            FirstPlot = Math.Clamp(firstPlot, FirstPlotNumber, LastPlotNumber),
+            LastPlot = Math.Clamp(lastPlot, FirstPlotNumber, LastPlotNumber),
+            MinimumEntries = minimumEntries is >= 0 ? minimumEntries : null,
+            MaximumEntries = maximumEntries is >= 0 ? maximumEntries : null,
+            MaximumAgeHours = Math.Max(0, maximumAgeHours),
+        };
+    }
 
     public bool HasPlotRange => FirstPlot > FirstPlotNumber || LastPlot < LastPlotNumber;
 

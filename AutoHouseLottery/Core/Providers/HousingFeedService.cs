@@ -1,42 +1,49 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Persistence;
 using AutoHouseLottery.Core.Providers.Model;
+using AutoHouseLottery.Core.Storage;
 
 namespace AutoHouseLottery.Core.Providers;
 
 // Ported from Aetherphone's housing service and reworked around the plot store. Tick runs on the framework thread and
-// only decides; every request, parse, merge and cache write happens on a task, and the page reads the immutable snapshot
-// published after each merge. Refreshing never touches the game, so it never takes the execution lease.
+// only decides; every request, parse, merge and disk write happens on a task, and the page reads the immutable snapshot
+// published after each change without taking any lock. Parsing and normalizing hold only the calendar lock; the store
+// lock covers the merge and the publish. Refreshing never touches the game, so it never takes the execution lease.
 internal sealed class HousingFeedService : IDisposable
 {
     private const int MaximumPositions = 8;
 
     private readonly HousingFeedClient client;
     private readonly HousingFeedCache cache;
-    private readonly string schedulePath;
+    private readonly QueuedFile scheduleFile;
     private readonly Task<LotterySchedules> schedulesLoading;
     private readonly Lock gate = new();
+    private readonly Lock calendarGate = new();
     private readonly PlotStore store = new();
     private readonly FeedSession session = new();
-    private readonly Dictionary<uint, WorldState> worlds = [];
+    private readonly Dictionary<uint, WorldFeedState> worlds = [];
     private readonly List<CyclePosition> positions = [];
     private readonly CancellationTokenSource shutdown = new();
-    private ImmutableArray<uint> scope = [];
     private ImmutableArray<FeedWorld> worldList = [];
+    private FrozenDictionary<(uint World, ushort District), CoverageSnapshot> coverage = FrozenDictionary<(uint World, ushort District), CoverageSnapshot>.Empty;
+    private int coverageRevision = -1;
+    private LotterySchedules? schedules;
+    private LotterySchedule calendar = LotteryCalendar.Global;
     private bool worldListRequested;
     private int revision;
-    private LotterySchedules? schedules;
+    private volatile bool disposed;
     private volatile DiscoverySnapshot snapshot = DiscoverySnapshot.Empty;
 
     public HousingFeedService(HousingFeedClient client, HousingFeedCache cache, string schedulePath)
     {
         this.client = client;
         this.cache = cache;
-        this.schedulePath = schedulePath;
+        scheduleFile = new QueuedFile(schedulePath, "lottery calendar", static (exception, message) => RunLog.Warning(exception, message));
         schedulesLoading = Task.Run(() => LoadSchedules(schedulePath));
     }
 
@@ -52,31 +59,29 @@ internal sealed class HousingFeedService : IDisposable
         RequestWorldList();
         lock (gate)
         {
-            schedules ??= schedulesLoading.Result;
-            scope = fetchScope;
+            if (schedules is null)
+            {
+                schedules = schedulesLoading.Result;
+                schedules.TryGet(GameRegion.Global, out calendar);
+            }
+
             for (var index = 0; index < fetchScope.Length; index++)
             {
                 var worldId = fetchScope[index];
                 var state = StateFor(worldId);
-                if (!state.CacheRead)
+                if (state.NeedsCacheRead)
                 {
-                    BeginCacheRead(worldId, state);
+                    state.BeginCacheRead();
+                    PublishLocked();
+                    _ = Task.Run(() => ReadCache(worldId));
                     continue;
                 }
 
-                if (!state.InFlight && RefreshCadence.IsDue(state.Timer, mode, nowUtc))
+                if (state.CanFetch(mode, nowUtc))
                 {
                     BeginFetch(worldId, state, nowUtc);
                 }
             }
-        }
-    }
-
-    public TimeSpan ManualWait(uint worldId, DateTime nowUtc)
-    {
-        lock (gate)
-        {
-            return worlds.TryGetValue(worldId, out var state) ? RefreshCadence.ManualWait(state.Timer, nowUtc) : TimeSpan.Zero;
         }
     }
 
@@ -85,7 +90,7 @@ internal sealed class HousingFeedService : IDisposable
         lock (gate)
         {
             var state = StateFor(worldId);
-            if (schedules is null || !state.CacheRead || state.InFlight || RefreshCadence.ManualWait(state.Timer, nowUtc) > TimeSpan.Zero)
+            if (schedules is null || !state.CanRefreshNow(nowUtc))
             {
                 return false;
             }
@@ -98,65 +103,54 @@ internal sealed class HousingFeedService : IDisposable
 
     public void Dispose()
     {
+        disposed = true;
         shutdown.Cancel();
         client.Dispose();
+        scheduleFile.Close();
         shutdown.Dispose();
     }
 
-    private WorldState StateFor(uint worldId)
+    private WorldFeedState StateFor(uint worldId)
     {
         if (!worlds.TryGetValue(worldId, out var state))
         {
-            state = new WorldState();
+            state = new WorldFeedState();
             worlds[worldId] = state;
         }
 
         return state;
     }
 
-    private void BeginCacheRead(uint worldId, WorldState state)
+    private void BeginFetch(uint worldId, WorldFeedState state, DateTime nowUtc)
     {
-        if (state.CacheReading)
-        {
-            return;
-        }
-
-        state.CacheReading = true;
-        PublishLocked();
-        _ = Task.Run(() => ReadCache(worldId), shutdown.Token);
-    }
-
-    private void BeginFetch(uint worldId, WorldState state, DateTime nowUtc)
-    {
-        state.InFlight = true;
-        state.Timer = RefreshCadence.Started(state.Timer, nowUtc);
         var ticket = session.Issue(worldId);
+        state.Begin(ticket, nowUtc);
         PublishLocked();
-        _ = Task.Run(() => FetchAsync(ticket), shutdown.Token);
+        _ = Task.Run(() => FetchAsync(ticket));
     }
 
     private void ReadCache(uint worldId)
     {
         var cached = cache.ReadWorld(worldId, DateTime.UtcNow);
+        var read = cached is { } fetch ? Read(fetch, worldId, CalendarUse.ReadOnly) : default;
         lock (gate)
         {
-            var state = StateFor(worldId);
-            state.CacheRead = true;
-            state.CacheReading = false;
-            if (cached is { } fetch)
+            if (disposed)
             {
-                var ticket = session.Issue(worldId);
-                var result = FeedIntake.Accept(store, session, ticket, scope.AsSpan(), fetch, schedules!);
-                if (result.Applied)
-                {
-                    state.HasData = true;
-                    state.CachedReceivedUtc = fetch.Receipt.ReceivedUtc;
-                    Remember(result.Feed!);
-                    RunLog.Info($"Loaded the saved housing listings for world {worldId} from {fetch.Receipt.ReceivedUtc:u}: {result.Merged} plots.");
-                }
-
-                PublishLocked();
                 return;
+            }
+
+            var result = FeedIntakeResult.Ignored(FeedIntakeStatus.FetchFailed);
+            if (read.Feed is not null)
+            {
+                result = FeedIntake.Apply(store, session, session.Issue(worldId), read);
+            }
+
+            StateFor(worldId).FinishCacheRead(cached, result);
+            if (result.Applied)
+            {
+                Remember(result.Feed!);
+                RunLog.Info($"Loaded the saved housing listings for world {worldId} from {cached!.Value.Receipt.ReceivedUtc:u}: {result.Merged} plots.");
             }
 
             PublishLocked();
@@ -175,45 +169,46 @@ internal sealed class HousingFeedService : IDisposable
             return;
         }
 
-        if (fetch.Status == FetchStatus.Cancelled)
+        if (disposed || fetch.Status == FetchStatus.Cancelled)
         {
             return;
         }
 
+        var read = Read(fetch, ticket.WorldId, CalendarUse.Anchor);
         FeedIntakeResult result;
-        TimeSpan? retryIn = null;
+        FetchOutcome outcome;
+        DateTime retryAt;
         lock (gate)
         {
+            if (disposed)
+            {
+                return;
+            }
+
+            result = FeedIntake.Apply(store, session, ticket, read);
             var state = StateFor(ticket.WorldId);
-            state.InFlight = false;
-            result = FeedIntake.Accept(store, session, ticket, scope.AsSpan(), fetch, schedules!);
-            var now = DateTime.UtcNow;
+            outcome = state.Finish(ticket, fetch, result, DateTime.UtcNow, Random.Shared.NextDouble());
+            retryAt = state.RetryAt;
             if (result.Applied)
             {
-                state.Timer = RefreshCadence.Succeeded(state.Timer, now, fetch.MaxAge);
-                state.HasData = true;
-                state.LiveReceivedUtc = fetch.Receipt.ReceivedUtc;
-                state.LiveUpstreamUtc = fetch.Receipt.UpstreamUtc;
-                state.Failure = FeedFailure.None;
-                state.HttpStatus = fetch.HttpStatus;
                 Remember(result.Feed!);
-            }
-            else if (result.Status != FeedIntakeStatus.Stale)
-            {
-                state.Timer = RefreshCadence.Failed(state.Timer, now, fetch.RetryAfter, Random.Shared.NextDouble());
-                state.Failure = FailureOf(fetch.Status, result.Status);
-                state.HttpStatus = fetch.HttpStatus;
-                var retryAt = state.Timer.RetryAfterUtc > state.Timer.BackoffUntilUtc ? state.Timer.RetryAfterUtc : state.Timer.BackoffUntilUtc;
-                retryIn = retryAt - now;
             }
 
             PublishLocked();
         }
 
-        Report(ticket.WorldId, fetch, result, retryIn);
-        if (result.Applied)
+        Report(ticket.WorldId, fetch, result, outcome, retryAt);
+        if (outcome == FetchOutcome.Applied && !disposed)
         {
-            cache.WriteWorld(ticket.WorldId, fetch);
+            cache.WriteWorld(ticket.WorldId, fetch.Body!, fetch.Receipt);
+        }
+    }
+
+    private FeedRead Read(in FeedFetch fetch, uint worldId, CalendarUse use)
+    {
+        lock (calendarGate)
+        {
+            return FeedIntake.Read(fetch, worldId, schedules!, use);
         }
     }
 
@@ -229,7 +224,7 @@ internal sealed class HousingFeedService : IDisposable
             worldListRequested = true;
         }
 
-        _ = Task.Run(LoadWorldListAsync, shutdown.Token);
+        _ = Task.Run(LoadWorldListAsync);
     }
 
     private async Task LoadWorldListAsync()
@@ -257,7 +252,10 @@ internal sealed class HousingFeedService : IDisposable
         }
 
         PublishWorldList(parsed);
-        cache.WriteWorldList(fetch);
+        if (!disposed)
+        {
+            cache.WriteWorldList(fetch.Body!, fetch.Receipt);
+        }
     }
 
     private void PublishWorldList(ImmutableArray<FeedWorld> parsed)
@@ -276,11 +274,12 @@ internal sealed class HousingFeedService : IDisposable
 
     private void Remember(WorldFeed feed)
     {
-        if (feed.Schedule is ScheduleUpdate.Established or ScheduleUpdate.Reanchored && schedules!.TryGet(GameRegion.Global, out var schedule))
+        calendar = feed.Calendar;
+        if (feed.Schedule is ScheduleUpdate.Established or ScheduleUpdate.Reanchored)
         {
-            RunLog.Info($"The listings {(feed.Schedule == ScheduleUpdate.Established ? "established" : "moved")} the lottery calendar: cycle {schedule.AnchorCycleNumber} entry opens {schedule.AnchorEntryStartUtc:u} (revision {schedule.Revision}).");
-            var persisted = schedules.All;
-            _ = Task.Run(() => SaveSchedules(persisted));
+            RunLog.Info($"The listings {(feed.Schedule == ScheduleUpdate.Established ? "established" : "moved")} the lottery calendar: cycle {calendar.AnchorCycleNumber} entry opens {calendar.AnchorEntryStartUtc:u} (revision {calendar.Revision}).");
+            var persisted = calendar;
+            scheduleFile.Write(() => LotteryScheduleFile.Serialize([persisted]));
         }
 
         for (var index = 0; index < feed.Positions.Length; index++)
@@ -304,15 +303,7 @@ internal sealed class HousingFeedService : IDisposable
         var statuses = new Dictionary<uint, FeedWorldStatus>(worlds.Count);
         foreach (var pair in worlds)
         {
-            var state = pair.Value;
-            statuses[pair.Key] = new FeedWorldStatus(
-                state.InFlight || state.CacheReading,
-                state.HasData,
-                state.LiveReceivedUtc,
-                state.LiveUpstreamUtc,
-                state.CachedReceivedUtc,
-                state.Failure,
-                state.HttpStatus);
+            statuses[pair.Key] = pair.Value.Status();
         }
 
         snapshot = new DiscoverySnapshot
@@ -322,9 +313,35 @@ internal sealed class HousingFeedService : IDisposable
             Plots = store.Plots,
             Positions = [.. positions],
             Worlds = statuses.ToFrozenDictionary(),
+            Coverage = CoverageLocked(),
             WorldList = worldList,
-            Schedule = schedules is not null && schedules.TryGet(GameRegion.Global, out var schedule) ? schedule : LotteryCalendar.Global,
+            Schedule = calendar,
         };
+    }
+
+    private FrozenDictionary<(uint World, ushort District), CoverageSnapshot> CoverageLocked()
+    {
+        if (coverageRevision == store.Revision)
+        {
+            return coverage;
+        }
+
+        coverageRevision = store.Revision;
+        var found = new Dictionary<(uint World, ushort District), CoverageSnapshot>();
+        foreach (var worldId in worlds.Keys)
+        {
+            for (var index = 0; index < HousingDistricts.All.Length; index++)
+            {
+                var districtId = HousingDistricts.All[index].TerritoryId;
+                if (CoverageScope.TryForDistrict(GameRegion.Global, worldId, districtId, out var scope) && store.TryGetCoverage(scope, ObservationSource.PublicFeed, out var snapshotOfDistrict))
+                {
+                    found[(worldId, districtId)] = snapshotOfDistrict;
+                }
+            }
+        }
+
+        coverage = found.ToFrozenDictionary();
+        return coverage;
     }
 
     private static LotterySchedules LoadSchedules(string path)
@@ -334,55 +351,23 @@ internal sealed class HousingFeedService : IDisposable
             return LotterySchedules.Create(persisted.AsSpan());
         }
 
-        RunLog.Warning("The saved lottery calendar could not be read; the built-in calendar is used until the listings confirm it.");
+        RunLog.Warning($"The saved lottery calendar in {Path.GetFileName(path)} could not be read; the built-in calendar is used until the listings confirm it.");
         return LotterySchedules.Create([]);
     }
 
-    private void SaveSchedules(ImmutableArray<LotterySchedule> persisted)
+    private static void Report(uint worldId, in FeedFetch fetch, in FeedIntakeResult result, FetchOutcome outcome, DateTime retryAt)
     {
-        if (!LotteryScheduleFile.TrySave(schedulePath, persisted.AsSpan()))
+        switch (outcome)
         {
-            RunLog.Warning("The lottery calendar could not be saved; it is confirmed again from the next listings.");
-        }
-    }
-
-    private static void Report(uint worldId, in FeedFetch fetch, in FeedIntakeResult result, TimeSpan? retryIn)
-    {
-        switch (result.Status)
-        {
-            case FeedIntakeStatus.Applied:
+            case FetchOutcome.Applied:
                 RunLog.Info($"Housing listings for world {worldId} refreshed: {result.Merged} plots merged, {result.Rejected} rejected (first reason {result.FirstRejection}), {result.MarkedNotReported} no longer listed (service read {fetch.Receipt.UpstreamUtc:u}).");
                 break;
-            case FeedIntakeStatus.Stale:
-                RunLog.Debug($"A housing response for world {worldId} arrived after the page moved on and was ignored.");
+            case FetchOutcome.Superseded:
+                RunLog.Debug($"A housing response for world {worldId} was overtaken by a newer request and was not used.");
                 break;
             default:
-                RunLog.Warning($"Housing listings for world {worldId} were not refreshed ({fetch.Status}, {result.Status}, HTTP {fetch.HttpStatus}); the previous listings stay and the next try is in {retryIn?.TotalSeconds:F0}s.");
+                RunLog.Warning($"Housing listings for world {worldId} were not refreshed ({fetch.Status}, {result.Status}, HTTP {fetch.HttpStatus}); the previous listings stay and the next try is at {retryAt:u}.");
                 break;
         }
-    }
-
-    private static FeedFailure FailureOf(FetchStatus fetch, FeedIntakeStatus intake) => fetch switch
-    {
-        FetchStatus.Success => intake == FeedIntakeStatus.Applied ? FeedFailure.None : FeedFailure.Malformed,
-        FetchStatus.RateLimited => FeedFailure.RateLimited,
-        FetchStatus.HttpError => FeedFailure.HttpError,
-        FetchStatus.Oversized => FeedFailure.Oversized,
-        FetchStatus.TimedOut => FeedFailure.TimedOut,
-        _ => FeedFailure.Unreachable,
-    };
-
-    private sealed class WorldState
-    {
-        public RefreshTimer Timer;
-        public bool InFlight;
-        public bool CacheRead;
-        public bool CacheReading;
-        public bool HasData;
-        public DateTime LiveReceivedUtc;
-        public DateTime LiveUpstreamUtc;
-        public DateTime CachedReceivedUtc;
-        public FeedFailure Failure;
-        public int HttpStatus;
     }
 }

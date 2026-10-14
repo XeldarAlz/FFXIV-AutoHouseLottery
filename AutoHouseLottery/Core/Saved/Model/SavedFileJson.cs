@@ -1,3 +1,5 @@
+using AutoHouseLottery.Core.Housing.Model;
+
 namespace AutoHouseLottery.Core.Saved.Model;
 
 internal sealed class SavedFileJson
@@ -11,4 +13,8 @@ internal sealed class SavedFileJson
     public DeliveredNoticeJson[]? Delivered { get; init; }
 
     public NoticeRecordJson[]? Recent { get; init; }
+
+    public Guid[]? PendingSources { get; init; }
+
+    public PlotKeyJson[]? PendingPlots { get; init; }
 }

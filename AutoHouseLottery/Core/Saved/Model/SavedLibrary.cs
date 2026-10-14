@@ -35,12 +35,31 @@ internal sealed class SavedLibrary
         return list;
     }
 
-    public void Restore(ReadOnlySpan<SavedSearch> savedSearches, ReadOnlySpan<SavedList> savedLists)
+    // The file loads in the background; anything saved before it arrived is kept after what was already on disk.
+    public void MergeLoaded(ReadOnlySpan<SavedSearch> savedSearches, ReadOnlySpan<SavedList> savedLists)
     {
+        var added = searches.ToArray();
         searches.Clear();
-        lists.Clear();
         searches.AddRange(savedSearches);
+        for (var index = 0; index < added.Length; index++)
+        {
+            if (!HasSearch(added[index].Id))
+            {
+                searches.Add(added[index]);
+            }
+        }
+
+        var addedLists = lists.ToArray();
+        lists.Clear();
         lists.AddRange(savedLists);
+        for (var index = 0; index < addedLists.Length; index++)
+        {
+            if (IndexOfList(addedLists[index].Id) < 0)
+            {
+                lists.Add(addedLists[index]);
+            }
+        }
+
         Revision++;
     }
 
@@ -113,6 +132,19 @@ internal sealed class SavedLibrary
     }
 
     public SavedLibrarySnapshot Snapshot() => new(Revision, [.. searches], [.. lists]);
+
+    private bool HasSearch(Guid id)
+    {
+        for (var index = 0; index < searches.Count; index++)
+        {
+            if (searches[index].Id == id)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private int IndexOfList(Guid listId)
     {

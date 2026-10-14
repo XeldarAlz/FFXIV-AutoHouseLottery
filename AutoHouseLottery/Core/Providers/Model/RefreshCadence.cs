@@ -41,18 +41,19 @@ internal static class RefreshCadence
 
     public static TimeSpan ManualWait(in RefreshTimer timer, DateTime nowUtc)
     {
+        var allowedAt = ManualAllowedAt(timer);
+        return allowedAt > nowUtc ? allowedAt - nowUtc : TimeSpan.Zero;
+    }
+
+    public static DateTime ManualAllowedAt(in RefreshTimer timer)
+    {
         var allowedAt = timer.LastAttemptUtc == default ? default : timer.LastAttemptUtc + ManualCooldown;
         if (timer.RetryAfterUtc > allowedAt)
         {
             allowedAt = timer.RetryAfterUtc;
         }
 
-        if (timer.FreshUntilUtc > allowedAt)
-        {
-            allowedAt = timer.FreshUntilUtc;
-        }
-
-        return allowedAt > nowUtc ? allowedAt - nowUtc : TimeSpan.Zero;
+        return timer.FreshUntilUtc > allowedAt ? timer.FreshUntilUtc : allowedAt;
     }
 
     public static RefreshTimer Started(in RefreshTimer timer, DateTime nowUtc) => timer with { LastAttemptUtc = nowUtc };
@@ -62,7 +63,6 @@ internal static class RefreshCadence
         var fresh = maxAge is { } age && age > TimeSpan.Zero ? nowUtc + (age < ActiveInterval ? age : ActiveInterval) : default;
         return timer with
         {
-            LastSuccessUtc = nowUtc,
             ConsecutiveFailures = 0,
             BackoffUntilUtc = default,
             RetryAfterUtc = default,

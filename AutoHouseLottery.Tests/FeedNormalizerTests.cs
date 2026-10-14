@@ -13,10 +13,10 @@ public sealed class FeedNormalizerTests
     {
         Assert.True(FeedNormalizer.TryParseWorld(SampleBody(), out var detail));
 
-        var result = FeedNormalizer.Normalize(detail, SampleWorld, SampleReceipt, LotterySchedules.Create([]));
+        var result = FeedNormalizer.Normalize(detail, SampleWorld, SampleReceipt, LotterySchedules.Create([]), CalendarUse.Anchor);
 
         var feed = Assert.IsType<WorldFeed>(result.Feed);
-        Assert.Equal(42, feed.ObservationCount);
+        Assert.Equal(42, feed.Districts.Sum(district => district.Observations.Length));
         Assert.Equal(0, feed.RejectedRows);
         Assert.Equal(5, feed.Districts.Length);
         Assert.All(feed.Districts, district => Assert.Equal(CoverageOutcome.Complete, district.Coverage.Outcome));
@@ -29,7 +29,7 @@ public sealed class FeedNormalizerTests
     {
         FeedNormalizer.TryParseWorld(SampleBody(), out var detail);
 
-        var feed = FeedNormalizer.Normalize(detail, SampleWorld, SampleReceipt, LotterySchedules.Create([])).Feed!;
+        var feed = FeedNormalizer.Normalize(detail, SampleWorld, SampleReceipt, LotterySchedules.Create([]), CalendarUse.Anchor).Feed!;
 
         var observation = feed.Districts[0].Observations[0];
         Assert.Equal(SampleReceived, observation.Provenance.ReceivedUtc);
@@ -97,10 +97,88 @@ public sealed class FeedNormalizerTests
     [Fact]
     public void NegativeCountsAndMissingTimestampsRejectTheRow()
     {
-        var feed = Normalize(World(HomeWorld, Row(0, 0, entries: "-1"), Row(0, 1, updated: "null"), Row(0, 2, updated: "0")));
+        var feed = Normalize(World(HomeWorld, Row(0, 0, entries: "-1"), Row(0, 1, updated: "null"), Row(0, 2, updated: "0"), Row(0, 3)));
 
-        Assert.Empty(feed.Districts[0].Observations);
+        Assert.Equal([Plot(1, 4)], feed.Districts[0].Observations.Select(observation => observation.Key).ToArray());
         Assert.Equal(3, feed.Districts[0].RejectedRows);
+    }
+
+    [Fact]
+    public void AResponseWithNothingUsableIsMalformedRatherThanEmpty()
+    {
+        var allRejected = Problem(World(HomeWorld, Row(30, 0), Row(0, 0, world: OtherWorld)));
+        var noDistricts = Problem("""{"id":63,"num_open_plots":0,"districts":[]}"""u8.ToArray());
+        var unknownDistricts = Problem("""{"id":63,"districts":[{"id":123,"num_open_plots":0,"open_plots":[]}]}"""u8.ToArray());
+        var truncated = Problem("""{"id":63,"districts":[{"id":339,"num_open_plots":2,"open_plots":null}]}"""u8.ToArray());
+
+        Assert.Equal(FeedProblem.Malformed, allRejected);
+        Assert.Equal(FeedProblem.Malformed, noDistricts);
+        Assert.Equal(FeedProblem.Malformed, unknownDistricts);
+        Assert.Equal(FeedProblem.Malformed, truncated);
+    }
+
+    [Fact]
+    public void ADistrictHonestlyListingNoPlotsIsCompleteAndEmpty()
+    {
+        var feed = Normalize("""{"id":63,"districts":[{"id":339,"num_open_plots":0,"open_plots":[]}]}"""u8.ToArray());
+
+        Assert.Equal(CoverageOutcome.Complete, feed.Districts[0].Coverage.Outcome);
+        Assert.Empty(feed.Districts[0].Observations);
+    }
+
+    [Fact]
+    public void RejectedRowsCannotMoveTheCalendar()
+    {
+        var shifted = Seconds(EntryEnd.AddHours(3)).Split('.')[0];
+        var schedules = LotterySchedules.Create([]);
+
+        var feed = NormalizeWith(schedules, CalendarUse.Anchor, World(HomeWorld, Row(0, 0), Row(0, 1, world: OtherWorld, phaseEnd: shifted), Row(0, 2, world: OtherWorld, phaseEnd: shifted), Row(31, 3, phaseEnd: shifted)));
+
+        Assert.Equal(ScheduleUpdate.Unchanged, feed.Schedule);
+        Assert.True(schedules.TryGet(GameRegion.Global, out var schedule));
+        Assert.Equal(LotteryCalendar.Global, schedule);
+    }
+
+    [Fact]
+    public void OldRowsCannotOutvoteFreshOnes()
+    {
+        var oldEnd = Seconds(EntryEnd.AddHours(3)).Split('.')[0];
+        var oldSeen = Seconds(ObservedAt.AddDays(-6));
+        var schedules = LotterySchedules.Create([]);
+
+        var feed = NormalizeWith(schedules, CalendarUse.Anchor, World(HomeWorld,
+            Row(0, 0), Row(0, 1),
+            Row(1, 0, updated: oldSeen, phaseEnd: oldEnd), Row(1, 1, updated: oldSeen, phaseEnd: oldEnd), Row(1, 2, updated: oldSeen, phaseEnd: oldEnd)));
+
+        Assert.Equal(ScheduleUpdate.Unchanged, feed.Schedule);
+        var fresh = feed.Districts[0].Observations.Where(observation => observation.Key.Ward == 1).ToArray();
+        Assert.All(fresh, observation => Assert.Equal(PlotSale.LotteryEntry, observation.Sale!.Value.Sale));
+    }
+
+    [Fact]
+    public void PhaseEndsThatHadPassedWhenTheServiceReadThemDoNotVote()
+    {
+        var passedEnd = Seconds(ObservedAt.AddMinutes(10)).Split('.')[0];
+        var seen = Seconds(ObservedAt.AddDays(-1));
+        var schedules = LotterySchedules.Create([]);
+
+        var feed = NormalizeWith(schedules, CalendarUse.Anchor, World(HomeWorld, Row(0, 0, updated: seen, phaseEnd: passedEnd), Row(0, 1, updated: seen, phaseEnd: passedEnd)));
+
+        Assert.Equal(ScheduleUpdate.Unchanged, feed.Schedule);
+    }
+
+    [Fact]
+    public void AReplayedResponseReadsTheCalendarWithoutMovingIt()
+    {
+        var shifted = Seconds(EntryEnd.AddHours(3)).Split('.')[0];
+        var schedules = LotterySchedules.Create([]);
+
+        var feed = NormalizeWith(schedules, CalendarUse.ReadOnly, World(HomeWorld, Row(0, 0, phaseEnd: shifted), Row(0, 1, phaseEnd: shifted)));
+
+        Assert.Equal(ScheduleUpdate.Unchanged, feed.Schedule);
+        Assert.True(schedules.TryGet(GameRegion.Global, out var schedule));
+        Assert.Equal(LotteryCalendar.Global, schedule);
+        Assert.All(feed.Districts[0].Observations, observation => Assert.Null(observation.Sale));
     }
 
     [Fact]
@@ -147,7 +225,7 @@ public sealed class FeedNormalizerTests
         var schedules = LotterySchedules.Create([]);
         Assert.True(FeedNormalizer.TryParseWorld(World(HomeWorld, Row(0, 0, phaseEnd: shifted), Row(0, 1, phaseEnd: shifted)), out var detail));
 
-        var feed = FeedNormalizer.Normalize(detail, HomeWorld, Receipt, schedules).Feed!;
+        var feed = FeedNormalizer.Normalize(detail, HomeWorld, Receipt, schedules, CalendarUse.Anchor).Feed!;
 
         Assert.Equal(ScheduleUpdate.Reanchored, feed.Schedule);
         Assert.True(schedules.TryGet(GameRegion.Global, out var schedule));
@@ -180,8 +258,8 @@ public sealed class FeedNormalizerTests
         FeedNormalizer.TryParseWorld(World(OtherWorld, Row(0, 0, world: OtherWorld)), out var other);
         FeedNormalizer.TryParseWorld("""{"id":63,"name":"Fixture"}"""u8, out var empty);
 
-        Assert.Equal(FeedProblem.WrongWorld, FeedNormalizer.Normalize(other, HomeWorld, Receipt, LotterySchedules.Create([])).Problem);
-        Assert.Equal(FeedProblem.Malformed, FeedNormalizer.Normalize(empty, HomeWorld, Receipt, LotterySchedules.Create([])).Problem);
+        Assert.Equal(FeedProblem.WrongWorld, FeedNormalizer.Normalize(other, HomeWorld, Receipt, LotterySchedules.Create([]), CalendarUse.Anchor).Problem);
+        Assert.Equal(FeedProblem.Malformed, FeedNormalizer.Normalize(empty, HomeWorld, Receipt, LotterySchedules.Create([]), CalendarUse.Anchor).Problem);
     }
 
     [Fact]
@@ -206,10 +284,18 @@ public sealed class FeedNormalizerTests
         Assert.Equal([new FeedWorld(73, "Adamantoise", "Aether")], worlds.ToArray());
     }
 
-    private static WorldFeed Normalize(byte[] body)
+    private static WorldFeed Normalize(byte[] body) => NormalizeWith(LotterySchedules.Create([]), CalendarUse.Anchor, body);
+
+    private static WorldFeed NormalizeWith(LotterySchedules schedules, CalendarUse use, byte[] body)
     {
         Assert.True(FeedNormalizer.TryParseWorld(body, out var detail));
-        var result = FeedNormalizer.Normalize(detail, HomeWorld, Receipt, LotterySchedules.Create([]));
+        var result = FeedNormalizer.Normalize(detail, HomeWorld, Receipt, schedules, use);
         return Assert.IsType<WorldFeed>(result.Feed);
+    }
+
+    private static FeedProblem Problem(byte[] body)
+    {
+        Assert.True(FeedNormalizer.TryParseWorld(body, out var detail));
+        return FeedNormalizer.Normalize(detail, HomeWorld, Receipt, LotterySchedules.Create([]), CalendarUse.Anchor).Problem;
     }
 }

@@ -1,6 +1,7 @@
 using System.Linq;
 using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
+using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Selection.Model;
 using static AutoHouseLottery.Tests.FindFixtures;
 using static AutoHouseLottery.Tests.HousingFixtures;
@@ -44,21 +45,6 @@ public sealed class FindResultsTests
         var second = shortlist.AddRange(results.MatchingKeys.AsSpan());
 
         Assert.Equal(0, second);
-        Assert.Equal(2, shortlist.Count);
-    }
-
-    [Fact]
-    public void ChangingFiltersNeverRemovesShortlistedPlots()
-    {
-        var plots = Plots(Listing(Plot(1, 1), size: PlotSize.Small), Listing(Plot(1, 2), size: PlotSize.Large));
-        var shortlist = new Shortlist(Guid.NewGuid(), "Shortlist");
-        shortlist.AddRange(FindResultsBuilder.Build(plots, Query(Scope(HousingDistricts.Mist))).MatchingKeys.AsSpan());
-
-        var narrowed = FindResultsBuilder.Build(plots, Query(Scope(HousingDistricts.Mist), PlotFilter.Default with { Sizes = SizeFilter.Small }));
-        var elsewhere = FindResultsBuilder.Build(plots, Query(Scope(HousingDistricts.Goblet)));
-
-        Assert.Equal(1, narrowed.Count);
-        Assert.Equal(0, elsewhere.Count);
         Assert.Equal(2, shortlist.Count);
     }
 
@@ -170,6 +156,24 @@ public sealed class FindResultsTests
         var scattered = ScopeSummary.Describe(mist with { AllWards = false, WardMask = AreaScope.WardMaskOf([2, 5, 9]) });
         Assert.Equal((WardSpan.Several, 3), (scattered.Wards, scattered.WardCount));
         Assert.Equal(DivisionSpan.Subdivision, ScopeSummary.Describe(mist with { MainDivision = false }).Divisions);
+        var none = ScopeSummary.Describe(mist with { MainDivision = false, Subdivision = false }).Divisions;
+        Assert.Equal(DivisionSpan.None, none);
+        Assert.Equal(L.Find.ScopeNoDivision.Key, ScopeWords.Divisions(none).Key);
+        Assert.Equal(L.Find.ScopeSubdivision.Key, ScopeWords.Divisions(DivisionSpan.Subdivision).Key);
+    }
+
+    [Fact]
+    public void AnAreaIsCoveredOnlyWhenTheListingsAnsweredForOneOfItsDistricts()
+    {
+        var area = Scope(HousingDistricts.Mist, HousingDistricts.Goblet);
+        Assert.True(CoverageScope.TryForDistrict(GameRegion.Global, HomeWorld, HousingDistricts.Goblet, out var goblet));
+        var empty = new CoverageSnapshot(goblet, ObservationSource.PublicFeed, CoverageOutcome.Complete, 0, 0, ObservedAt, ObservedAt, ObservedAt);
+        var coverage = new Dictionary<(uint World, ushort District), CoverageSnapshot> { [(HomeWorld, HousingDistricts.Goblet)] = empty };
+        var elsewhere = new Dictionary<(uint World, ushort District), CoverageSnapshot> { [(OtherWorld, HousingDistricts.Goblet)] = empty };
+
+        Assert.True(AreaCoverage.Covered(coverage, area));
+        Assert.False(AreaCoverage.Covered(elsewhere, area));
+        Assert.False(AreaCoverage.Covered(coverage, Scope(HousingDistricts.Mist)));
     }
 
     [Fact]

@@ -6,7 +6,6 @@ using AutoHouseLottery.Windows.Find;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
-using Dalamud.Interface.Utility.Raii;
 using System.Globalization;
 using System.Numerics;
 
@@ -28,6 +27,7 @@ internal sealed partial class FindHomePage
     private readonly string[] districtLabels = new string[HousingDistricts.All.Length];
     private readonly string[] ageLabels = new string[ageChoices.Length];
     private LanguageInfo? districtLabelsLanguage;
+    private LanguageInfo? ageLabelsLanguage;
     private bool districtLabelsNamed;
     private string rangeFrom = string.Empty;
     private string rangeTo = string.Empty;
@@ -223,9 +223,13 @@ internal sealed partial class FindHomePage
         }
 
         TextDraw.Hint(Loc.T(L.Find.ObservedWithin));
-        for (var index = 0; index < ageChoices.Length; index++)
+        if (!ReferenceEquals(ageLabelsLanguage, Loc.Current))
         {
-            ageLabels[index] = ageChoices[index] == 0 ? Loc.T(L.Find.AnyTime) : FindText.Hours(ageChoices[index]);
+            ageLabelsLanguage = Loc.Current;
+            for (var index = 0; index < ageChoices.Length; index++)
+            {
+                ageLabels[index] = ageChoices[index] == 0 ? Loc.T(L.Find.AnyTime) : FindText.Hours(ageChoices[index]);
+            }
         }
 
         var age = Math.Max(0, Array.IndexOf(ageChoices, filter.MaximumAgeHours));
@@ -253,13 +257,6 @@ internal sealed partial class FindHomePage
             ImGui.PopID();
         }
 
-        var reachable = false;
-        using (ImRaii.Disabled())
-        {
-            ImGui.Checkbox(Loc.T(L.Find.Reachable), ref reachable);
-        }
-
-        TextDraw.Hint(Loc.T(L.Find.ReachableLater));
         if (PillButton.Draw("##ahl_find_preset_small", Loc.T(L.Find.PresetSmall), Styling.AccentMint, PillButton.Emphasis.Tinted, FontAwesomeIcon.Home, tooltip: Loc.T(L.Find.PresetSmallHelp)))
         {
             updated = updated with { Sizes = SizeFilter.Small, Statuses = StatusFilter.EntryOpen | StatusFilter.Results | StatusFilter.NextCycle };

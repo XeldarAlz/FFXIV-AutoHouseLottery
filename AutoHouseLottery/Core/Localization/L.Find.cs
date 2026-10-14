@@ -59,8 +59,6 @@ internal static partial class L
         public static readonly LocString AnyTime = new("findHome.anyTime", "Any time");
         public static readonly LocPlural Hours = new("findHome.hours", "{0} hour", "{0} hours");
         public static readonly LocString AlsoShow = new("findHome.alsoShow", "Also show");
-        public static readonly LocString Reachable = new("findHome.reachable", "Only plots I can travel to");
-        public static readonly LocString ReachableLater = new("findHome.reachableLater", "Arrives with travel support.");
         public static readonly LocString ResetFilters = new("findHome.resetFilters", "Reset filters");
         public static readonly LocString PresetSmall = new("findHome.presetSmall", "Empty small plots");
         public static readonly LocString PresetSmallHelp = new("findHome.presetSmallHelp", "Small plots reported vacant: open for entry, awaiting results or opening next cycle.");
@@ -104,6 +102,7 @@ internal static partial class L
         public static readonly LocString ScopeBothDivisions = new("findHome.scope.bothDivisions", "both divisions");
         public static readonly LocString ScopeMainDivision = new("findHome.scope.mainDivision", "main division");
         public static readonly LocString ScopeSubdivision = new("findHome.scope.subdivision", "subdivision");
+        public static readonly LocString ScopeNoDivision = new("findHome.scope.noDivision", "no division");
         public static readonly LocString ScopeJoin = new("findHome.scope.join", "{0} · {1} · {2}");
 
         public static readonly LocString Ward = new("findHome.ward", "Ward {0}");

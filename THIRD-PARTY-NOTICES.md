@@ -15,7 +15,7 @@ Lifestream is a separate plugin you install yourself; none of its code ships wit
 ## Aetherphone
 
 - Source: FFXIV-Aetherphone by XeldarAlz, the same author as this project, https://github.com/XeldarAlz/FFXIV-Aetherphone.
-- Used: the Lifestream travel bridge's housing address and the housing discovery code (the housing service client and its normalization, the cache and refresh service, the district maps and marker projection, the district art lookup, saved plots and reminders). Each file is listed under [Ported from Aetherphone](#ported-from-aetherphone) with the commit it came from.
+- Used: the Lifestream travel bridge's housing address and the housing discovery code (the housing service client and its normalization, the cache and refresh service, the district maps and marker projection, saved plots and reminders). Each file is listed under [Ported from Aetherphone](#ported-from-aetherphone) with the commit it came from.
 - License: GNU Affero General Public License v3.0, the license of this project.
 
 ## Auto GC Supply
@@ -75,7 +75,7 @@ The housing discovery files below come from `src/Aetherphone/Core/Housing/` and 
 - `AutoHouseLottery/Core/Providers/HousingFeedClient.cs` and `Model/BoundedBody.cs`: the request, timeout, Retry-After and response size handling of `Core/Net/HttpService.cs` and the two-request limit of `Core/Net/RequestThrottle.cs`.
 - `AutoHouseLottery/Core/Providers/HousingFeedService.cs` and `Model/RefreshCadence.cs`: the refresh, backoff and caching flow and the cadence constants of `HousingService.cs` and `HousingRecords.cs`.
 - `AutoHouseLottery/Core/Providers/HousingFeedCache.cs`: from `HousingCache.cs`, keeping each response with its receipt instead of the converted plots.
-- `AutoHouseLottery/Core/Maps/HousingGameMaps.cs`, `MapTextures.cs` and `Model/MapProjection.cs`: from `HousingGameMaps.cs` and `Core/Maps/MapTextures.cs`, plus the loading image lookup of `HousingDistrictArt.cs`.
+- `AutoHouseLottery/Core/Maps/HousingGameMaps.cs`, `MapTextures.cs` and `Model/MapProjection.cs`: from `HousingGameMaps.cs` and `Core/Maps/MapTextures.cs`.
 - `AutoHouseLottery/Core/Find/Model/PlotFilter.cs`: the filter model of `HousingFilterState.cs`, extended to areas, buyer type, price and the lottery statuses.
-- `AutoHouseLottery/Core/Saved/SavedService.cs`, `NoticeAnnouncer.cs` and `Model/NoticeRules.cs`, `NoticeLedger.cs`: the watch list reconciliation and the deduplicated reminders of `HousingWatchStore.cs` and `HousingReminderService.cs`.
+- `AutoHouseLottery/Core/Saved/SavedService.cs`, `NoticeAnnouncer.cs` and `Model/NoticeRules.cs`, `NoticePlanner.cs`, `NoticeLedger.cs`: the watch list reconciliation and the deduplicated reminders of `HousingWatchStore.cs` and `HousingReminderService.cs`.
 - `AutoHouseLottery/Windows/Find/FindText.cs`: the labels and countdown of `HousingFormat.cs`.

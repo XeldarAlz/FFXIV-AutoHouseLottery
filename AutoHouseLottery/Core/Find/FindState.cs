@@ -8,19 +8,19 @@ using AutoHouseLottery.Core.Selection.Model;
 
 namespace AutoHouseLottery.Core.Find;
 
-// The Find a home page's state: its area and filters, kept in the settings, and the one shortlist shared by the map,
-// the list and the drawers. Update runs every frame on the framework thread and only compares a few numbers; when one
-// changes, the whole view is rebuilt on a task and swapped in when it is done.
+// The Find a home page's state: the selection (area, filters and the one shared shortlist), kept in the settings and
+// the shortlist file. Update runs every frame on the framework thread and only compares a few numbers; when one changes,
+// the whole view is rebuilt on a task and swapped in when it is done.
 internal sealed class FindState
 {
     private const string ShortlistName = "Shortlist";
-    private const long TicksPerMinute = TimeSpan.TicksPerMinute;
 
     private readonly Configuration configuration;
     private readonly ShortlistStore store;
-    private Shortlist shortlist = new(Guid.NewGuid(), ShortlistName);
+    private readonly FindSelection selection;
     private bool shortlistLoaded;
     private int savedShortlistRevision;
+    private int viewRevision;
     private ViewInputs lastInputs;
     private Task<FindView>? building;
 
@@ -28,20 +28,18 @@ internal sealed class FindState
     {
         this.configuration = configuration;
         this.store = store;
-        LoadQuery();
+        selection = LoadSelection(configuration.Find);
     }
 
     public FindView View { get; private set; } = FindView.Empty;
 
-    public Shortlist Shortlist => shortlist;
+    public Shortlist Shortlist => selection.Shortlist;
 
-    public AreaScope Area { get; private set; }
+    public AreaScope Area => selection.Area;
 
-    public PlotFilter Filter { get; private set; }
+    public PlotFilter Filter => selection.Filter;
 
-    public ResultSort Sort { get; private set; }
-
-    public uint PreferredDistricts { get; private set; }
+    public ResultSort Sort => selection.Sort;
 
     public bool ListView => configuration.Find.ListView;
 
@@ -49,7 +47,7 @@ internal sealed class FindState
 
     public uint ChosenWorld => configuration.Find.WorldId;
 
-    public int QueryRevision { get; private set; }
+    public int QueryRevision => selection.QueryRevision;
 
     public uint WorldFor(CharacterProfile? character) => configuration.Find.WorldId != 0 ? configuration.Find.WorldId : character?.HomeWorldId ?? 0;
 
@@ -73,39 +71,64 @@ internal sealed class FindState
         var world = WorldFor(character);
         var inputs = new ViewInputs(
             snapshot.PlotsRevision,
-            QueryRevision,
-            shortlist.Revision,
+            selection.QueryRevision,
+            Shortlist.Revision,
             character?.ContentId ?? 0,
             world,
             configuration.Find.GilReserve,
-            nowUtc.Ticks / TicksPerMinute);
+            nowUtc.Ticks / TimeSpan.TicksPerMinute);
         if (building is not null || inputs == lastInputs)
         {
             return;
         }
 
         lastInputs = inputs;
-        var request = new ViewRequest(snapshot, Area with { WorldId = world }, Filter, Sort, PreferredDistricts, shortlist.Freeze(), character, configuration.Find.GilReserve, QueryRevision, nowUtc);
+        viewRevision++;
+        var request = new ViewRequest(
+            viewRevision,
+            snapshot,
+            selection.Area with { WorldId = world },
+            selection.Filter,
+            selection.Sort,
+            selection.PreferredDistricts,
+            Shortlist.Freeze(),
+            character,
+            configuration.Find.GilReserve,
+            selection.QueryRevision,
+            nowUtc);
         building = Task.Run(() => Build(request));
     }
 
     public void SetWorld(uint worldId)
     {
         configuration.Find.WorldId = worldId;
-        Changed();
+        selection.WorldChanged();
+        configuration.SaveDebounced();
     }
 
     public void SetArea(in AreaScope area)
     {
         var settings = configuration.Find;
         var districts = area.DistrictIds();
-        settings.Districts = districts.Length == HousingDistricts.All.Length ? null : [.. districts.Select(static district => (uint)district)];
+        if (districts.Length == HousingDistricts.All.Length)
+        {
+            settings.Districts = null;
+        }
+        else
+        {
+            settings.Districts = new List<uint>(districts.Length);
+            for (var index = 0; index < districts.Length; index++)
+            {
+                settings.Districts.Add(districts[index]);
+            }
+        }
+
         settings.AllWards = area.AllWards;
         settings.Wards = area.AllWards ? [] : [.. area.WardNumbers()];
         settings.MainDivision = area.MainDivision;
         settings.Subdivision = area.Subdivision;
-        Area = area with { WorldId = 0 };
-        Changed();
+        selection.SetArea(area with { WorldId = 0 });
+        configuration.SaveDebounced();
     }
 
     public void SetFilter(in PlotFilter filter)
@@ -120,15 +143,15 @@ internal sealed class FindState
         settings.MinimumEntries = filter.MinimumEntries;
         settings.MaximumEntries = filter.MaximumEntries;
         settings.MaximumAgeHours = filter.MaximumAgeHours;
-        Filter = filter;
-        Changed();
+        selection.SetFilter(filter);
+        configuration.SaveDebounced();
     }
 
     public void SetSort(ResultSort sort)
     {
         configuration.Find.Sort = (byte)sort;
-        Sort = sort;
-        Changed();
+        selection.SetSort(sort);
+        configuration.SaveDebounced();
     }
 
     public void SetListView(bool listView)
@@ -151,11 +174,11 @@ internal sealed class FindState
             preferred.Add(districtId);
         }
 
-        PreferredDistricts = AreaScope.DistrictMaskOf(preferred.ToArray());
-        Changed();
+        selection.SetPreferred(AreaScope.DistrictMaskOf([.. preferred]));
+        configuration.SaveDebounced();
     }
 
-    public bool IsPreferred(uint districtId) => (PreferredDistricts & AreaScope.DistrictBit(districtId)) != 0;
+    public bool IsPreferred(uint districtId) => (selection.PreferredDistricts & AreaScope.DistrictBit(districtId)) != 0;
 
     public void ApplySearch(in AreaScope area, in PlotFilter filter)
     {
@@ -166,27 +189,21 @@ internal sealed class FindState
 
     public bool Toggle(PlotKey key)
     {
-        if (shortlist.Remove(key))
-        {
-            RunLog.Info($"Removed {key} from the shortlist.");
-            return false;
-        }
-
-        shortlist.Add(key);
-        RunLog.Info($"Added {key} to the shortlist.");
-        return true;
+        var added = selection.Toggle(key);
+        RunLog.Info(added ? $"Added {key} to the shortlist." : $"Removed {key} from the shortlist.");
+        return added;
     }
 
     public int AddAll(ImmutableArray<PlotKey> keys, string origin)
     {
-        var added = shortlist.AddRange(keys.AsSpan());
-        RunLog.Info($"{origin}: added {added} of {keys.Length} plots to the shortlist, which now holds {shortlist.Count}.");
+        var added = selection.AddAll(keys);
+        RunLog.Info($"{origin}: added {added} of {keys.Length} plots to the shortlist, which now holds {Shortlist.Count}.");
         return added;
     }
 
     public void Remove(PlotKey key)
     {
-        if (shortlist.Remove(key))
+        if (selection.Remove(key))
         {
             RunLog.Info($"Removed {key} from the shortlist.");
         }
@@ -194,27 +211,22 @@ internal sealed class FindState
 
     public int RemoveUnavailable()
     {
-        var unavailable = ShortlistRules.Unavailable(View.Shortlist);
-        var removed = 0;
-        for (var index = 0; index < unavailable.Length; index++)
-        {
-            if (shortlist.Remove(unavailable[index]))
-            {
-                removed++;
-            }
-        }
-
+        var removed = selection.RemoveUnavailable(View.Shortlist);
         RunLog.Info($"Removed {removed} unavailable plots from the shortlist.");
         return removed;
     }
 
     public void ClearShortlist()
     {
-        RunLog.Info($"Cleared the shortlist of {shortlist.Count} plots.");
-        shortlist.Clear();
+        RunLog.Info($"Cleared the shortlist of {Shortlist.Count} plots.");
+        Shortlist.Clear();
     }
 
-    public void Flush() => store.Flush();
+    public void Close()
+    {
+        SaveShortlistIfChanged();
+        store.Close();
+    }
 
     private static FindView Build(ViewRequest request)
     {
@@ -234,13 +246,15 @@ internal sealed class FindState
             : BestMatchRanking.Rank(request.Shortlist.Plots.AsSpan(), plots, position);
         return new FindView
         {
+            Revision = request.Revision,
             Results = results,
             Plots = plots,
             Position = position,
+            AreaCovered = AreaCoverage.Covered(request.Snapshot.Coverage, request.Area),
             Shortlist = rows,
             ShortlistRevision = request.Shortlist.Revision,
             QueryRevision = request.QueryRevision,
-            Ranking = ranking,
+            BestMatch = BestMatchOrder.For(preview, ranking),
             Preview = preview,
             UnavailableCount = ShortlistRules.Unavailable(rows).Length,
         };
@@ -254,64 +268,49 @@ internal sealed class FindState
         }
 
         shortlistLoaded = true;
+        var replaced = loaded is not null && selection.TakeLoaded(loaded);
         if (loaded is not null)
         {
-            if (shortlist.Count == 0)
-            {
-                shortlist = loaded;
-            }
-            else
-            {
-                shortlist.AddRange([.. loaded.Plots]);
-            }
-
             RunLog.Info($"Loaded the shortlist with {loaded.Count} plots.");
         }
 
-        savedShortlistRevision = ReferenceEquals(shortlist, loaded) || shortlist.Count == 0 ? shortlist.Revision : -1;
+        savedShortlistRevision = replaced || Shortlist.Count == 0 ? Shortlist.Revision : -1;
     }
 
     private void SaveShortlistIfChanged()
     {
-        if (!shortlistLoaded || shortlist.Revision == savedShortlistRevision)
+        if (!shortlistLoaded || Shortlist.Revision == savedShortlistRevision)
         {
             return;
         }
 
-        savedShortlistRevision = shortlist.Revision;
-        store.Save(shortlist.Freeze(), ShortlistName);
+        savedShortlistRevision = Shortlist.Revision;
+        store.Save(Shortlist.Freeze(), ShortlistName);
     }
 
-    private void LoadQuery()
+    private static FindSelection LoadSelection(FindSettings settings)
     {
-        var settings = configuration.Find;
-        var districts = settings.Districts is { } chosen ? AreaScope.DistrictMaskOf(chosen.ToArray()) : AreaScope.AllDistrictsMask;
-        Area = new AreaScope(0, districts, settings.AllWards, AreaScope.WardMaskOf(settings.Wards.ToArray()), settings.MainDivision, settings.Subdivision);
-        Filter = PlotFilter.Default with
-        {
-            Sizes = (SizeFilter)settings.Sizes & SizeFilter.All,
-            Buyer = Enum.IsDefined((BuyerType)settings.Buyer) ? (BuyerType)settings.Buyer : BuyerType.Unknown,
-            PriceCeiling = Math.Max(0, settings.PriceCeiling),
-            Statuses = (StatusFilter)settings.Statuses,
-            FirstPlot = Math.Clamp(settings.FirstPlot, PlotFilter.FirstPlotNumber, PlotFilter.LastPlotNumber),
-            LastPlot = Math.Clamp(settings.LastPlot, PlotFilter.FirstPlotNumber, PlotFilter.LastPlotNumber),
-            MinimumEntries = settings.MinimumEntries is >= 0 ? settings.MinimumEntries : null,
-            MaximumEntries = settings.MaximumEntries is >= 0 ? settings.MaximumEntries : null,
-            MaximumAgeHours = Math.Max(0, settings.MaximumAgeHours),
-        };
-        Sort = Enum.IsDefined((ResultSort)settings.Sort) ? (ResultSort)settings.Sort : ResultSort.PreferredAreas;
-        PreferredDistricts = AreaScope.DistrictMaskOf(settings.PreferredDistricts.ToArray());
-    }
-
-    private void Changed()
-    {
-        QueryRevision++;
-        configuration.SaveDebounced();
+        var districts = settings.Districts is { } chosen ? AreaScope.DistrictMaskOf([.. chosen]) : AreaScope.AllDistrictsMask;
+        var area = new AreaScope(0, districts, settings.AllWards, AreaScope.WardMaskOf([.. settings.Wards]), settings.MainDivision, settings.Subdivision);
+        var filter = PlotFilter.Sanitized(
+            (SizeFilter)settings.Sizes,
+            (BuyerType)settings.Buyer,
+            settings.PriceCeiling,
+            (StatusFilter)settings.Statuses,
+            settings.FirstPlot,
+            settings.LastPlot,
+            settings.MinimumEntries,
+            settings.MaximumEntries,
+            settings.MaximumAgeHours);
+        var sort = Enum.IsDefined((ResultSort)settings.Sort) ? (ResultSort)settings.Sort : ResultSort.PreferredAreas;
+        var shortlist = new Shortlist(Guid.NewGuid(), ShortlistName);
+        return new FindSelection(shortlist, area, filter, sort, AreaScope.DistrictMaskOf([.. settings.PreferredDistricts]));
     }
 
     private readonly record struct ViewInputs(int PlotsRevision, int QueryRevision, int ShortlistRevision, ulong ContentId, uint WorldId, long GilReserve, long Minute);
 
     private sealed record ViewRequest(
+        int Revision,
         DiscoverySnapshot Snapshot,
         AreaScope Area,
         PlotFilter Filter,

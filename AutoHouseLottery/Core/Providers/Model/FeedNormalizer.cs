@@ -6,9 +6,12 @@ namespace AutoHouseLottery.Core.Providers.Model;
 
 // The service relays PaissaDB, whose wards and plots are zero-based. They become the canonical one-based address here and
 // nowhere else. A row that cannot be read exactly is rejected rather than repaired, and a district with a rejected row
-// is reported as partial so the plots it may have dropped are never taken for unlisted. The phase end most rows agree on
-// anchors the region's lottery calendar; a row whose own phase end is off that calendar keeps its plot but loses the
-// fields that belong to a cycle.
+// is reported as partial so the plots it may have dropped are never taken for unlisted. A response with nothing usable in
+// it is malformed, never an empty listing.
+//
+// Only rows that were read cleanly, and that were observed during the phase they report, vote on where the lottery
+// calendar stands; the phase end most of them agree on may move the region's calendar, and only on a live response. A row
+// whose own phase end is off that calendar keeps its plot but loses the fields that belong to a cycle.
 internal static class FeedNormalizer
 {
     public const int GridToleranceMinutes = 60;
@@ -73,7 +76,7 @@ internal static class FeedNormalizer
         return worlds.ToImmutable();
     }
 
-    public static FeedResult Normalize(FeedWorldDetail? payload, uint requestedWorldId, in FeedReceipt receipt, LotterySchedules schedules)
+    public static FeedResult Normalize(FeedWorldDetail? payload, uint requestedWorldId, in FeedReceipt receipt, LotterySchedules schedules, CalendarUse calendar)
     {
         if (payload?.Districts is not { } districts)
         {
@@ -85,113 +88,79 @@ internal static class FeedNormalizer
             return FeedResult.Failed(FeedProblem.WrongWorld);
         }
 
-        var update = Anchor(districts, schedules);
+        var readings = Read(districts, requestedWorldId, receipt);
+        if (!Usable(readings))
+        {
+            return FeedResult.Failed(FeedProblem.Malformed);
+        }
+
+        var update = calendar == CalendarUse.Anchor ? Anchor(readings, receipt, schedules) : ScheduleUpdate.Unchanged;
         schedules.TryGet(GameRegion.Global, out var schedule);
-        var built = ImmutableArray.CreateBuilder<DistrictFeed>(HousingDistricts.All.Length);
+        var built = ImmutableArray.CreateBuilder<DistrictFeed>(readings.Count);
         var positions = ImmutableArray.CreateBuilder<CyclePosition>();
+        for (var index = 0; index < readings.Count; index++)
+        {
+            built.Add(Build(readings[index], receipt, schedule, positions));
+        }
+
+        return new FeedResult(FeedProblem.None, new WorldFeed(requestedWorldId, receipt, built.ToImmutable(), positions.ToImmutable(), update, schedule));
+    }
+
+    // Usable means at least one accepted row, or at least one recognised district that is completely and honestly empty.
+    private static bool Usable(List<DistrictReading> readings)
+    {
+        for (var index = 0; index < readings.Count; index++)
+        {
+            var reading = readings[index];
+            if (reading.Rows.Count > 0 || (reading.Rejected == 0 && reading.Detail is { OpenPlots.Length: 0, OpenPlotCount: 0 }))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static List<DistrictReading> Read(FeedDistrictDetail?[] districts, uint worldId, in FeedReceipt receipt)
+    {
+        var readings = new List<DistrictReading>(HousingDistricts.All.Length);
         var seen = new HashSet<uint>();
         for (var index = 0; index < districts.Length; index++)
         {
             if (districts[index] is not { Id: { } districtId } detail
                 || !HousingDistricts.TryGet(districtId, out _)
                 || !seen.Add(districtId)
-                || !CoverageScope.TryForDistrict(GameRegion.Global, requestedWorldId, districtId, out var scope))
+                || !CoverageScope.TryForDistrict(GameRegion.Global, worldId, districtId, out var scope))
             {
                 continue;
             }
 
-            built.Add(NormalizeDistrict(detail, requestedWorldId, districtId, scope, receipt, schedule, positions));
-        }
-
-        return new FeedResult(FeedProblem.None, new WorldFeed(requestedWorldId, receipt, built.ToImmutable(), positions.ToImmutable(), update));
-    }
-
-    private static ScheduleUpdate Anchor(FeedDistrictDetail?[] districts, LotterySchedules schedules)
-    {
-        var votes = new Dictionary<(LotteryPhase Phase, DateTime End), int>();
-        for (var districtIndex = 0; districtIndex < districts.Length; districtIndex++)
-        {
-            var rows = districts[districtIndex]?.OpenPlots ?? [];
+            var rows = detail.OpenPlots ?? [];
+            var accepted = new List<RowReading>(rows.Length);
+            var keys = new HashSet<PlotKey>(rows.Length);
+            var rejected = 0;
             for (var rowIndex = 0; rowIndex < rows.Length; rowIndex++)
             {
-                if (rows[rowIndex] is not { } row || ReportedPhase(row.LotteryPhase) is not { } phase || !UnixTime.TryFromSeconds(row.LotteryPhaseUntil, out var end))
+                if (!TryReadRow(rows[rowIndex], worldId, districtId, receipt, out var reading) || !keys.Add(reading.Plain.Key))
                 {
+                    rejected++;
                     continue;
                 }
 
-                votes[(phase, end)] = votes.GetValueOrDefault((phase, end)) + 1;
+                accepted.Add(reading);
             }
+
+            readings.Add(new DistrictReading(detail, scope, accepted, rejected));
         }
 
-        var best = default((LotteryPhase Phase, DateTime End));
-        var bestVotes = 0;
-        foreach (var vote in votes)
-        {
-            if (vote.Value > bestVotes || (vote.Value == bestVotes && vote.Key.End > best.End))
-            {
-                best = vote.Key;
-                bestVotes = vote.Value;
-            }
-        }
-
-        return bestVotes == 0 ? ScheduleUpdate.Unchanged : schedules.Observe(GameRegion.Global, best.Phase, best.End, out _);
+        return readings;
     }
 
-    private static LotteryPhase? ReportedPhase(int? phase) => phase switch
+    // Everything about a row that does not depend on the lottery calendar: its address, its source time and the plain
+    // fields, checked by the same rules the plot store applies.
+    private static bool TryReadRow(FeedOpenPlot? row, uint worldId, uint districtId, in FeedReceipt receipt, out RowReading reading)
     {
-        EntryPhase => LotteryPhase.Entry,
-        ResultsPhase => LotteryPhase.Results,
-        _ => null,
-    };
-
-    private static DistrictFeed NormalizeDistrict(
-        FeedDistrictDetail detail,
-        uint worldId,
-        uint districtId,
-        in CoverageScope scope,
-        in FeedReceipt receipt,
-        in LotterySchedule schedule,
-        ImmutableArray<CyclePosition>.Builder positions)
-    {
-        var rows = detail.OpenPlots ?? [];
-        var observations = ImmutableArray.CreateBuilder<PlotObservation>(rows.Length);
-        var keys = new HashSet<PlotKey>(rows.Length);
-        var rejected = 0;
-        for (var index = 0; index < rows.Length; index++)
-        {
-            if (!TryNormalizeRow(rows[index], worldId, districtId, receipt, schedule, positions, out var observation) || !keys.Add(observation.Key))
-            {
-                rejected++;
-                continue;
-            }
-
-            observations.Add(observation);
-        }
-
-        var listed = detail.OpenPlots is not null && detail.OpenPlotCount == rows.Length;
-        var outcome = listed && rejected == 0 ? CoverageOutcome.Complete : CoverageOutcome.Partial;
-        var coverage = new CoverageSnapshot(
-            scope,
-            ObservationSource.PublicFeed,
-            outcome,
-            detail.OpenPlotCount,
-            observations.Count,
-            receipt.UpstreamUtc,
-            receipt.UpstreamUtc,
-            receipt.ReceivedUtc);
-        return new DistrictFeed(coverage, observations.ToImmutable(), rejected);
-    }
-
-    private static bool TryNormalizeRow(
-        FeedOpenPlot? row,
-        uint worldId,
-        uint districtId,
-        in FeedReceipt receipt,
-        in LotterySchedule schedule,
-        ImmutableArray<CyclePosition>.Builder positions,
-        out PlotObservation observation)
-    {
-        observation = default;
+        reading = default;
         if (row is null || row.WorldId != worldId || row.DistrictId != districtId)
         {
             return false;
@@ -212,25 +181,118 @@ internal static class FeedNormalizer
             return false;
         }
 
-        var hasPhaseEnd = UnixTime.TryFromSeconds(row.LotteryPhaseUntil, out var phaseEnd);
         var flags = row.PurchaseSystem is { } purchase && purchase > 0 && (purchase & ~KnownFlags) == 0 ? purchase : 0;
-        var sale = MapSale(flags, row.LotteryPhase, hasPhaseEnd ? phaseEnd : null);
-        var cycle = ResolveCycle(schedule, row.LotteryPhase, hasPhaseEnd ? phaseEnd : null, positions);
+        var plain = new PlotObservation(key, new Provenance(ObservationSource.PublicFeed, sourceTime, receipt.ReceivedUtc, null))
+        {
+            Occupancy = PlotOccupancy.Vacant,
+            Size = MapSize(row.Size),
+            Price = row.Price is > 0 ? row.Price : null,
+            Buyers = MapBuyers(flags),
+        };
+        if (PlotMerge.Validate(plain) != MergeRejection.None)
+        {
+            return false;
+        }
+
+        DateTime? phaseEnd = UnixTime.TryFromSeconds(row.LotteryPhaseUntil, out var end) ? end : null;
+        reading = new RowReading(plain, flags, row.LotteryPhase, phaseEnd, row.LotteryEntries);
+        return true;
+    }
+
+    private static ScheduleUpdate Anchor(List<DistrictReading> readings, in FeedReceipt receipt, LotterySchedules schedules)
+    {
+        var votes = new Dictionary<(LotteryPhase Phase, DateTime End), int>();
+        for (var districtIndex = 0; districtIndex < readings.Count; districtIndex++)
+        {
+            var rows = readings[districtIndex].Rows;
+            for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+            {
+                if (Vote(rows[rowIndex], receipt) is { } vote)
+                {
+                    votes[vote] = votes.GetValueOrDefault(vote) + 1;
+                }
+            }
+        }
+
+        var best = default((LotteryPhase Phase, DateTime End));
+        var bestVotes = 0;
+        foreach (var vote in votes)
+        {
+            if (vote.Value > bestVotes || (vote.Value == bestVotes && vote.Key.End > best.End))
+            {
+                best = vote.Key;
+                bestVotes = vote.Value;
+            }
+        }
+
+        return bestVotes == 0 ? ScheduleUpdate.Unchanged : schedules.Observe(GameRegion.Global, best.Phase, best.End, out _);
+    }
+
+    // A row speaks for the calendar only about a phase that had begun when it was seen and had not ended when the service
+    // last read its upstream.
+    private static (LotteryPhase Phase, DateTime End)? Vote(in RowReading row, in FeedReceipt receipt)
+    {
+        var phase = row.Phase switch
+        {
+            EntryPhase => LotteryPhase.Entry,
+            ResultsPhase => LotteryPhase.Results,
+            _ => LotteryPhase.Unknown,
+        };
+        if (phase == LotteryPhase.Unknown || row.PhaseEnd is not { } end || end < receipt.UpstreamUtc)
+        {
+            return null;
+        }
+
+        var phaseStart = end - (phase == LotteryPhase.Entry ? LotteryCalendar.EntryPeriod : LotteryCalendar.ResultsPeriod);
+        return row.Plain.Provenance.SourceTimeUtc >= phaseStart ? (phase, end) : null;
+    }
+
+    private static DistrictFeed Build(DistrictReading reading, in FeedReceipt receipt, in LotterySchedule schedule, ImmutableArray<CyclePosition>.Builder positions)
+    {
+        var observations = ImmutableArray.CreateBuilder<PlotObservation>(reading.Rows.Count);
+        var rejected = reading.Rejected;
+        for (var index = 0; index < reading.Rows.Count; index++)
+        {
+            var observation = WithCycle(reading.Rows[index], schedule, positions);
+            if (PlotMerge.Validate(observation) != MergeRejection.None)
+            {
+                rejected++;
+                continue;
+            }
+
+            observations.Add(observation);
+        }
+
+        var detail = reading.Detail;
+        var listed = detail.OpenPlots is not null && detail.OpenPlotCount == detail.OpenPlots.Length;
+        var outcome = listed && rejected == 0 ? CoverageOutcome.Complete : CoverageOutcome.Partial;
+        var coverage = new CoverageSnapshot(
+            reading.Scope,
+            ObservationSource.PublicFeed,
+            outcome,
+            detail.OpenPlotCount,
+            observations.Count,
+            receipt.UpstreamUtc,
+            receipt.UpstreamUtc,
+            receipt.ReceivedUtc);
+        return new DistrictFeed(coverage, observations.ToImmutable(), rejected);
+    }
+
+    private static PlotObservation WithCycle(in RowReading row, in LotterySchedule schedule, ImmutableArray<CyclePosition>.Builder positions)
+    {
+        var sale = MapSale(row.Flags, row.Phase, row.PhaseEnd);
+        var cycle = ResolveCycle(schedule, row.Phase, row.PhaseEnd, positions);
         if (sale is { } scoped && IsCycleScoped(scoped.Sale) && cycle is null)
         {
             sale = null;
         }
 
-        observation = new PlotObservation(key, new Provenance(ObservationSource.PublicFeed, sourceTime, receipt.ReceivedUtc, cycle))
+        return row.Plain with
         {
-            Occupancy = PlotOccupancy.Vacant,
+            Provenance = row.Plain.Provenance with { Cycle = cycle },
             Sale = sale,
-            Size = MapSize(row.Size),
-            Price = row.Price is > 0 ? row.Price : null,
-            Buyers = MapBuyers(flags),
-            EntryCount = cycle is null ? null : row.LotteryEntries,
+            EntryCount = cycle is null ? null : row.Entries,
         };
-        return PlotMerge.Validate(observation) == MergeRejection.None;
     }
 
     private static SaleState? MapSale(int flags, int? phase, DateTime? phaseEnd)
@@ -320,4 +382,8 @@ internal static class FeedNormalizer
     }
 
     private static bool IsCycleScoped(PlotSale sale) => sale is PlotSale.Unavailable or PlotSale.LotteryEntry or PlotSale.LotteryResults;
+
+    private readonly record struct RowReading(PlotObservation Plain, int Flags, int? Phase, DateTime? PhaseEnd, int? Entries);
+
+    private sealed record DistrictReading(FeedDistrictDetail Detail, CoverageScope Scope, List<RowReading> Rows, int Rejected);
 }

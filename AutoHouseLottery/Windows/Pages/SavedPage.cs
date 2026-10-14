@@ -1,6 +1,4 @@
 using AutoHouseLottery.Core.Find;
-using AutoHouseLottery.Core.Find.Model;
-using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Saved;
 using AutoHouseLottery.Core.Saved.Model;
@@ -11,14 +9,12 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using System.Collections.Immutable;
 using System.Numerics;
-using System.Text;
 
 namespace AutoHouseLottery.Windows.Pages;
 
 // Saved searches, fixed plot lists and the notices they raised. A search fills the shortlist with what matches now; a
-// list fills it with exactly its plots.
+// list fills it with exactly its plots. Every label comes from a text model rebuilt only when something it shows changes.
 internal sealed class SavedPage
 {
     private const float CardPad = 14f;
@@ -32,11 +28,8 @@ internal sealed class SavedPage
     private readonly Plugin plugin;
     private readonly Action<AppWindow.Page> navigate;
     private readonly HashSet<Guid> expanded = [];
-    private readonly Dictionary<Guid, string> summaries = [];
     private readonly Dictionary<Guid, float> cardHeights = [];
-    private (int Revision, LanguageInfo? Language, bool Named) summariesFor;
-    private readonly List<string> noticeTexts = [];
-    private (int Revision, LanguageInfo? Language, bool Named) noticeTextsFor;
+    private readonly SavedText text = new();
     private Guid armedDelete;
     private long armedUntil;
     private TransientNotice notice;
@@ -64,9 +57,8 @@ internal sealed class SavedPage
             return;
         }
 
-        RefreshSummaries();
-        var now = DateTime.UtcNow;
-        DrawNotices(now);
+        text.Refresh(Saved, Discovery.Find.View, Discovery.Names, DateTime.UtcNow);
+        DrawNotices();
         if (library.Searches.Count > 0)
         {
             Section(Loc.T(L.Saved.Searches), Loc.T(L.Saved.SearchesHelp));
@@ -79,10 +71,9 @@ internal sealed class SavedPage
         if (library.Lists.Count > 0)
         {
             Section(Loc.T(L.Saved.Lists), Loc.T(L.Saved.ListsHelp));
-            var view = Discovery.Find.View;
             for (var index = 0; index < library.Lists.Count; index++)
             {
-                DrawList(library.Lists[index], index, view);
+                DrawList(library.Lists[index], index);
             }
         }
     }
@@ -105,10 +96,10 @@ internal sealed class SavedPage
         }
     }
 
-    private void DrawNotices(DateTime now)
+    private void DrawNotices()
     {
-        var recent = Saved.Recent;
-        if (recent.Count == 0)
+        var notices = text.Notices;
+        if (notices.Length == 0)
         {
             return;
         }
@@ -121,12 +112,12 @@ internal sealed class SavedPage
         }
 
         var scale = ImGuiHelpers.GlobalScale;
-        for (var index = 0; index < recent.Count; index++)
+        for (var index = 0; index < notices.Length; index++)
         {
-            var record = recent[index];
+            var line = notices[index];
             var origin = ImGui.GetCursorScreenPos();
             var width = ImGui.GetContentRegionAvail().X;
-            var icon = record.Kind switch
+            var icon = line.Kind switch
             {
                 NoticeKind.NewMatch => FontAwesomeIcon.Search,
                 NoticeKind.EntryOpened => FontAwesomeIcon.DoorOpen,
@@ -136,12 +127,10 @@ internal sealed class SavedPage
             var lineHeight = TextDraw.LineHeight();
             var iconSize = TextDraw.IconSize(icon);
             TextDraw.Icon(icon, new Vector2(origin.X, origin.Y + (lineHeight - iconSize.Y) * 0.5f), Styling.AccentGlowSoft);
-            var age = Formatting.RelativeTime(record.AtUtc, now);
-            var ageWidth = TextDraw.Measure(age).X;
+            var ageWidth = TextDraw.Measure(line.Age).X;
             var textX = origin.X + iconSize.X + 10f * scale;
-            var text = NoticeText(index);
-            TextDraw.At(TextDraw.Truncate(text, width - (textX - origin.X) - ageWidth - 12f * scale), new Vector2(textX, origin.Y), Styling.TextSecondary);
-            TextDraw.At(age, new Vector2(origin.X + width - ageWidth, origin.Y), Styling.TextMuted);
+            TextDraw.At(TextDraw.Truncate(line.Text, width - (textX - origin.X) - ageWidth - 12f * scale), new Vector2(textX, origin.Y), Styling.TextSecondary);
+            TextDraw.At(line.Age, new Vector2(origin.X + width - ageWidth, origin.Y), Styling.TextMuted);
             ImGui.Dummy(new Vector2(width, lineHeight + RowPad * scale));
         }
 
@@ -150,15 +139,15 @@ internal sealed class SavedPage
 
     private void DrawSearch(SavedSearch search, int index)
     {
-        var matches = Saved.Matches.TryGetValue(search.Id, out var found) ? found : ImmutableArray<PlotKey>.Empty;
+        var labels = text.Search(search.Id);
         ImGui.PushID(index);
         using (new Card(cardHeights, search.Id, CardPad))
         {
-            Title(search.Name, search.CreatedUtc);
-            TextDraw.Hint(summaries.TryGetValue(search.Id, out var summary) ? summary : string.Empty);
-            if (!found.IsDefault)
+            Title(search.Name, labels.SavedOn);
+            TextDraw.Hint(labels.Summary);
+            if (labels.Matching is { } matching)
             {
-                ImGui.TextUnformatted(Loc.Plural(L.Saved.MatchingNow, matches.Length));
+                ImGui.TextUnformatted(matching);
             }
 
             Styling.VSpace(4f);
@@ -169,7 +158,8 @@ internal sealed class SavedPage
             }
 
             ImGui.SameLine();
-            if (PillButton.Draw("##add", Loc.T(L.Saved.AddMatches, matches.Length), Styling.AccentGlow, PillButton.Emphasis.Filled, FontAwesomeIcon.PlusCircle, matches.Length > 0))
+            if (PillButton.Draw("##add", labels.AddLabel, Styling.AccentGlow, PillButton.Emphasis.Filled, FontAwesomeIcon.PlusCircle, labels.MatchCount > 0)
+                && Saved.Matches.TryGetValue(search.Id, out var matches))
             {
                 var added = Discovery.Find.AddAll(matches, $"Saved search \"{search.Name}\"");
                 notice.Show(Loc.Plural(L.Find.Added, added), Styling.AccentMint);
@@ -182,24 +172,16 @@ internal sealed class SavedPage
         ImGui.PopID();
     }
 
-    private void DrawList(SavedList list, int index, FindView view)
+    private void DrawList(SavedList list, int index)
     {
+        var labels = text.List(list.Id);
         ImGui.PushID(SearchIdSpan + index);
         using (new Card(cardHeights, list.Id, CardPad))
         {
-            Title(list.Name, list.CreatedUtc);
-            var open = 0;
-            for (var plotIndex = 0; plotIndex < list.Plots.Length; plotIndex++)
-            {
-                if (view.StatusOf(list.Plots[plotIndex]) == PlotStatus.EntryOpen)
-                {
-                    open++;
-                }
-            }
-
-            TextDraw.Hint(Loc.T(L.Find.CountsJoin, Loc.Plural(L.Find.PlotCount, list.Plots.Length), Loc.Plural(L.Saved.EntryOpenNow, open)));
+            Title(list.Name, labels.SavedOn);
+            TextDraw.Hint(labels.Counts);
             Styling.VSpace(4f);
-            if (PillButton.Draw("##add", Loc.T(L.Saved.AddPlots, list.Plots.Length), Styling.AccentGlow, PillButton.Emphasis.Filled, FontAwesomeIcon.PlusCircle, list.Plots.Length > 0))
+            if (PillButton.Draw("##add", labels.AddLabel, Styling.AccentGlow, PillButton.Emphasis.Filled, FontAwesomeIcon.PlusCircle, list.Plots.Length > 0))
             {
                 var added = Discovery.Find.AddAll(list.Plots, $"Saved list \"{list.Name}\"");
                 notice.Show(Loc.Plural(L.Find.Added, added), Styling.AccentMint);
@@ -220,16 +202,16 @@ internal sealed class SavedPage
             if (isExpanded)
             {
                 Styling.VSpace(4f);
-                DrawListPlots(list, view);
+                DrawListPlots(list.Id, labels.Plots);
             }
         }
 
         ImGui.PopID();
     }
 
-    private void DrawListPlots(SavedList list, FindView view)
+    private void DrawListPlots(Guid listId, ListPlotText[] plots)
     {
-        if (list.Plots.IsEmpty)
+        if (plots.Length == 0)
         {
             TextDraw.Hint(Loc.T(L.Saved.EmptyList));
             return;
@@ -237,52 +219,32 @@ internal sealed class SavedPage
 
         var scale = ImGuiHelpers.GlobalScale;
         var drawList = ImGui.GetWindowDrawList();
-        for (var index = 0; index < list.Plots.Length; index++)
+        for (var index = 0; index < plots.Length; index++)
         {
-            var key = list.Plots[index];
-            var status = view.StatusOf(key);
+            var plot = plots[index];
             var origin = ImGui.GetCursorScreenPos();
             var width = ImGui.GetContentRegionAvail().X;
             var height = TextDraw.LineHeight() + RowPad * 2f * scale;
             var radius = MarkRadius * scale;
             var midY = origin.Y + height * 0.5f;
-            StatusMarks.Draw(drawList, new Vector2(origin.X + radius, midY), radius, status);
-            var label = FindText.Status(status);
-            var labelWidth = TextDraw.Measure(label).X;
+            StatusMarks.Draw(drawList, new Vector2(origin.X + radius, midY), radius, plot.Status);
+            var labelWidth = TextDraw.Measure(plot.StatusLabel).X;
             var removeSize = RemoveSize * scale;
             var textX = origin.X + radius * 2f + 8f * scale;
             var textY = midY - TextDraw.LineHeight() * 0.5f;
-            TextDraw.At(TextDraw.Truncate(PlotLabels.AddressOnWorld(Discovery.Names, key), width - (textX - origin.X) - labelWidth - removeSize - 20f * scale), new Vector2(textX, textY), Styling.TextSecondary);
-            TextDraw.At(label, new Vector2(origin.X + width - removeSize - 8f * scale - labelWidth, textY), StatusMarks.Color(status));
+            TextDraw.At(TextDraw.Truncate(plot.Address, width - (textX - origin.X) - labelWidth - removeSize - 20f * scale), new Vector2(textX, textY), Styling.TextSecondary);
+            TextDraw.At(plot.StatusLabel, new Vector2(origin.X + width - removeSize - 8f * scale - labelWidth, textY), StatusMarks.Color(plot.Status));
             ImGui.SetCursorScreenPos(new Vector2(origin.X + width - removeSize, origin.Y + (height - removeSize) * 0.5f));
             ImGui.PushID(index);
             if (IconButton.Draw(FontAwesomeIcon.Times, "##remove", removeSize, Styling.TextDim, Loc.T(L.Find.Remove)))
             {
-                Saved.RemoveFromList(list.Id, key);
+                Saved.RemoveFromList(listId, plot.Key);
             }
 
             ImGui.PopID();
             ImGui.SetCursorScreenPos(origin);
             ImGui.Dummy(new Vector2(width, height));
         }
-    }
-
-    private string NoticeText(int index)
-    {
-        var current = (Saved.RecentRevision, Loc.Current, Discovery.Names.Ready);
-        if (noticeTextsFor != current)
-        {
-            noticeTextsFor = current;
-            noticeTexts.Clear();
-        }
-
-        while (noticeTexts.Count <= index)
-        {
-            var next = Saved.Recent[noticeTexts.Count];
-            noticeTexts.Add(NoticeAnnouncer.Describe(Discovery.Names, next.Kind, next.Plot, next.SourceName));
-        }
-
-        return noticeTexts[index];
     }
 
     private void DeleteButton(Guid id)
@@ -304,7 +266,7 @@ internal sealed class SavedPage
         armedUntil = Environment.TickCount64 + ConfirmWindowMs;
     }
 
-    private static void Title(string name, DateTime createdUtc)
+    private static void Title(string name, string savedOn)
     {
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
@@ -315,12 +277,11 @@ internal sealed class SavedPage
             TextDraw.At(TextDraw.Truncate(name, width * 0.7f), origin, Styling.TextStrong);
         }
 
-        if (createdUtc != default)
+        if (savedOn.Length > 0)
         {
             using (Fonts.PushCaption())
             {
-                var saved = Loc.T(L.Saved.SavedOn, createdUtc.ToLocalTime().ToString("d", Loc.Culture));
-                TextDraw.Right(saved, origin.X + width, origin.Y + (height - TextDraw.LineHeight()) * 0.5f, Styling.TextMuted);
+                TextDraw.Right(savedOn, origin.X + width, origin.Y + (height - TextDraw.LineHeight()) * 0.5f, Styling.TextMuted);
             }
         }
 
@@ -336,55 +297,6 @@ internal sealed class SavedPage
         }
 
         Styling.VSpace(4f);
-    }
-
-    private void RefreshSummaries()
-    {
-        var current = (Saved.Library.Revision, Loc.Current, Discovery.Names.Ready);
-        if (summariesFor == current)
-        {
-            return;
-        }
-
-        summariesFor = current;
-        summaries.Clear();
-        var searches = Saved.Library.Searches;
-        for (var index = 0; index < searches.Count; index++)
-        {
-            summaries[searches[index].Id] = Summary(searches[index]);
-        }
-    }
-
-    private string Summary(SavedSearch search)
-    {
-        var text = new StringBuilder();
-        text.Append(Discovery.Names.World(search.Area.WorldId)).Append(TextDraw.Separator).Append(FindText.Scope(Discovery.Names, search.Area));
-        var filter = search.Filter;
-        for (var status = PlotStatus.EntryOpen; status <= PlotStatus.NeedsRefresh; status++)
-        {
-            if ((filter.Statuses & PlotFilter.ToFilter(status)) != 0)
-            {
-                text.Append(TextDraw.Separator).Append(FindText.Status(status));
-            }
-        }
-
-        if (filter.Sizes != SizeFilter.All)
-        {
-            for (var size = PlotSize.Small; size <= PlotSize.Large; size++)
-            {
-                if ((filter.Sizes & PlotFilter.ToFilter(size)) != 0)
-                {
-                    text.Append(TextDraw.Separator).Append(FindText.Size(size));
-                }
-            }
-        }
-
-        if (filter.PriceCeiling > 0)
-        {
-            text.Append(TextDraw.Separator).Append(Loc.T(L.Saved.PriceUpTo, Formatting.Gil(filter.PriceCeiling)));
-        }
-
-        return text.ToString();
     }
 
     // A card is a child window, so its padding holds on both sides; its height is the content measured on the previous

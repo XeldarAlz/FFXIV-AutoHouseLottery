@@ -2,6 +2,7 @@ using AutoHouseLottery.Core.Find;
 using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
+using AutoHouseLottery.Core.Providers.Model;
 using AutoHouseLottery.Windows.Components;
 using AutoHouseLottery.Windows.Find;
 using Dalamud.Bindings.ImGui;
@@ -39,6 +40,8 @@ internal sealed partial class FindHomePage
     private PlotKey? details;
     private TransientNotice notice;
     private CachedText summaryText;
+    private CachedText loadingText;
+    private CachedText savedCopyText;
     private CachedText addAllText;
 
     public FindHomePage(Plugin plugin)
@@ -147,19 +150,31 @@ internal sealed partial class FindHomePage
 
         if (!status.HasData)
         {
-            if (status.Failure != Core.Providers.Model.FeedFailure.None && !status.Loading)
+            if (status.Failure != FeedFailure.None && !status.Loading)
             {
                 Message(FontAwesomeIcon.ExclamationTriangle, Loc.T(L.Find.Failed));
                 return;
             }
 
-            Message(FontAwesomeIcon.Hourglass, Loc.T(L.Find.Loading, Discovery.Names.World(world)));
+            var loadingKey = world | (Discovery.Names.Ready ? 1L << 32 : 0L);
+            if (!loadingText.TryGet(loadingKey, out var loading))
+            {
+                loading = loadingText.Set(loadingKey, Loc.T(L.Find.Loading, Discovery.Names.World(world)));
+            }
+
+            Message(FontAwesomeIcon.Hourglass, loading);
             return;
         }
 
         if (status.ShowingSavedCopy)
         {
-            DrawBanner(Loc.T(L.Find.SavedCopyBanner, FindText.LocalTime(status.CachedReceivedUtc)));
+            var savedKey = status.CachedReceivedUtc.Ticks;
+            if (!savedCopyText.TryGet(savedKey, out var savedCopy))
+            {
+                savedCopy = savedCopyText.Set(savedKey, Loc.T(L.Find.SavedCopyBanner, FindText.LocalTime(status.CachedReceivedUtc)));
+            }
+
+            DrawBanner(savedCopy);
         }
 
         if (State.Area.SelectsNothing)
@@ -170,6 +185,12 @@ internal sealed partial class FindHomePage
 
         if (State.ListView)
         {
+            if (!view.AreaCovered)
+            {
+                Message(FontAwesomeIcon.SatelliteDish, Loc.T(L.Find.NoCoverage));
+                return;
+            }
+
             if (shownResults.Count == 0)
             {
                 DrawNoMatches();
@@ -180,18 +201,21 @@ internal sealed partial class FindHomePage
             return;
         }
 
+        if (!view.AreaCovered)
+        {
+            DrawBanner(Loc.T(L.Find.NoCoverage));
+        }
+        else if (shownResults.Count == 0)
+        {
+            DrawBanner(Loc.T(L.Find.NoMatches));
+        }
+
         DrawMap(view, now);
     }
 
     private void DrawNoMatches()
     {
-        var noCoverage = shownResults.ReportedVacant == 0;
-        Message(noCoverage ? FontAwesomeIcon.SatelliteDish : FontAwesomeIcon.Filter, Loc.T(noCoverage ? L.Find.NoCoverage : L.Find.NoMatches));
-        if (noCoverage)
-        {
-            return;
-        }
-
+        Message(FontAwesomeIcon.Filter, Loc.T(L.Find.NoMatches));
         Styling.VSpace(8f);
         var label = Loc.T(L.Find.ClearFilters);
         Styling.CenterNextItem(PillButton.Width(label, FontAwesomeIcon.Undo));

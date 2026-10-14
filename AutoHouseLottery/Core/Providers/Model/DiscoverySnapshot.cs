@@ -14,6 +14,7 @@ internal sealed class DiscoverySnapshot
         Plots = FrozenDictionary<PlotKey, PlotSnapshot>.Empty,
         Positions = [],
         Worlds = FrozenDictionary<uint, FeedWorldStatus>.Empty,
+        Coverage = FrozenDictionary<(uint World, ushort District), CoverageSnapshot>.Empty,
         WorldList = [],
         Schedule = LotteryCalendar.Global,
     };
@@ -27,6 +28,8 @@ internal sealed class DiscoverySnapshot
     public required ImmutableArray<CyclePosition> Positions { get; init; }
 
     public required FrozenDictionary<uint, FeedWorldStatus> Worlds { get; init; }
+
+    public required FrozenDictionary<(uint World, ushort District), CoverageSnapshot> Coverage { get; init; }
 
     public required ImmutableArray<FeedWorld> WorldList { get; init; }
 

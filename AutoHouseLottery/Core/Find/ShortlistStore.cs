@@ -7,28 +7,29 @@ using AutoHouseLottery.Core.Storage;
 namespace AutoHouseLottery.Core.Find;
 
 // The working shortlist in shortlist.json, in the shortlist exchange format, read and written off the framework thread.
+// Until the file has been read, nothing is written over it; a damaged file is kept under a dated name first.
 internal sealed class ShortlistStore
 {
     private const string FileName = "shortlist.json";
 
     private readonly QueuedFile file;
-    private readonly Task<byte[]?> loading;
+    private readonly Task<FileRead> loading;
 
     public ShortlistStore(string directory)
     {
-        file = new QueuedFile(Path.Combine(directory, FileName), "shortlist");
-        loading = file.ReadAsync();
+        file = new QueuedFile(Path.Combine(directory, FileName), "shortlist", static (exception, message) => RunLog.Warning(exception, message));
+        loading = file.ReadWhenReadableAsync();
     }
 
     public bool TryTakeLoaded(out Shortlist? loaded)
     {
         loaded = null;
-        if (!loading.IsCompleted)
+        if (!loading.IsCompleted || loading.Result.Status == FileReadStatus.Failed)
         {
             return false;
         }
 
-        if (loading.Result is not { } bytes)
+        if (loading.Result.Bytes is not { } bytes)
         {
             return true;
         }
@@ -36,7 +37,7 @@ internal sealed class ShortlistStore
         var error = ShortlistTransfer.TryImport(Encoding.UTF8.GetString(bytes), out loaded);
         if (error != ShortlistImportError.None)
         {
-            RunLog.Warning($"The saved shortlist could not be read ({error}); starting with an empty shortlist.");
+            RunLog.Warning($"The saved shortlist could not be read ({error}); it is kept under a dated name and the shortlist starts empty.");
             file.BackUp(DateTime.UtcNow);
         }
 
@@ -53,5 +54,5 @@ internal sealed class ShortlistStore
         });
     }
 
-    public void Flush() => file.Flush();
+    public void Close() => file.Close();
 }

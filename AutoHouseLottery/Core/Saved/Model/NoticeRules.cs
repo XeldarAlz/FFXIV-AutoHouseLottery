@@ -27,20 +27,6 @@ internal static class NoticeRules
         return due.ToImmutable();
     }
 
-    public static ImmutableArray<Notice> DueForSearch(SavedSearch search, IReadOnlyDictionary<PlotKey, PlotSnapshot> plots, in CyclePosition position, DateTime nowUtc, NoticeLedger ledger)
-    {
-        var due = ImmutableArray.CreateBuilder<Notice>();
-        CollectSearch(search, plots, position, nowUtc, ledger, new HashSet<string>(StringComparer.Ordinal), due);
-        return due.ToImmutable();
-    }
-
-    public static ImmutableArray<Notice> DueForList(SavedList list, IReadOnlyDictionary<PlotKey, PlotSnapshot> plots, in CyclePosition position, DateTime nowUtc, NoticeLedger ledger)
-    {
-        var due = ImmutableArray.CreateBuilder<Notice>();
-        CollectList(list, plots, position, nowUtc, ledger, new HashSet<string>(StringComparer.Ordinal), due);
-        return due.ToImmutable();
-    }
-
     private static void CollectSearch(
         SavedSearch search,
         IReadOnlyDictionary<PlotKey, PlotSnapshot> plots,

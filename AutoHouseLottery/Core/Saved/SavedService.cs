@@ -12,28 +12,27 @@ using AutoHouseLottery.Core.Storage;
 namespace AutoHouseLottery.Core.Saved;
 
 // Saved searches, fixed lists and their notices, kept in saved.json. Ported from Aetherphone's watch store and reminder
-// service: notices are worked out on a task from the latest listings and delivered on the framework thread, where the
-// ledger records them so each one fires once, including when the plugin catches up after a login. A search or list
-// saved a moment ago first records what it already matches without announcing it.
+// service: the notice plan is worked out on a task from the latest listings and delivered on the framework thread, where
+// the ledger records it so each notice fires once, including when the plugin catches up after a login. Nothing is written
+// over saved.json until it has been read, and what was saved meanwhile is merged with it.
 internal sealed class SavedService
 {
     private const string FileName = "saved.json";
-    private const long TicksPerMinute = TimeSpan.TicksPerMinute;
 
     private readonly QueuedFile file;
-    private readonly Task<byte[]?> loading;
+    private readonly Task<FileRead> loading;
     private readonly NoticeLedger ledger = new();
+    private readonly NoticeBaseline baseline = new();
     private readonly List<NoticeRecord> recent = [];
-    private readonly HashSet<Guid> baselinePending = [];
-    private Task<NoticeBatch>? evaluating;
-    private EvaluationInputs lastInputs;
+    private Task<NoticePlan>? planning;
+    private PlanInputs lastInputs;
     private bool loaded;
     private bool dirty;
 
     public SavedService(string directory)
     {
-        file = new QueuedFile(Path.Combine(directory, FileName), "saved searches and lists");
-        loading = file.ReadAsync();
+        file = new QueuedFile(Path.Combine(directory, FileName), "saved searches and lists", static (exception, message) => RunLog.Warning(exception, message));
+        loading = file.ReadWhenReadableAsync();
     }
 
     public SavedLibrary Library { get; } = new();
@@ -42,23 +41,25 @@ internal sealed class SavedService
 
     public int RecentRevision { get; private set; }
 
+    public int MatchesRevision { get; private set; }
+
     public FrozenDictionary<Guid, ImmutableArray<PlotKey>> Matches { get; private set; } = FrozenDictionary<Guid, ImmutableArray<PlotKey>>.Empty;
 
     public void Update(DateTime nowUtc, DiscoverySnapshot snapshot, Action<IReadOnlyList<Notice>> announce)
     {
         if (!loaded)
         {
-            if (!loading.IsCompleted)
+            if (!loading.IsCompleted || loading.Result.Status == FileReadStatus.Failed)
             {
                 return;
             }
 
-            Load(loading.Result, nowUtc);
+            Load(loading.Result.Bytes, nowUtc);
         }
 
-        if (evaluating is { IsCompleted: true } finished)
+        if (planning is { IsCompleted: true } finished)
         {
-            evaluating = null;
+            planning = null;
             if (finished.IsCompletedSuccessfully)
             {
                 Deliver(finished.Result, nowUtc, announce);
@@ -69,27 +70,24 @@ internal sealed class SavedService
             }
         }
 
-        var inputs = new EvaluationInputs(snapshot.PlotsRevision, Library.Revision, baselinePending.Count, nowUtc.Ticks / TicksPerMinute);
-        if (evaluating is null && inputs != lastInputs && !Library.IsEmpty)
+        var inputs = new PlanInputs(snapshot.Revision, Library.Revision, baseline.Count, nowUtc.Ticks / TimeSpan.TicksPerMinute);
+        if (planning is null && inputs != lastInputs && !Library.IsEmpty)
         {
             lastInputs = inputs;
             var library = Library.Snapshot();
             var ledgerCopy = ledger.Copy();
-            var baseline = baselinePending.ToImmutableArray();
-            evaluating = Task.Run(() => Evaluate(library, snapshot, ledgerCopy, baseline, nowUtc));
+            var baselineCopy = baseline.Copy();
+            var loadedWorlds = LoadedWorlds(snapshot);
+            planning = Task.Run(() => Plan(library, snapshot, ledgerCopy, baselineCopy, loadedWorlds, nowUtc));
         }
 
-        if (dirty)
-        {
-            dirty = false;
-            Save();
-        }
+        SaveIfDirty();
     }
 
     public SavedSearch SaveSearch(string name, in AreaScope area, in PlotFilter filter, DateTime nowUtc)
     {
         var search = Library.AddSearch(name, area, filter, nowUtc);
-        baselinePending.Add(search.Id);
+        baseline.AddSource(search.Id);
         dirty = true;
         RunLog.Info($"Saved the search \"{search.Name}\" for world {area.WorldId}.");
         return search;
@@ -98,7 +96,7 @@ internal sealed class SavedService
     public SavedList SaveList(string name, ReadOnlySpan<PlotKey> plots, DateTime nowUtc)
     {
         var list = Library.AddList(name, plots, nowUtc);
-        baselinePending.Add(list.Id);
+        baseline.AddSource(list.Id);
         dirty = true;
         RunLog.Info($"Saved the list \"{list.Name}\" with {list.Plots.Length} plots.");
         return list;
@@ -108,7 +106,7 @@ internal sealed class SavedService
     {
         if (Library.AddPlot(listId, key))
         {
-            baselinePending.Add(listId);
+            baseline.AddPlot(key);
             dirty = true;
         }
     }
@@ -122,7 +120,7 @@ internal sealed class SavedService
     {
         if (Library.Remove(id))
         {
-            baselinePending.Remove(id);
+            baseline.Forget(id);
             dirty = true;
             RunLog.Info($"Removed a saved search or list ({id:N}).");
         }
@@ -135,7 +133,26 @@ internal sealed class SavedService
         dirty = true;
     }
 
-    public void Flush() => file.Flush();
+    public void Close()
+    {
+        SaveIfDirty();
+        file.Close();
+    }
+
+    private void SaveIfDirty()
+    {
+        if (!loaded || !dirty)
+        {
+            return;
+        }
+
+        dirty = false;
+        var library = Library.Snapshot();
+        var delivered = new Dictionary<string, DateTime>(ledger.Entries);
+        var records = recent.ToArray();
+        var pending = baseline.Copy();
+        file.Write(() => Encoding.UTF8.GetBytes(SavedCodec.Export(library, delivered, records, pending)));
+    }
 
     private void Load(byte[]? bytes, DateTime nowUtc)
     {
@@ -148,44 +165,53 @@ internal sealed class SavedService
         var error = SavedCodec.TryRead(Encoding.UTF8.GetString(bytes), out var document);
         if (error != SavedReadError.None)
         {
-            RunLog.Warning($"The saved searches and lists could not be read ({error}); starting with none.");
+            RunLog.Warning($"The saved searches and lists could not be read ({error}); the file is kept under a dated name and the page starts empty.");
             file.BackUp(nowUtc);
+            dirty = true;
             return;
         }
 
-        Library.Restore(document!.Searches.AsSpan(), document.Lists.AsSpan());
+        Library.MergeLoaded(document!.Searches.AsSpan(), document.Lists.AsSpan());
         for (var index = 0; index < document.Delivered.Length; index++)
         {
             ledger.Restore(document.Delivered[index].Key, document.Delivered[index].Value);
         }
 
-        recent.AddRange(document.Recent);
-        RecentRevision++;
-        if (ledger.Prune(nowUtc) > 0 || document.Skipped > 0)
+        for (var index = 0; index < document.PendingSources.Length; index++)
         {
-            dirty = true;
+            baseline.AddSource(document.PendingSources[index]);
         }
 
+        for (var index = 0; index < document.PendingPlots.Length; index++)
+        {
+            baseline.AddPlot(document.PendingPlots[index]);
+        }
+
+        recent.InsertRange(0, document.Recent);
+        RecentRevision++;
+        dirty |= ledger.Prune(nowUtc) > 0 || document.Skipped > 0;
         RunLog.Info($"Loaded {document.Searches.Length} saved searches and {document.Lists.Length} lists{(document.Skipped > 0 ? $"; {document.Skipped} damaged entries were skipped" : string.Empty)}.");
     }
 
-    private void Deliver(NoticeBatch batch, DateTime nowUtc, Action<IReadOnlyList<Notice>> announce)
+    private void Deliver(NoticePlan plan, DateTime nowUtc, Action<IReadOnlyList<Notice>> announce)
     {
-        Matches = batch.Matches;
-        for (var index = 0; index < batch.Silent.Length; index++)
+        Matches = plan.Matches;
+        MatchesRevision++;
+        for (var index = 0; index < plan.Silent.Length; index++)
         {
-            dirty |= ledger.TryRecord(batch.Silent[index], nowUtc);
+            dirty |= ledger.TryRecord(plan.Silent[index], nowUtc);
         }
 
-        for (var index = 0; index < batch.BaselineDone.Length; index++)
+        if (!plan.ReadySources.IsEmpty || !plan.ReadyPlots.IsEmpty)
         {
-            baselinePending.Remove(batch.BaselineDone[index]);
+            baseline.Settle(plan.ReadySources.AsSpan(), plan.ReadyPlots.AsSpan());
+            dirty = true;
         }
 
         var fresh = new List<Notice>();
-        for (var index = 0; index < batch.Announce.Length; index++)
+        for (var index = 0; index < plan.Announce.Length; index++)
         {
-            var notice = batch.Announce[index];
+            var notice = plan.Announce[index];
             if (!ledger.TryRecord(notice, nowUtc))
             {
                 continue;
@@ -211,86 +237,25 @@ internal sealed class SavedService
         announce(fresh);
     }
 
-    private void Save()
+    private static NoticePlan Plan(SavedLibrarySnapshot library, DiscoverySnapshot snapshot, NoticeLedger ledger, NoticeBaseline baseline, FrozenSet<uint> loadedWorlds, DateTime nowUtc)
     {
-        var library = Library.Snapshot();
-        var delivered = new Dictionary<string, DateTime>(ledger.Entries);
-        var records = recent.ToArray();
-        file.Write(() => Encoding.UTF8.GetBytes(SavedCodec.Export(library, delivered, records)));
-    }
-
-    private static NoticeBatch Evaluate(SavedLibrarySnapshot library, DiscoverySnapshot snapshot, NoticeLedger ledger, ImmutableArray<Guid> baseline, DateTime nowUtc)
-    {
-        var plots = snapshot.Plots;
         var position = CycleResolver.Current(snapshot.Schedule, snapshot.Positions.AsSpan(), nowUtc);
-        var matches = new Dictionary<Guid, ImmutableArray<PlotKey>>(library.Searches.Length);
-        for (var index = 0; index < library.Searches.Length; index++)
-        {
-            matches[library.Searches[index].Id] = library.Searches[index].Matches(plots, position, nowUtc);
-        }
-
-        var ready = Ready(library, snapshot, baseline);
-        var due = NoticeRules.Due(library, plots, position, nowUtc, ledger);
-        var announce = ImmutableArray.CreateBuilder<Notice>();
-        var silent = ImmutableArray.CreateBuilder<Notice>();
-        for (var index = 0; index < due.Length; index++)
-        {
-            var notice = due[index];
-            if (!baseline.Contains(notice.SourceId))
-            {
-                announce.Add(notice);
-            }
-            else if (ready.Contains(notice.SourceId))
-            {
-                silent.Add(notice);
-            }
-        }
-
-        return new NoticeBatch(matches.ToFrozenDictionary(), announce.ToImmutable(), silent.ToImmutable(), ready);
+        return NoticePlanner.Plan(library, snapshot.Plots, position, nowUtc, ledger, baseline, loadedWorlds);
     }
 
-    // A new search or list can only take its starting point once the listings for its worlds are loaded; until then its
-    // notices are held back rather than recorded.
-    private static ImmutableArray<Guid> Ready(in SavedLibrarySnapshot library, DiscoverySnapshot snapshot, ImmutableArray<Guid> baseline)
+    private static FrozenSet<uint> LoadedWorlds(DiscoverySnapshot snapshot)
     {
-        var ready = ImmutableArray.CreateBuilder<Guid>();
-        for (var index = 0; index < library.Searches.Length; index++)
+        var worlds = new List<uint>(snapshot.Worlds.Count);
+        foreach (var pair in snapshot.Worlds)
         {
-            var search = library.Searches[index];
-            if (baseline.Contains(search.Id) && snapshot.StatusOf(search.Area.WorldId).HasData)
+            if (pair.Value.HasData)
             {
-                ready.Add(search.Id);
+                worlds.Add(pair.Key);
             }
         }
 
-        for (var listIndex = 0; listIndex < library.Lists.Length; listIndex++)
-        {
-            var list = library.Lists[listIndex];
-            if (!baseline.Contains(list.Id))
-            {
-                continue;
-            }
-
-            var loadedWorlds = true;
-            for (var plotIndex = 0; plotIndex < list.Plots.Length && loadedWorlds; plotIndex++)
-            {
-                loadedWorlds = snapshot.StatusOf(list.Plots[plotIndex].WorldId).HasData;
-            }
-
-            if (loadedWorlds)
-            {
-                ready.Add(list.Id);
-            }
-        }
-
-        return ready.ToImmutable();
+        return worlds.ToFrozenSet();
     }
 
-    private readonly record struct EvaluationInputs(int PlotsRevision, int LibraryRevision, int Pending, long Minute);
-
-    private sealed record NoticeBatch(
-        FrozenDictionary<Guid, ImmutableArray<PlotKey>> Matches,
-        ImmutableArray<Notice> Announce,
-        ImmutableArray<Notice> Silent,
-        ImmutableArray<Guid> BaselineDone);
+    private readonly record struct PlanInputs(int SnapshotRevision, int LibraryRevision, int Pending, long Minute);
 }

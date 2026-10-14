@@ -1,6 +1,4 @@
-using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Find;
-using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Windows.Components;
@@ -18,6 +16,8 @@ internal sealed partial class FindHomePage
     private const float FieldGap = 4f;
     private const string ListPopup = "##ahl_find_save_to_list";
 
+    private readonly DetailsText detailsText = new();
+
     private void DrawDetails(FindView view, PlotKey key, DateTime now)
     {
         if (PillButton.Draw("##ahl_find_back", Loc.T(L.Find.Back), Styling.AccentGlow, PillButton.Emphasis.Ghost, FontAwesomeIcon.ChevronLeft))
@@ -26,90 +26,72 @@ internal sealed partial class FindHomePage
             return;
         }
 
+        detailsText.Refresh(key, view, State, Discovery, now);
         Styling.VSpace(6f);
         using (Fonts.PushHeadline())
         {
             ImGui.PushTextWrapPos();
-            ImGui.TextUnformatted(PlotLabels.Address(Discovery.Names, key));
+            ImGui.TextUnformatted(detailsText.Address);
             ImGui.PopTextWrapPos();
         }
 
-        TextDraw.Hint(Discovery.Names.World(key.WorldId));
-        var plot = view.Plot(key);
-        var status = plot is null ? (PlotStatus?)null : PlotStatuses.Classify(plot, view.Position);
-        DrawStatusLine(plot, status, now);
+        TextDraw.Hint(detailsText.World);
+        DrawStatusLine();
         Styling.VSpace(8f);
-        if (plot is null)
+        if (!detailsText.Listed)
         {
             TextDraw.Hint(Loc.T(L.Find.NoListing));
         }
-        else
+
+        for (var index = 0; index < detailsText.Fields.Length; index++)
         {
-            DrawFields(plot, view.Position, now);
+            Field(detailsText.Fields[index]);
+        }
+
+        if (detailsText.Conflicted)
+        {
+            Reason(Loc.T(L.Find.ConflictNote));
         }
 
         Styling.VSpace(8f);
-        DrawDetailActions(key, plot, status);
+        DrawDetailActions(key);
         Styling.VSpace(10f);
-        DrawPlotEligibility(view, key);
-        if (plot is not null)
+        DrawPlotEligibility();
+        if (detailsText.Sources.Length > 0)
         {
             Styling.VSpace(8f);
-            DrawSources(plot, now);
+            DrawSources();
         }
     }
 
-    private static void DrawStatusLine(PlotSnapshot? plot, PlotStatus? status, DateTime now)
+    private void DrawStatusLine()
     {
         var scale = ImGuiHelpers.GlobalScale;
         var origin = ImGui.GetCursorScreenPos();
         var radius = StatusMarkRadius * scale;
         var lineHeight = TextDraw.LineHeight();
-        StatusMarks.Draw(ImGui.GetWindowDrawList(), origin + new Vector2(radius, lineHeight * 0.5f), radius, status);
-        var label = FindText.Status(status);
-        if (plot?.Sale?.Value.PhaseEndUtc is { } end && status is PlotStatus.EntryOpen or PlotStatus.Results or PlotStatus.NextCycle)
-        {
-            label = string.Concat(label, TextDraw.Separator, Loc.T(L.Find.PhaseEnds, FindText.LocalTime(end), FindText.Countdown(end - now)));
-        }
-
-        TextDraw.At(TextDraw.Truncate(label, ImGui.GetContentRegionAvail().X - radius * 3f), origin + new Vector2(radius * 3f, 0f), StatusMarks.Color(status));
+        StatusMarks.Draw(ImGui.GetWindowDrawList(), origin + new Vector2(radius, lineHeight * 0.5f), radius, detailsText.Status);
+        TextDraw.At(TextDraw.Truncate(detailsText.StatusLine, ImGui.GetContentRegionAvail().X - radius * 3f), origin + new Vector2(radius * 3f, 0f), detailsText.StatusColor);
         ImGui.Dummy(new Vector2(ImGui.GetContentRegionAvail().X, lineHeight));
-        if (status is { } known && ImGui.IsItemHovered())
+        if (detailsText.Status is { } known && ImGui.IsItemHovered())
         {
             Tooltip.Show(FindText.StatusHelp(known));
         }
     }
 
-    private static void DrawFields(PlotSnapshot plot, in CyclePosition position, DateTime now)
-    {
-        Field(Loc.T(L.Find.FieldSize), FindText.Size(plot.Size?.Value), plot.Size?.Provenance, now);
-        Field(Loc.T(L.Find.FieldDeposit), FindText.Gil(plot.Price?.Value), plot.Price?.Provenance, now);
-        Field(Loc.T(L.Find.FieldBuyers), FindText.Buyers(plot.Buyers?.Value), plot.Buyers?.Provenance, now);
-        Field(Loc.T(L.Find.FieldPhase), FindText.Status(PlotStatuses.Classify(plot, position)), plot.Sale?.Provenance, now);
-        var entries = plot.EntryCountIn(position.Cycle);
-        Field(Loc.T(L.Find.FieldEntries), FindText.Count(entries), entries is null ? null : plot.EntryCount?.Provenance, now);
-        Field(Loc.T(L.Find.FieldMap), Loc.T(plot.Key.IsSubdivision ? L.Find.SubdivisionLong : L.Find.MainDivisionLong), null, now);
-        if (plot.NeedsVerification)
-        {
-            Reason(Loc.T(L.Find.ConflictNote));
-        }
-    }
-
-    private static void Field(string label, string value, Provenance? provenance, DateTime now)
+    private static void Field(in DetailField field)
     {
         var origin = ImGui.GetCursorScreenPos();
         var width = ImGui.GetContentRegionAvail().X;
-        TextDraw.At(label, origin, Styling.TextDim);
-        var valueWidth = MathF.Min(TextDraw.Measure(value).X, width * 0.6f);
-        TextDraw.At(TextDraw.Truncate(value, width * 0.6f), new Vector2(origin.X + width - valueWidth, origin.Y), Styling.TextStrong);
+        TextDraw.At(field.Label, origin, Styling.TextDim);
+        var valueWidth = MathF.Min(TextDraw.Measure(field.Value).X, width * 0.6f);
+        TextDraw.At(TextDraw.Truncate(field.Value, width * 0.6f), new Vector2(origin.X + width - valueWidth, origin.Y), Styling.TextStrong);
         var height = TextDraw.LineHeight();
-        if (provenance is { } source)
+        if (field.Age is { } age)
         {
             using (Fonts.PushCaption())
             {
-                var age = FindText.Observed(source.SourceTimeUtc, now);
-                var ageWidth = TextDraw.Measure(age).X;
-                TextDraw.At(age, new Vector2(origin.X + width - ageWidth, origin.Y + height), Styling.TextMuted);
+                TextDraw.Right(age, origin.X + width, origin.Y + height, Styling.TextMuted);
                 height += TextDraw.LineHeight();
             }
         }
@@ -117,7 +99,7 @@ internal sealed partial class FindHomePage
         ImGui.Dummy(new Vector2(width, height + FieldGap * ImGuiHelpers.GlobalScale));
     }
 
-    private void DrawDetailActions(PlotKey key, PlotSnapshot? plot, PlotStatus? status)
+    private void DrawDetailActions(PlotKey key)
     {
         var shortlisted = State.Shortlist.Contains(key);
         var label = Loc.T(shortlisted ? L.Find.RemoveFromShortlist : L.Find.AddToShortlist);
@@ -150,10 +132,9 @@ internal sealed partial class FindHomePage
         }
 
         Styling.VSpace(6f);
-        var actionable = status == PlotStatus.EntryOpen && plot?.Price?.Value is not null;
-        if (actionable)
+        if (detailsText.EnterTitle is { } enterTitle)
         {
-            UnavailableAction(FontAwesomeIcon.Ticket, Loc.T(L.Find.EnterFor, FindText.Gil(plot!.Price!.Value.Value)), Styling.AccentGlow, Loc.T(L.Find.EnteringLater));
+            UnavailableAction(FontAwesomeIcon.Ticket, enterTitle, Styling.AccentGlow, Loc.T(L.Find.EnteringLater));
             return;
         }
 
@@ -210,43 +191,29 @@ internal sealed partial class FindHomePage
         }
     }
 
-    private void DrawPlotEligibility(FindView view, PlotKey key)
+    private void DrawPlotEligibility()
     {
-        if (Discovery.Character is not { } character)
+        if (Discovery.Character is null)
         {
             return;
         }
 
-        TextDraw.SmallCaps(Loc.T(L.Find.ForCharacter, character.Name), ImGui.GetCursorScreenPos(), Styling.AccentGlowSoft);
+        TextDraw.SmallCaps(detailsText.ForCharacter, ImGui.GetCursorScreenPos(), Styling.AccentGlowSoft);
         ImGui.Dummy(new Vector2(1f, TextDraw.CaptionLineHeight()));
-        var filter = State.Filter;
-        if (filter.Buyer == BuyerType.Unknown)
+        if (detailsText.Eligibility is not { } eligibility)
         {
             Reason(Loc.T(L.Find.NeedBuyer));
             return;
         }
 
-        var plot = view.Plot(key);
-        var candidate = new EntryCandidate(
-            key,
-            plot?.Buyers?.Value ?? PlotBuyers.Unknown,
-            plot?.AvailabilityAt(view.Position) ?? PlotAvailability.Unknown,
-            plot?.Price?.Value)
+        DrawEligibility(eligibility);
+        if (detailsText.Blockers is { } blockers)
         {
-            NeedsVerification = plot?.NeedsVerification ?? false,
-        };
-        // Without a price ceiling the cap would refuse every plot; this view only shows the other checks, the preview keeps the real cap.
-        var budget = new CharacterBudget(filter.PriceCeiling > 0 ? filter.PriceCeiling : long.MaxValue, State.GilReserve, Core.Find.Model.RunPreviewBuilder.PreviewTravelAllowance);
-        var result = EligibilityRules.EvaluatePlot(character, filter.Buyer, candidate, budget, default)
-            .Combine(EligibilityRules.EvaluateCharacter(character, filter.Buyer, view.Position.Cycle, true));
-        DrawEligibility(result);
-        if (result.Blockers != EligibilityReason.None)
-        {
-            Reason(FindText.Reasons(result.Blockers));
+            Reason(blockers);
         }
     }
 
-    private static void DrawSources(PlotSnapshot plot, DateTime now)
+    private void DrawSources()
     {
         if (!ImGui.CollapsingHeader(Loc.T(L.Find.SourceDetails)))
         {
@@ -257,29 +224,12 @@ internal sealed partial class FindHomePage
         ImGui.PushTextWrapPos();
         using (ImRaii.PushColor(ImGuiCol.Text, Styling.TextDim))
         {
-            Source(Loc.T(L.Find.FieldSize), plot.Size?.Provenance, now);
-            Source(Loc.T(L.Find.FieldDeposit), plot.Price?.Provenance, now);
-            Source(Loc.T(L.Find.FieldBuyers), plot.Buyers?.Provenance, now);
-            Source(Loc.T(L.Find.FieldPhase), plot.Sale?.Provenance, now);
-            Source(Loc.T(L.Find.FieldEntries), plot.EntryCount?.Provenance, now);
+            for (var index = 0; index < detailsText.Sources.Length; index++)
+            {
+                ImGui.TextUnformatted(detailsText.Sources[index]);
+            }
         }
 
         ImGui.PopTextWrapPos();
-    }
-
-    private static void Source(string field, Provenance? provenance, DateTime now)
-    {
-        if (provenance is not { } source)
-        {
-            return;
-        }
-
-        var origin = FindText.Source(source.Source);
-        if (source.Cycle is { } cycle)
-        {
-            origin = string.Concat(origin, TextDraw.Separator, Loc.T(L.Find.SourceCycle, cycle.Number));
-        }
-
-        ImGui.TextUnformatted(Loc.T(L.Find.SourceLine, field, origin, FindText.Age(source.SourceTimeUtc, now), FindText.Age(source.ReceivedUtc, now)));
     }
 }

@@ -131,7 +131,7 @@ internal sealed partial class FindHomePage
         labelledWorlds = worlds;
         labelledHome = home;
         worldLabelsLanguage = Loc.Current;
-        var sorted = worlds.IsDefault ? [] : worlds.Sort(static (left, right) =>
+        var sorted = worlds.Sort(static (left, right) =>
         {
             var center = string.Compare(left.DataCenter, right.DataCenter, StringComparison.OrdinalIgnoreCase);
             return center != 0 ? center : string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
@@ -300,7 +300,7 @@ internal sealed partial class FindHomePage
         var scale = ImGuiHelpers.GlobalScale;
         var world = Discovery.World;
         var status = Discovery.Feed.Snapshot.StatusOf(world);
-        var wait = world == 0 ? TimeSpan.Zero : Discovery.Feed.ManualWait(world, now);
+        var wait = status.RefreshAllowedUtc > now ? status.RefreshAllowedUtc - now : TimeSpan.Zero;
         var waiting = wait > TimeSpan.Zero;
         var label = waiting ? refreshText.Get((long)Math.Ceiling(wait.TotalSeconds), static seconds => Loc.T(L.Find.RefreshIn, seconds)) : Loc.T(L.Find.Refresh);
         var enabled = world != 0 && !waiting && !status.Loading;

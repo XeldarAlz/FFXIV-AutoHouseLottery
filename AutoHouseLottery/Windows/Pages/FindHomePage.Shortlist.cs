@@ -1,4 +1,3 @@
-using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Find;
 using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
@@ -16,7 +15,6 @@ namespace AutoHouseLottery.Windows.Pages;
 
 internal sealed partial class FindHomePage
 {
-    private const int FallbackCount = 4;
     private const float DrawerPad = 14f;
     private const float ShortlistRowPad = 5f;
     private const float ShortlistShare = 0.42f;
@@ -35,8 +33,7 @@ internal sealed partial class FindHomePage
     private long clearArmedUntil;
     private CachedText countsText;
     private CachedText removeUnavailableText;
-    private CachedText previewCountsText;
-    private CachedText characterText;
+    private readonly DrawerText drawerText = new();
 
     private void DrawDrawer(FindView view, Vector2 size, DateTime now)
     {
@@ -63,6 +60,7 @@ internal sealed partial class FindHomePage
 
     private void DrawShortlist(FindView view)
     {
+        drawerText.Refresh(view, Discovery, State.Shortlist.Count);
         var shortlist = State.Shortlist;
         Styling.SectionLabel(Loc.T(L.Find.ShortlistTitle));
         var entries = view.Preview?.MaxNewEntries ?? 0;
@@ -228,23 +226,22 @@ internal sealed partial class FindHomePage
 
     private void DrawBestMatch(FindView view)
     {
-        var order = BestMatchOrder(view);
-        if (order.IsDefaultOrEmpty)
+        var order = view.BestMatch;
+        if (order.IsEmpty)
         {
             return;
         }
 
         TextDraw.SmallCaps(Loc.T(L.Find.BestMatch), ImGui.GetCursorScreenPos(), Styling.AccentGlowSoft);
         ImGui.Dummy(new Vector2(1f, TextDraw.CaptionLineHeight()));
-        var best = order[0];
-        Selectable(best.Key, Styling.TextStrong);
-        TextDraw.Hint(string.Concat(Loc.T(L.Find.Deposit, FindText.Gil(best.Deposit)), TextDraw.Separator, Loc.T(L.Find.EntriesValue, FindText.Count(best.ReportedEntries))));
+        Selectable(order[0].Key, Styling.TextStrong);
+        TextDraw.Hint(drawerText.BestDetail);
         if (order.Length > 1)
         {
             Styling.VSpace(4f);
             TextDraw.SmallCaps(Loc.T(L.Find.Fallbacks), ImGui.GetCursorScreenPos(), Styling.TextMuted);
             ImGui.Dummy(new Vector2(1f, TextDraw.CaptionLineHeight()));
-            for (var index = 1; index < order.Length && index <= FallbackCount; index++)
+            for (var index = 1; index < order.Length; index++)
             {
                 Selectable(order[index].Key, Styling.TextSecondary);
             }
@@ -254,32 +251,6 @@ internal sealed partial class FindHomePage
         {
             Tooltip.Show(Loc.T(L.Find.RankingNote));
         }
-    }
-
-    // The top plot and its fallbacks as the planner would try them for this character; before the planner can run, the
-    // plain ranking of the shortlist.
-    private static System.Collections.Immutable.ImmutableArray<RankedPlot> BestMatchOrder(FindView view)
-    {
-        if (view.Preview is { PolicyError: RunPolicyError.None, Assignments.Length: > 0 } preview)
-        {
-            var targets = preview.Assignments[0].TargetOrder;
-            var ordered = System.Collections.Immutable.ImmutableArray.CreateBuilder<RankedPlot>(targets.Length);
-            for (var index = 0; index < targets.Length; index++)
-            {
-                for (var rankIndex = 0; rankIndex < preview.Ranking.Length; rankIndex++)
-                {
-                    if (preview.Ranking[rankIndex].Key == targets[index])
-                    {
-                        ordered.Add(preview.Ranking[rankIndex]);
-                        break;
-                    }
-                }
-            }
-
-            return ordered.ToImmutable();
-        }
-
-        return view.Ranking;
     }
 
     private void Selectable(PlotKey key, Vector4 color)
@@ -301,20 +272,14 @@ internal sealed partial class FindHomePage
     {
         TextDraw.SmallCaps(Loc.T(L.Find.PreviewTitle), ImGui.GetCursorScreenPos(), Styling.AccentGlowSoft);
         ImGui.Dummy(new Vector2(1f, TextDraw.CaptionLineHeight()));
-        var character = Discovery.Character;
-        if (character is not { } profile)
+        if (Discovery.Character is null)
         {
             Reason(Loc.T(L.Find.NeedCharacter));
             return;
         }
 
-        TextDraw.Hint(previewCountsText.Get(State.Shortlist.Count, static count => Loc.T(L.Find.CountsJoin, Loc.Plural(L.Find.PlotCount, (int)count), Loc.Plural(L.Find.CharacterCount, 1))));
-        if (!characterText.TryGet((long)profile.ContentId ^ (Discovery.Names.Ready ? 1L : 0L), out var characterLine))
-        {
-            characterLine = characterText.Set((long)profile.ContentId ^ (Discovery.Names.Ready ? 1L : 0L), string.Concat(profile.Name, TextDraw.Separator, Discovery.Names.World(profile.HomeWorldId)));
-        }
-
-        ImGui.TextUnformatted(characterLine);
+        TextDraw.Hint(drawerText.Counts);
+        ImGui.TextUnformatted(drawerText.Character);
         if (view.Preview is not { } preview)
         {
             return;
@@ -334,35 +299,27 @@ internal sealed partial class FindHomePage
                 return;
         }
 
-        for (var index = 0; index < preview.Exclusions.Length; index++)
+        for (var index = 0; index < drawerText.Exclusions.Length; index++)
         {
-            Reason(Loc.T(L.Find.Excluded, profile.Name, FindText.Reasons(preview.Exclusions[index].Reasons)));
+            Reason(drawerText.Exclusions[index]);
         }
 
         if (preview.Assignments.Length > 0)
         {
-            var assignment = preview.Assignments[0];
-            PreviewLine(Loc.T(L.Find.MaximumDeposit), FindText.Gil(assignment.MaximumDeposit));
-            DrawEligibility(assignment.Eligibility);
+            PreviewLine(Loc.T(L.Find.MaximumDeposit), drawerText.MaximumDeposit);
+            DrawEligibility(drawerText.Eligibility);
         }
 
         DrawReserve();
         DrawBlockers(preview.Blockers);
     }
 
-    private void DrawEligibility(in EligibilityResult eligibility)
+    private void DrawEligibility(in EligibilityText eligibility)
     {
-        var verdict = eligibility.Verdict;
-        var (text, color) = verdict switch
+        PreviewLine(Loc.T(L.Find.Eligibility), eligibility.Verdict, eligibility.Color);
+        if (eligibility.Unresolved is { } unresolved && ImGui.IsItemHovered())
         {
-            EligibilityVerdict.Eligible => (Loc.T(L.Find.EligibilityEligible), Styling.AccentMint),
-            EligibilityVerdict.Ineligible => (Loc.T(L.Find.EligibilityIneligible), Styling.AccentRose),
-            _ => (Loc.T(L.Find.EligibilityUnknown), Styling.AccentAmberSoft),
-        };
-        PreviewLine(Loc.T(L.Find.Eligibility), text, color);
-        if (ImGui.IsItemHovered() && eligibility.Unresolved != EligibilityReason.None)
-        {
-            Tooltip.Show(Loc.T(L.Find.Unresolved, FindText.Reasons(eligibility.Unresolved)));
+            Tooltip.Show(unresolved);
         }
     }
 

@@ -3,7 +3,6 @@ using AutoHouseLottery.Core.Find.Model;
 using AutoHouseLottery.Core.Housing.Model;
 using AutoHouseLottery.Core.Localization;
 using AutoHouseLottery.Core.Maps;
-using System.Globalization;
 using System.Text;
 
 namespace AutoHouseLottery.Windows.Find;
@@ -121,13 +120,7 @@ internal static class FindText
             WardSpan.Range => Loc.T(L.Find.ScopeWardRange, summary.FirstWard, summary.LastWard),
             _ => Loc.Plural(L.Find.ScopeWards, summary.WardCount),
         };
-        var divisions = summary.Divisions switch
-        {
-            DivisionSpan.Both => Loc.T(L.Find.ScopeBothDivisions),
-            DivisionSpan.Main => Loc.T(L.Find.ScopeMainDivision),
-            _ => Loc.T(L.Find.ScopeSubdivision),
-        };
-        return Loc.T(L.Find.ScopeJoin, Districts(names, summary), wards, divisions);
+        return Loc.T(L.Find.ScopeJoin, Districts(names, summary), wards, Loc.T(ScopeWords.Divisions(summary.Divisions)));
     }
 
     public static string Reasons(EligibilityReason reasons)
@@ -148,8 +141,6 @@ internal static class FindText
     }
 
     public static string Hours(int hours) => Loc.Plural(L.Find.Hours, hours);
-
-    public static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static void Append(StringBuilder text, EligibilityReason reasons, EligibilityReason reason, LocString label)
     {

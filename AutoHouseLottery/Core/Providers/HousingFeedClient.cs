@@ -18,6 +18,7 @@ internal sealed class HousingFeedClient : IDisposable
     public const long MaximumResponseBytes = 8L * 1024 * 1024;
 
     private const int TimeoutSeconds = 20;
+    private const int ConnectionLifetimeMinutes = 10;
     private const string UpstreamFetchedHeader = "X-Source-Fetched-At";
     private const string ProxyAgeHeader = "X-Cache-Age-Seconds";
     private const string ProductName = "AutoHouseLottery";
@@ -32,7 +33,7 @@ internal sealed class HousingFeedClient : IDisposable
         var handler = new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(ConnectionLifetimeMinutes),
         };
         client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
         client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(ProductName, version));

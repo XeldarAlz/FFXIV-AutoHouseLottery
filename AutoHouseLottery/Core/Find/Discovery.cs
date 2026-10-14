@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.IO;
+using System.Runtime.InteropServices;
 using AutoHouseLottery.Core.Eligibility.Model;
 using AutoHouseLottery.Core.Maps;
 using AutoHouseLottery.Core.Providers;
@@ -56,8 +57,8 @@ internal sealed class Discovery : IDisposable
     {
         Svc.Framework.Update -= OnUpdate;
         Feed.Dispose();
-        Find.Flush();
-        Saved.Flush();
+        Find.Close();
+        Saved.Close();
     }
 
     private void OnUpdate(IFramework framework)
@@ -88,7 +89,7 @@ internal sealed class Discovery : IDisposable
 
     private ImmutableArray<uint> Scope()
     {
-        var inputs = (World, Saved.Library.Revision, Find.Shortlist.Revision);
+        var inputs = (World, Library: Saved.Library.Revision, Shortlist: Find.Shortlist.Revision);
         if (inputs == scopeInputs)
         {
             return scope;
@@ -106,7 +107,7 @@ internal sealed class Discovery : IDisposable
             }
         }
 
-        scope = FetchScope.Worlds(inputs.Item1, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(watched));
+        scope = FetchScope.Worlds(inputs.World, CollectionsMarshal.AsSpan(watched));
         return scope;
     }
 }
