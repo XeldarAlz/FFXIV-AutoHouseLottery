@@ -20,7 +20,9 @@
 
 ## What it does
 
-Shows empty housing plots on a map from public listings. Pick a plot and press **Enter**, or build a shortlist and press **Enter best match**: the plugin travels there, reads the placard, checks the plot, buyer type and deposit, and enters the lottery once per character. Once results are out it checks them and collects your refund or claims your house.
+Enters housing lotteries for you: pick an empty plot on the map or build a shortlist, and the plugin travels there, enters the lottery, then checks the result and collects your refund or claims your house.
+
+Plots come from public listings, shown on the district map and in a list. Pick one and press **Enter**, or build a shortlist and press **Enter best match**: the plugin reads the placard, checks the plot, buyer type and deposit, and enters once per character, as the game allows.
 
 ## Features
 
