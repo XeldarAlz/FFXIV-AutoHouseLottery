@@ -1,10 +1,10 @@
-using clib.TaskSystem;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using AutoTask = clib.Services.AutoTask;
 
 namespace AutoHouseLottery.Core.Tasks;
 
-internal abstract partial class AutoCommon : TaskBase
+internal abstract partial class AutoCommon : AutoTask
 {
     private const int DelayPollFrames = 2;
     private const int WaitPollFrames = 30;

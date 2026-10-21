@@ -9,7 +9,7 @@ internal abstract partial class AutoCommon
 
     private const int CancellablePollFrames = 4;
 
-    // Runs one library move as its own task under a wall-clock cap. On timeout, or when abortIf trips, it cancels that
+    // Runs one move as its own task under a wall-clock cap. On timeout, or when abortIf trips, it cancels that
     // operation, whose cleanups stop navigation, so the move genuinely unwinds. True when the operation finished on its own.
     internal async Task<bool> RunCancellable(AutoTask operation, int timeoutMs, string label, Func<bool>? abortIf = null)
     {
