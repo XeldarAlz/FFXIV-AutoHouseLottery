@@ -175,6 +175,32 @@ public sealed class BatchRulesTests
     }
 
     [Fact]
+    public void ABatchThatGaveEveryCharacterItsTurnFinishedOnItsOwnEvenWithNoEntryForSome()
+    {
+        var batch = Done(Done(Done(Batch(out _), 1, BatchMemberState.Entered), 2, BatchMemberState.NotEntered), 3, BatchMemberState.Entered);
+
+        Assert.True(BatchRules.FinishedOnItsOwn(BatchRules.Finish(batch, BatchHalt.None, now)));
+    }
+
+    [Fact]
+    public void AnEntryInQuestionKeepsAFinishedBatchFromCountingAsFinishedOnItsOwn()
+    {
+        var batch = Done(Done(Done(Batch(out _), 1, BatchMemberState.Entered), 2, BatchMemberState.Uncertain), 3, BatchMemberState.NotEntered);
+
+        Assert.False(BatchRules.FinishedOnItsOwn(BatchRules.Finish(batch, BatchHalt.None, now)));
+    }
+
+    [Fact]
+    public void ARunningHaltedOrExpiredBatchNeverFinishedOnItsOwn()
+    {
+        var batch = Done(Batch(out _), 1, BatchMemberState.Entered);
+
+        Assert.False(BatchRules.FinishedOnItsOwn(batch));
+        Assert.False(BatchRules.FinishedOnItsOwn(BatchRules.Halt(batch, BatchHalt.StoppedByPlayer, now)));
+        Assert.False(BatchRules.FinishedOnItsOwn(BatchRules.Expire(batch, now)));
+    }
+
+    [Fact]
     public void OnlyTheRequestedCharacterOnItsHomeWorldCountsAfterASwitch()
     {
         var switching = BatchRules.BeginSwitch(Done(Batch(out _), 1, BatchMemberState.Entered), 2, now);

@@ -26,6 +26,9 @@ public sealed partial class Configuration : IPluginConfiguration
 
     public bool PauseWhileTyping { get; set; } = true;
 
+    // Lets a finished run hand off to other plugins, like "/li home" or "/ays m" for AutoRetainer; one command per line.
+    public string PostRunCommands { get; set; } = string.Empty;
+
     public string LastSeenChangelogVersion { get; set; } = string.Empty;
 
     [JsonIgnore]
@@ -39,7 +42,7 @@ public sealed partial class Configuration : IPluginConfiguration
     // True when the loaded config was older or needed a repair, so the caller saves it once.
     public bool Migrate()
     {
-        var changed = RepairSafetySettings() | RepairCharacters() | RepairRoster() | RepairFindSettings() | RepairSettlementSettings();
+        var changed = RepairSafetySettings() | RepairCharacters() | RepairRoster() | RepairFindSettings() | RepairSettlementSettings() | RepairPostRunCommands();
         if (Version >= CurrentVersion)
         {
             return changed;
@@ -88,5 +91,17 @@ public sealed partial class Configuration : IPluginConfiguration
         {
             Save();
         }
+    }
+
+    // A hand-edited file can carry a null command block; it is put right once on load.
+    private bool RepairPostRunCommands()
+    {
+        if (PostRunCommands is not null)
+        {
+            return false;
+        }
+
+        PostRunCommands = string.Empty;
+        return true;
     }
 }

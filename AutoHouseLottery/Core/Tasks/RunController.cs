@@ -386,7 +386,14 @@ internal sealed partial class RunController
 
         if (EntrySteps.IsTerminal(active.Step))
         {
+            var singleRun = RunningMember(active) < 0;
             Settle(active, active.Step, active.Step.ToString());
+            if (singleRun)
+            {
+                var entered = active.Step == EntryStep.Completed && !active.StopRequested && !active.PauseRequested;
+                SendPostRunCommands(entered, $"entry run {active.RunId} ended {active.Step} without an entry made on its own");
+            }
+
             return;
         }
 
@@ -473,6 +480,24 @@ internal sealed partial class RunController
             RunLog.Info($"Entry run {active.RunId}: attempt {attempt.AttemptId} {(unpressed ? "released, it was never pressed" : "marked for reconciliation")} ({written}).");
         }));
         reconcileWanted = false;
+    }
+
+    // A batch member's run never sends them: the batch sends them once, after its last character.
+    private static void SendPostRunCommands(bool endedOnItsOwn, string skipReason)
+    {
+        var commands = Plugin.Instance.Configuration.PostRunCommands;
+        if (string.IsNullOrWhiteSpace(commands))
+        {
+            return;
+        }
+
+        if (!endedOnItsOwn)
+        {
+            RunLog.Info($"Post-run commands skipped: {skipReason}.");
+            return;
+        }
+
+        ChatCommands.Dispatch(commands);
     }
 
     private void StopTask()

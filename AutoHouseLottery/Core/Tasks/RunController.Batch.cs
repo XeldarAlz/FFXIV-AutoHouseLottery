@@ -274,6 +274,7 @@ internal sealed partial class RunController
                 ReleaseBatchLease();
                 RunLog.Info($"Batch {running.BatchId}: finished; {DescribeReport(BatchRules.Report(batch))}.");
                 SaveBatch();
+                SendPostRunCommands(BatchRules.FinishedOnItsOwn(batch), $"batch {running.BatchId} has an entry in question");
                 return;
         }
     }

@@ -10,6 +10,7 @@ internal static class GeneralSettings
         DrawLanguageGroup(configuration);
         DrawWindowGroup(configuration);
         DrawBehaviorGroup(configuration);
+        PostRunSettings.Draw(configuration);
     }
 
     private static void DrawLanguageGroup(Configuration configuration)

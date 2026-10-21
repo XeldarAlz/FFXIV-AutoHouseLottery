@@ -331,6 +331,11 @@ internal static class BatchRules
     public static BatchCheckpoint Finish(BatchCheckpoint checkpoint, BatchHalt halt, DateTime nowUtc)
         => checkpoint with { Members = Requeue(checkpoint.Members, nowUtc), Phase = BatchPhase.Finished, Halt = halt, SwitchTarget = null, UpdatedUtc = nowUtc };
 
+    // A character with no entry this time still had its turn, but an entry still in question needs the player first.
+    public static bool FinishedOnItsOwn(BatchCheckpoint checkpoint)
+        => checkpoint is { Phase: BatchPhase.Finished, Halt: BatchHalt.None }
+        && Report(checkpoint) is { Uncertain: 0, Queued: 0, Running: 0 };
+
     // Read back after the plugin loaded: a batch that was running or switching lost its run and its switch with the
     // reload, so it waits for the player's explicit Continue instead of acting on its own.
     public static BatchCheckpoint Restore(BatchCheckpoint checkpoint, DateTime nowUtc)
