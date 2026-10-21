@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "選んだ後で土地の支払い額が変わりました。",
   "runFailure.overBudget": "支払い額がこのキャラクターの上限か所持ギルを超えています。",
   "runFailure.ineligible": "この土地は別の購入者区分向けです。",
+  "runFailure.districtLocked": "このキャラクターは土地のある住宅街を開放していません。開放するクエストを完了するか、別の住宅街の土地を選んでください。",
   "runFailure.travelFailed": "移動が土地に到着しませんでした。",
   "runFailure.travelUnavailable": "移動には Lifestream が必要です。インストールするか、自分で土地まで向かってください。",
   "runFailure.dependencyBusy": "Lifestream は別の作業中です。",

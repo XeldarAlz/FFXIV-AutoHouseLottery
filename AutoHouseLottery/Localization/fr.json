@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "Le dépôt du terrain a changé depuis votre choix.",
   "runFailure.overBudget": "Le dépôt dépasse la limite ou les gils de ce personnage.",
   "runFailure.ineligible": "Ce terrain est destiné à un autre type d'acheteur.",
+  "runFailure.districtLocked": "Ce personnage n'a pas débloqué le quartier de ce terrain. Terminez la quête qui l'ouvre, ou choisissez un terrain dans un autre quartier.",
   "runFailure.travelFailed": "Le trajet n'a pas atteint le terrain.",
   "runFailure.travelUnavailable": "Le trajet nécessite Lifestream. Installez-le ou rendez-vous au terrain vous-même.",
   "runFailure.dependencyBusy": "Lifestream est occupé à autre chose.",

@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "O depósito do terreno mudou desde que você o escolheu.",
   "runFailure.overBudget": "O depósito passa do limite ou do gil deste personagem.",
   "runFailure.ineligible": "Este terreno é para outro tipo de comprador.",
+  "runFailure.districtLocked": "Este personagem não desbloqueou a área residencial do terreno. Conclua a missão que a desbloqueia ou escolha um terreno em outra área residencial.",
   "runFailure.travelFailed": "A viagem não chegou ao terreno.",
   "runFailure.travelUnavailable": "A viagem precisa do Lifestream. Instale-o ou vá até o terreno por conta própria.",
   "runFailure.dependencyBusy": "O Lifestream está ocupado com outra coisa.",

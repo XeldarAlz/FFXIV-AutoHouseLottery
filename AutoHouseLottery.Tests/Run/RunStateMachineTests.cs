@@ -26,6 +26,17 @@ public sealed class RunStateMachineTests
         Assert.False(RunTransitions.IsLegal(step, EntryStep.NeedsReconciliation) && step != EntryStep.Preflight);
     }
 
+    // The steps a run stands at when it reaches the next target, where a plot in a locked district ends the character's turn.
+    [Theory]
+    [InlineData((byte)EntryStep.ReserveFunds)]
+    [InlineData((byte)EntryStep.ReadLivePlot)]
+    [InlineData((byte)EntryStep.VerifyEligibility)]
+    [InlineData((byte)EntryStep.PrepareEntry)]
+    public void AStepBeforeTheNextTravelCanFinishTheCharacter(byte raw)
+    {
+        Assert.True(RunTransitions.IsLegal((EntryStep)raw, EntryStep.FinishCharacter));
+    }
+
     [Theory]
     [InlineData((byte)EntryStep.SubmitOnce)]
     [InlineData((byte)EntryStep.AwaitReceipt)]

@@ -78,6 +78,7 @@ public sealed class BatchRulesTests
     [InlineData((byte)EntryStep.Completed, (byte)EntryFailure.None, (byte)BatchEnd.Finished, (byte)BatchMemberState.Entered, (byte)BatchHalt.None)]
     [InlineData((byte)EntryStep.Completed, (byte)EntryFailure.None, (byte)BatchEnd.StoppedByPlayer, (byte)BatchMemberState.Entered, (byte)BatchHalt.StoppedByPlayer)]
     [InlineData((byte)EntryStep.CompletedPartial, (byte)EntryFailure.InspectionsExhausted, (byte)BatchEnd.Finished, (byte)BatchMemberState.NotEntered, (byte)BatchHalt.None)]
+    [InlineData((byte)EntryStep.CompletedPartial, (byte)EntryFailure.DistrictLocked, (byte)BatchEnd.Finished, (byte)BatchMemberState.NotEntered, (byte)BatchHalt.None)]
     [InlineData((byte)EntryStep.NeedsReconciliation, (byte)EntryFailure.SubmissionUncertain, (byte)BatchEnd.Finished, (byte)BatchMemberState.Uncertain, (byte)BatchHalt.NeedsReconciliation)]
     [InlineData((byte)EntryStep.NeedsReconciliation, (byte)EntryFailure.None, (byte)BatchEnd.Interrupted, (byte)BatchMemberState.Uncertain, (byte)BatchHalt.NeedsReconciliation)]
     [InlineData((byte)EntryStep.Stopped, (byte)EntryFailure.TravelFailed, (byte)BatchEnd.StoppedByPlayer, (byte)BatchMemberState.Queued, (byte)BatchHalt.StoppedByPlayer)]

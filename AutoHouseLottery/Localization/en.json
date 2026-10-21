@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "The plot's deposit changed since you chose it.",
   "runFailure.overBudget": "The deposit is more than this character's limit or gil allows.",
   "runFailure.ineligible": "This plot is for a different buyer type.",
+  "runFailure.districtLocked": "This character has not unlocked the plot's residential district. Complete the quest that opens it, or choose a plot in another district.",
   "runFailure.travelFailed": "Travel did not reach the plot.",
   "runFailure.travelUnavailable": "Travel needs Lifestream. Install it, or walk to the plot yourself.",
   "runFailure.dependencyBusy": "Lifestream is busy with something else.",

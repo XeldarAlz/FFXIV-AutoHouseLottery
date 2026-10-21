@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "Залог за участок изменился с тех пор, как вы его выбрали.",
   "runFailure.overBudget": "Залог превышает лимит или запас гил этого персонажа.",
   "runFailure.ineligible": "Этот участок для другого типа покупателя.",
+  "runFailure.districtLocked": "Этот персонаж не открыл жилой район участка. Выполните задание, которое его открывает, или выберите участок в другом жилом районе.",
   "runFailure.travelFailed": "Перемещение не довело до участка.",
   "runFailure.travelUnavailable": "Для перемещения нужен Lifestream. Установите его или дойдите до участка сами.",
   "runFailure.dependencyBusy": "Lifestream занят другим делом.",

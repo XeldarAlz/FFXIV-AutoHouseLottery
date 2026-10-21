@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "Der Einsatz für das Grundstück hat sich geändert, seit du es gewählt hast.",
   "runFailure.overBudget": "Der Einsatz übersteigt das Limit oder das Gil dieses Charakters.",
   "runFailure.ineligible": "Dieses Grundstück ist für eine andere Käuferart.",
+  "runFailure.districtLocked": "Dieser Charakter hat das Wohngebiet des Grundstücks noch nicht freigeschaltet. Schließe den Auftrag ab, der es freischaltet, oder wähle ein Grundstück in einem anderen Wohngebiet.",
   "runFailure.travelFailed": "Die Reise hat das Grundstück nicht erreicht.",
   "runFailure.travelUnavailable": "Für die Reise wird Lifestream gebraucht. Installiere es oder geh selbst zum Grundstück.",
   "runFailure.dependencyBusy": "Lifestream ist mit etwas anderem beschäftigt.",

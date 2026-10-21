@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "自你选择后，该地块的保证金已变化。",
   "runFailure.overBudget": "保证金超出了此角色的上限或所持金币。",
   "runFailure.ineligible": "该地块面向其他购买者类型。",
+  "runFailure.districtLocked": "此角色尚未解锁该地块所在的住宅区。请完成解锁该住宅区的任务，或选择其他住宅区的地块。",
   "runFailure.travelFailed": "移动未能到达该地块。",
   "runFailure.travelUnavailable": "移动需要 Lifestream。请安装它，或自行前往该地块。",
   "runFailure.dependencyBusy": "Lifestream 正忙于其他事情。",

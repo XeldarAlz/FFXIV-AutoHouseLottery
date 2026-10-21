@@ -55,6 +55,7 @@ internal static class RunText
             EntryFailure.ChangedPrice => L.RunFailure.ChangedPrice,
             EntryFailure.OverBudget => L.RunFailure.OverBudget,
             EntryFailure.Ineligible => L.RunFailure.Ineligible,
+            EntryFailure.DistrictLocked => L.RunFailure.DistrictLocked,
             EntryFailure.TravelFailed => L.RunFailure.TravelFailed,
             EntryFailure.TravelUnavailable => L.RunFailure.TravelUnavailable,
             EntryFailure.DependencyBusy => L.RunFailure.DependencyBusy,

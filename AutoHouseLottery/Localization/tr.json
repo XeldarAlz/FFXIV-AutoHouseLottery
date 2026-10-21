@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "Arsanın depozitosu siz seçtikten sonra değişti.",
   "runFailure.overBudget": "Depozito bu karakterin sınırını veya gil miktarını aşıyor.",
   "runFailure.ineligible": "Bu arsa başka bir alıcı türü için.",
+  "runFailure.districtLocked": "Bu karakter arsanın konut bölgesinin kilidini açmamış. Bölgeyi açan görevi tamamlayın ya da başka bir konut bölgesinden arsa seçin.",
   "runFailure.travelFailed": "Yolculuk arsaya ulaşmadı.",
   "runFailure.travelUnavailable": "Yolculuk için Lifestream gerekir. Kurun ya da arsaya kendiniz gidin.",
   "runFailure.dependencyBusy": "Lifestream başka bir işle meşgul.",

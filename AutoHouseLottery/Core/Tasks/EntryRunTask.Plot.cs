@@ -20,6 +20,11 @@ internal sealed partial class EntryRunTask
 {
     private async Task<EntryFailure> TravelToTarget()
     {
+        if (!TargetDistrictReachable())
+        {
+            return EntryFailure.DistrictLocked;
+        }
+
         Move(EntryStep.Travel);
         var destination = HousingDestination.Of(session.Target);
         var label = $"Entry run {session.RunId}";
@@ -31,6 +36,20 @@ internal sealed partial class EntryRunTask
 
         Move(EntryStep.VerifyArrival);
         return FromVisit(VerifyArrival(destination, label));
+    }
+
+    // Lifestream gives up at the aetheryte of a district the character has not unlocked, and so would every retry or walk.
+    private bool TargetDistrictReachable()
+    {
+        var target = session.Target;
+        var access = DistrictAccessReader.Read();
+        if (access.CanReach(target.DistrictId, Svc.ClientState.TerritoryType))
+        {
+            return true;
+        }
+
+        Diag($"Entry run {session.RunId}: {target} is in a residential district {session.CharacterName} has not unlocked (unlocked mask {access.UnlockedMask}); not travelling there.");
+        return false;
     }
 
     private async Task<EntryFailure> OpenPlacard()

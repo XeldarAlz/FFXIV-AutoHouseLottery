@@ -50,6 +50,7 @@ internal static partial class L
         public static readonly LocString ChangedPrice = new("runFailure.changedPrice", "The plot's deposit changed since you chose it.");
         public static readonly LocString OverBudget = new("runFailure.overBudget", "The deposit is more than this character's limit or gil allows.");
         public static readonly LocString Ineligible = new("runFailure.ineligible", "This plot is for a different buyer type.");
+        public static readonly LocString DistrictLocked = new("runFailure.districtLocked", "This character has not unlocked the plot's residential district. Complete the quest that opens it, or choose a plot in another district.");
         public static readonly LocString TravelFailed = new("runFailure.travelFailed", "Travel did not reach the plot.");
         public static readonly LocString TravelUnavailable = new("runFailure.travelUnavailable", "Travel needs Lifestream. Install it, or walk to the plot yourself.");
         public static readonly LocString DependencyBusy = new("runFailure.dependencyBusy", "Lifestream is busy with something else.");

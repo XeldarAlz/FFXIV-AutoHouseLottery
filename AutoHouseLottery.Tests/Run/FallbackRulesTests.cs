@@ -71,6 +71,21 @@ public sealed class FallbackRulesTests
     }
 
     [Fact]
+    public void BestMatchPassesOverAPlotInALockedDistrict()
+    {
+        Assert.Equal(FallbackDecision.TryNextPlot, FallbackRules.Decide(RunMode.BestMatch, EntryFailure.DistrictLocked, submissionStarted: false, 1, Limit, hasNextTarget: true));
+        Assert.Equal(FallbackDecision.TryNextPlot, FallbackRules.Decide(RunMode.BestMatch, EntryFailure.DistrictLocked, submissionStarted: false, Limit, Limit, hasNextTarget: true));
+    }
+
+    [Fact]
+    public void ALockedDistrictWithNoPlotLeftEndsTheCharactersTurnInsteadOfWaitingForThePlayer()
+    {
+        Assert.Equal(FallbackDecision.FinishCharacter, FallbackRules.Decide(RunMode.BestMatch, EntryFailure.DistrictLocked, submissionStarted: false, 1, Limit, hasNextTarget: false));
+        Assert.Equal(FallbackDecision.FinishCharacter, FallbackRules.Decide(RunMode.Exact, EntryFailure.DistrictLocked, submissionStarted: false, 1, Limit, hasNextTarget: true));
+        Assert.False(FallbackRules.IsConclusivePreCommit(EntryFailure.DistrictLocked));
+    }
+
+    [Fact]
     public void ALoadedAutoAnswerPluginStopsForThePlayerInEveryMode()
     {
         Assert.Equal(FallbackDecision.AskPlayer, FallbackRules.Decide(RunMode.Exact, EntryFailure.AutoAnswerPlugin, submissionStarted: false, 1, Limit, hasNextTarget: true));

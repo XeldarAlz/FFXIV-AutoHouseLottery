@@ -13,6 +13,9 @@ internal enum EntryFailure : byte
     OverBudget,
     Ineligible,
 
+    // The plot's residential district is not unlocked for the character, so the run never travels there.
+    DistrictLocked,
+
     // Not conclusive about the plot: the player looks, then retries or resumes.
     TravelFailed,
     TravelUnavailable,
@@ -69,12 +72,17 @@ internal static class FallbackRules
             or EntryFailure.Ineligible;
 
     // A best match moves to the next ranked plot only after a conclusive failure before payment, within its inspection
-    // limit. An exact plot never moves. Once a press may have reached the game nothing moves.
+    // limit, or past a plot in a locked district. An exact plot never moves. Once a press may have reached the game nothing moves.
     public static FallbackDecision Decide(RunMode mode, EntryFailure failure, bool submissionStarted, int inspectionsUsed, int maxInspections, bool hasNextTarget)
     {
         if (submissionStarted)
         {
             return FallbackDecision.AskPlayer;
+        }
+
+        if (failure == EntryFailure.DistrictLocked)
+        {
+            return mode == RunMode.BestMatch && hasNextTarget ? FallbackDecision.TryNextPlot : FallbackDecision.FinishCharacter;
         }
 
         if (!IsConclusivePreCommit(failure))

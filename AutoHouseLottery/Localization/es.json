@@ -557,6 +557,7 @@
   "runFailure.changedPrice": "El depósito de la parcela cambió desde que la elegiste.",
   "runFailure.overBudget": "El depósito supera el límite o los guiles de este personaje.",
   "runFailure.ineligible": "Esta parcela es para otro tipo de comprador.",
+  "runFailure.districtLocked": "Este personaje no ha desbloqueado la zona residencial de la parcela. Completa la misión que la desbloquea o elige una parcela de otra zona residencial.",
   "runFailure.travelFailed": "El viaje no llegó a la parcela.",
   "runFailure.travelUnavailable": "Para viajar hace falta Lifestream. Instálalo o ve a la parcela por tu cuenta.",
   "runFailure.dependencyBusy": "Lifestream está ocupado con otra cosa.",
