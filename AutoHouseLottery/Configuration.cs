@@ -18,6 +18,8 @@ public sealed partial class Configuration : IPluginConfiguration
 
     public bool AutoShowOnLogin { get; set; } = false;
 
+    public bool DragWindowFromAnywhere { get; set; } = false;
+
     public string Language { get; set; } = "";
 
     public bool AutoPauseInContent { get; set; } = true;
