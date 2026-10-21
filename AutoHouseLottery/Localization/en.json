@@ -150,6 +150,7 @@
   "changelog.new": "New",
   "changelog.changes.one": "{0} change",
   "changelog.changes.other": "{0} changes",
+  "changelog.r1110.1": "Fixed long sessions ending in a crash or in runs that no longer start; moving around no longer sets up new game hooks each time",
   "changelog.r1000.1": "Find a home: the plots reported vacant on the district map and in a list, filtered by district, ward, division, size, price, buyer type and lottery phase, with the age of every report",
   "changelog.r1000.2": "A shortlist you fill plot by plot or with Add all matching, and a run preview with the maximum deposit, your gil reserve and anything that would stop the run",
   "changelog.r1000.3": "Enter on a plot travels there with Lifestream, reads its placard and enters that plot only; Enter best match checks up to five shortlisted plots and enters at most one",

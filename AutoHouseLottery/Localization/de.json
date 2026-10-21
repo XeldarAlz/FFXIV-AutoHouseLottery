@@ -150,6 +150,7 @@
   "changelog.new": "Neu",
   "changelog.changes.one": "{0} Änderung",
   "changelog.changes.other": "{0} Änderungen",
+  "changelog.r1110.1": "Behoben, dass lange Sitzungen mit einem Absturz endeten oder Läufe nicht mehr starteten; Bewegungen richten nicht mehr jedes Mal neue Spiel-Hooks ein",
   "changelog.r1000.1": "Zuhause finden: die als frei gemeldeten Grundstücke auf der Bezirkskarte und in einer Liste, gefiltert nach Bezirk, Bezirksnummer, Teilgebiet, Größe, Preis, Käuferart und Phase der Verlosung, mit dem Alter jeder Meldung",
   "changelog.r1000.2": "Eine Auswahlliste, die du Grundstück für Grundstück oder mit Alle Treffer hinzufügen füllst, und eine Vorschau des Laufs mit der höchsten Kaution, deiner Gil-Reserve und allem, was den Lauf aufhalten würde",
   "changelog.r1000.3": "Teilnehmen an einem Grundstück reist mit Lifestream dorthin, liest sein Schild und nimmt nur an diesem Grundstück teil; Am besten Treffer teilnehmen prüft bis zu fünf Grundstücke der Auswahlliste und nimmt höchstens einmal teil",

@@ -150,6 +150,7 @@
   "changelog.new": "Novo",
   "changelog.changes.one": "{0} mudança",
   "changelog.changes.other": "{0} mudanças",
+  "changelog.r1110.1": "Corrigido um problema em que sessões longas terminavam em um travamento ou em execuções que não iniciavam mais; mover-se não instala mais novos hooks do jogo a cada vez",
   "changelog.r1000.1": "Encontrar casa: os terrenos relatados como vagos no mapa do bairro e em uma lista, filtrados por bairro, distrito, divisão, tamanho, preço, tipo de comprador e fase da loteria, com a idade de cada relato",
   "changelog.r1000.2": "Uma pré-seleção que você preenche terreno a terreno ou com Adicionar todos, e uma prévia da execução com o depósito máximo, sua reserva de gil e tudo o que impediria a execução",
   "changelog.r1000.3": "Participar em um terreno viaja até ele com o Lifestream, lê a placa e participa só desse terreno; Participar da melhor opção verifica até cinco terrenos da pré-seleção e participa de no máximo um",

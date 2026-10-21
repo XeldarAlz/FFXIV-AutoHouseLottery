@@ -150,6 +150,7 @@
   "changelog.new": "Nuevo",
   "changelog.changes.one": "{0} cambio",
   "changelog.changes.other": "{0} cambios",
+  "changelog.r1110.1": "Se corrigió que las sesiones largas terminaran en un cierre del juego o en ejecuciones que ya no se iniciaban; moverse ya no instala nuevos hooks del juego cada vez",
   "changelog.r1000.1": "Buscar casa: las parcelas que se reportan libres en el mapa del distrito y en una lista, filtradas por zona, distrito, división, tamaño, precio, tipo de comprador y fase de la lotería, con la antigüedad de cada reporte",
   "changelog.r1000.2": "Una preselección que llenas parcela a parcela o con Añadir todas las coincidencias, y una vista previa con el depósito máximo, tu reserva de guiles y todo lo que detendría la ejecución",
   "changelog.r1000.3": "Participar en una parcela viaja allí con Lifestream, lee su cartel y participa solo en esa parcela; Participar en la mejor opción revisa hasta cinco parcelas preseleccionadas y participa como mucho en una",

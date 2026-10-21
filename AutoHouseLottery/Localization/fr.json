@@ -150,6 +150,7 @@
   "changelog.new": "Nouveau",
   "changelog.changes.one": "{0} changement",
   "changelog.changes.other": "{0} changements",
+  "changelog.r1110.1": "Correction des longues sessions qui se terminaient par un plantage ou par des exécutions qui ne se lançaient plus ; les déplacements n'installent plus de nouveaux hooks du jeu à chaque fois",
   "changelog.r1000.1": "Trouver un logement : les terrains signalés libres sur la carte du quartier et dans une liste, filtrés par quartier, secteur, division, taille, prix, type d'acheteur et phase de la loterie, avec l'âge de chaque signalement",
   "changelog.r1000.2": "Une présélection que vous remplissez terrain par terrain ou avec Ajouter tous les résultats, et un aperçu du lancement avec la caution maximale, votre réserve de gils et tout ce qui l'arrêterait",
   "changelog.r1000.3": "Participer sur un terrain s'y rend avec Lifestream, lit sa pancarte et ne participe que pour ce terrain ; Participer au meilleur choix vérifie jusqu'à cinq terrains présélectionnés et participe au plus une fois",
