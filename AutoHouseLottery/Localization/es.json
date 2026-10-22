@@ -150,6 +150,7 @@
   "changelog.new": "Nuevo",
   "changelog.changes.one": "{0} cambio",
   "changelog.changes.other": "{0} cambios",
+  "changelog.r1210.1": "Corregido que la casilla de la confirmación de la inscripción no se marcara, lo que dejaba Confirmar bloqueado y terminaba la sesión salvo que la marcaras a mano",
   "changelog.r1200.1": "Se añadieron Comandos de chat a los ajustes: escribe tus propios comandos, uno por línea (como /li home o /ays m), y se ejecutan cuando una sesión termina por sí sola, nunca tras Detener o un fallo",
   "changelog.r1200.2": "Corregido que una sesión esperara sin fin cuando una parcela está en una zona residencial que el personaje no ha desbloqueado: esas parcelas se omiten, o la sesión termina con un mensaje de zona bloqueada, y un lote sigue con el siguiente personaje",
   "changelog.r1200.3": "La ventana principal ahora solo se mueve al arrastrar su barra superior, así que arrastrar dentro de ella ya no la mueve sin querer; activa Arrastrar desde cualquier punto en los ajustes para el comportamiento anterior",

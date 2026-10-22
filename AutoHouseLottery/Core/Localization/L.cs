@@ -124,6 +124,11 @@ internal static partial class L
         public static readonly LocString New = new("changelog.new", "New");
         public static readonly LocPlural Changes = new("changelog.changes", "{0} change", "{0} changes");
 
+        public static readonly LocString[] Release1210 =
+        [
+            new("changelog.r1210.1", "Fixed the checkbox in the entry confirmation not being ticked, which kept Confirm locked and ended the run unless you ticked the box by hand"),
+        ];
+
         public static readonly LocString[] Release1200 =
         [
             new("changelog.r1200.1", "Added Chat commands to the settings: list your own commands, one per line (such as /li home or /ays m), and they run when a run finishes on its own, never after Stop or a failure"),

@@ -150,6 +150,7 @@
   "changelog.new": "Neu",
   "changelog.changes.one": "{0} Änderung",
   "changelog.changes.other": "{0} Änderungen",
+  "changelog.r1210.1": "Behoben: Das Kontrollkästchen in der Bestätigung des Losantrags wurde nicht angehakt, sodass Bestätigen gesperrt blieb und der Lauf endete, wenn du es nicht von Hand angehakt hast",
   "changelog.r1200.1": "Chat-Befehle in den Einstellungen hinzugefügt: Trage eigene Befehle ein, einen pro Zeile (etwa /li home oder /ays m); sie laufen, wenn ein Lauf von selbst endet, und nie nach Stopp oder einem Fehler",
   "changelog.r1200.2": "Behoben: Ein Lauf wartete endlos, wenn ein Grundstück in einem Wohngebiet lag, das der Charakter nicht freigeschaltet hat; solche Grundstücke werden übersprungen oder der Lauf endet mit einem Hinweis auf das gesperrte Wohngebiet, und ein Stapel macht mit dem nächsten Charakter weiter",
   "changelog.r1200.3": "Das Hauptfenster bewegt sich jetzt nur noch beim Ziehen an der oberen Leiste, Ziehen im Fenster verschiebt es also nicht mehr versehentlich; aktiviere Überall ziehen in den Einstellungen für das alte Verhalten",

@@ -150,6 +150,7 @@
   "changelog.new": "New",
   "changelog.changes.one": "{0} change",
   "changelog.changes.other": "{0} changes",
+  "changelog.r1210.1": "Fixed the checkbox in the entry confirmation not being ticked, which kept Confirm locked and ended the run unless you ticked the box by hand",
   "changelog.r1200.1": "Added Chat commands to the settings: list your own commands, one per line (such as /li home or /ays m), and they run when a run finishes on its own, never after Stop or a failure",
   "changelog.r1200.2": "Fixed a run waiting forever when a plot is in a residential district the character has not unlocked: such plots are skipped, or the run ends with a message saying the district is locked, and a batch moves on to the next character",
   "changelog.r1200.3": "The main window now moves only when you drag its top bar, so a drag inside it no longer moves it by accident; turn on Drag from anywhere in the settings for the old behaviour",
