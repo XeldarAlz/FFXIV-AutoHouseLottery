@@ -319,7 +319,7 @@ internal static unsafe class HousingDialogs
             return DialogActionResult.Throttled;
         }
 
-        var result = ButtonPress.Press(addon, button);
+        var result = action == NativeAction.TickEntryCheckbox ? ButtonPress.Tick(addon, button) : ButtonPress.Press(addon, button);
         RunLog.Info($"Housing dialog: {action} {(result == DialogActionResult.Pressed ? "pressed" : $"refused ({result})")}.");
         return result;
     }

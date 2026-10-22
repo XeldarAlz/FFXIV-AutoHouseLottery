@@ -13,7 +13,14 @@ internal static unsafe class ButtonPress
         return owner != null && owner->AtkResNode.IsVisible();
     }
 
-    public static DialogActionResult Press(AtkUnitBase* addon, AtkComponentButton* button)
+    public static DialogActionResult Press(AtkUnitBase* addon, AtkComponentButton* button) => Click(addon, button, tick: false);
+
+    // A mouse click on a checkbox flips the box's checked flag inside the component before the window hears the click,
+    // and the window's click handler only reads that flag to decide whether its buttons unlock. The click event alone
+    // leaves the box unticked, so a tick sets the flag through the game's own SetChecked first.
+    public static DialogActionResult Tick(AtkUnitBase* addon, AtkComponentButton* checkBox) => Click(addon, checkBox, tick: true);
+
+    private static DialogActionResult Click(AtkUnitBase* addon, AtkComponentButton* button, bool tick)
     {
         var owner = button->AtkComponentBase.OwnerNode;
         if (owner == null)
@@ -30,6 +37,11 @@ internal static unsafe class ButtonPress
         if (clickEvent == null)
         {
             return DialogActionResult.ButtonMissing;
+        }
+
+        if (tick)
+        {
+            button->SetChecked(true);
         }
 
         addon->ReceiveEvent(clickEvent->State.EventType, unchecked((int)clickEvent->Param), clickEvent);
